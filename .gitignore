@@ -1,0 +1,41 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+
+# Build outputs
+.next/
+dist/
+build/
+
+# Logs
+logs/
+*.log
+pids/
+*.pid
+*.seed
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+uploads/temp/
+*.tmp
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Ignore database config files with sensitive info (if any)
+*.sqlite
+*.db
+
+# Optional: Ignore coverage reports
+coverage/
