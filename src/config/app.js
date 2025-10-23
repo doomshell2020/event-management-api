@@ -7,6 +7,7 @@ const config = {
   // JWT
   jwtSecret: process.env.JWT_SECRET || 'yourjwtsecret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  tokenExpiresIn: process.env.TOKEN_EXPIRES_IN || '1h',
   // Database
   db: {
     host: process.env.DB_HOST || 'localhost',

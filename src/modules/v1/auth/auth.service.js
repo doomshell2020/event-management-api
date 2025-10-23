@@ -4,13 +4,17 @@ const User = require('../../../models/user.model');
 const config = require('../../../config/app');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const sendEmail = require('../../../common/utils/sendEmail');
+const { generateVerificationToken, verifyVerificationToken } = require('../../../common/utils/generateToken');
 const verifyEmailTemplate = require('../../../common/utils/emailTemplates/verifyEmailTemplate');
 const emailVerifiedTemplate = require('../../../common/utils/emailTemplates/emailVerifiedTemplate');
-const { generateVerificationToken, verifyVerificationToken } = require('../../../common/utils/generateToken');
+const resetPasswordTemplate = require('../../../common/utils/emailTemplates/resetPasswordTemplate');
+const passwordChangedTemplate = require('../../../common/utils/emailTemplates/passwordChangedTemplate');
 
-const verifyEmailToken = async (token) => {
+
+module.exports.verifyEmailToken = async (token) => {
     try {
         const decoded = verifyVerificationToken(token);
         if (!decoded) {
@@ -46,7 +50,7 @@ const verifyEmailToken = async (token) => {
     }
 };
 
-const registerUser = async ({ firstName, lastName, gender, dob, email, password }) => {
+module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, password }) => {
     // Check if user already exists
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
@@ -85,7 +89,7 @@ const registerUser = async ({ firstName, lastName, gender, dob, email, password 
     };
 };
 
-const loginUser = async ({ email, password }) => {
+module.exports.loginUser = async ({ email, password }) => {
     // Find user by email
     const user = await User.findOne({ where: { email } });
     if (!user) {
@@ -124,14 +128,14 @@ const loginUser = async ({ email, password }) => {
     };
 };
 
-const getUserInfo = async (userId) => {
+module.exports.getUserInfo = async (userId) => {
     const user = await User.findByPk(userId, {
         attributes: ['id', 'first_name', 'last_name', 'email', 'gender', 'dob'],
     });
     return user;
 };
 
-const updateUserProfile = async (userId, updates, uploadFolder = null) => {
+module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) => {
     try {
         const user = await User.findByPk(userId);
         if (!user) {
@@ -202,4 +206,65 @@ const updateUserProfile = async (userId, updates, uploadFolder = null) => {
     }
 };
 
-module.exports = { registerUser, loginUser, getUserInfo, verifyEmailToken, updateUserProfile };
+module.exports.initiatePasswordReset = async (email) => {
+    try {
+        const user = await User.findOne({ where: { email } });
+
+        if (!user) {
+            return {
+                success: false,
+                message: "Invalid email address"
+            };
+        }
+
+        const resetToken = generateVerificationToken(email);
+        const resetUrl = `${config.clientUrl}/reset-password?token=${resetToken}`;
+
+        // Send email
+        const html = resetPasswordTemplate(user.first_name, resetUrl);
+        await sendEmail(user.email, 'Password Reset Request', html);
+
+        return {
+            success: true,
+            message: 'Password reset link has been sent to your email'
+        };
+
+    } catch (error) {
+        console.error('initiatePasswordReset error:', error);
+        return {
+            success: false,
+            message: 'Failed to initiate password reset'
+        };
+    }
+};
+
+module.exports.resetPassword = async (token, password) => {
+    try {
+        // Verify JWT token
+        const decoded = verifyVerificationToken(token);
+        if (!decoded) {
+            return { success: false, message: 'Invalid or expired password reset link' };
+        }
+
+        // Find user by email
+        const user = await User.findOne({ where: { email: decoded.email } });
+        if (!user) {
+            return { success: false, message: 'User not found' };
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        user.password = hashedPassword;
+        await user.save();
+
+        // Send confirmation email including new password
+        const html = passwordChangedTemplate(user.first_name, password);
+        await sendEmail(user.email, 'Your Password Has Been Changed', html);
+
+        return { success: true, message: 'Password has been reset successfully' };
+
+    } catch (error) {
+        console.error('Reset password error:', error);
+        return { success: false, message: 'Failed to reset password' };
+    }
+};

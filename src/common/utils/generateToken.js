@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../../config/app');
 
 const generateVerificationToken = (email) => {
-  return jwt.sign({ email }, config.jwtSecret, { expiresIn: '1h' });
+  return jwt.sign({ email }, config.jwtSecret, { expiresIn: config.tokenExpiresIn });
 };
 
 const verifyVerificationToken = (token) => {

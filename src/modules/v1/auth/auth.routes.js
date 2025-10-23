@@ -71,17 +71,43 @@ router.patch(
       .isDate({ format: 'YYYY-MM-DD' }).withMessage('DOB must be a valid date in YYYY-MM-DD format'),
     body('password')
       .optional()
-      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
+      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'), // ✅ COMMA ADDED
+    body('emailRelatedEvents')
+      .optional()
+      .isIn(['Y', 'N']).withMessage('emailRelatedEvents must be Y or N'),
+    body('emailNewsLetter')
+      .optional()
+      .isIn(['Y', 'N']).withMessage('emailNewsLetter must be Y or N')
   ],
   validate,
   authController.updateProfile
 );
+
 // 🖼️ PATCH /update-profile-image
 router.patch(
   '/update-profile-image',
   authenticate,
   uploadFiles({ folder: 'uploads/profile', type: 'single', fieldName: 'profile_image' }),
   authController.updateProfileImage
+);
+
+// Forgot password
+router.post(
+  '/forgot-password',
+  [body('email').notEmpty().withMessage('Email is required').isEmail().withMessage('Invalid email')],
+  validate,
+  authController.forgotPassword
+);
+
+// Reset password
+router.post(
+  '/reset-password',
+  [
+    body('token').notEmpty().withMessage('Token is required'),
+    body('password').notEmpty().withMessage('Password is required').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
+  ],
+  validate,
+  authController.resetPassword
 );
 
 module.exports = router;

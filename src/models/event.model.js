@@ -1,0 +1,179 @@
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
+
+
+const Event = sequelize.define(
+    'Event',
+    {
+        id: {
+            type: DataTypes.INTEGER,
+            autoIncrement: true,
+            primaryKey: true
+        },
+        event_org_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        },
+        name: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        desp: {
+            type: DataTypes.TEXT,
+            allowNull: true
+        },
+        date_from: {
+            type: DataTypes.DATE,
+            allowNull: false
+        },
+        date_to: {
+            type: DataTypes.DATE,
+            allowNull: false
+        },
+        sale_start: {
+            type: DataTypes.DATE,
+            allowNull: false
+        },
+        sale_end: {
+            type: DataTypes.DATE,
+            allowNull: false
+        },
+        request_rsvp: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false
+        },
+        feat_image: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+        video_url: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+        thumbnail: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+        no_of_seats: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        },
+        amount: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: false
+        },
+        location: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        lat: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        longs: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        created: {
+            type: DataTypes.DATE,
+            allowNull: false,
+            defaultValue: DataTypes.NOW
+        },
+        company_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        },
+        country_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        },
+        slug: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        ticket_limit: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        },
+        approve_timer: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        fee_assign: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        committee_memberId: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        payment_currency: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        banner_image: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        status: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        featured: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N'
+        },
+        agreement: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N'
+        },
+        hidden_homepage: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N'
+        },
+        hidden_company: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N'
+        },
+        committee_payment: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N'
+        },
+        online_payments: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N'
+        },
+        admineventstatus: {
+            type: DataTypes.STRING,
+            allowNull: false
+        },
+        is_free: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N'
+        },
+        allow_register: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'Y'
+        },
+
+        submit_count: {
+            type: DataTypes.INTEGER,
+            allowNull: false
+        }
+    },
+    {
+        tableName: 'tblevent',
+        createdAt: 'created',    // map createdAt → created
+        updatedAt: 'updateAt',   // map updatedAt → updateAt
+    });
+
+module.exports = Event;
+

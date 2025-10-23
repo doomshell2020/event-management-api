@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 
 
-const register = async (req, res) => {
+module.exports.register = async (req, res) => {
     try {
         // ✅ Get POST data from request body
         const { firstName, lastName, gender, dob, email, password } = req.body;
@@ -25,7 +25,7 @@ const register = async (req, res) => {
     }
 };
 
-const login = async (req, res) => {
+module.exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
@@ -42,7 +42,7 @@ const login = async (req, res) => {
     }
 };
 
-const getUserInfo = async (req, res) => {
+module.exports.getUserInfo = async (req, res) => {
     try {
         const userId = req.user.id;
         const user = await authService.getUserInfo(userId);
@@ -58,7 +58,7 @@ const getUserInfo = async (req, res) => {
     }
 };
 
-const updateProfile = async (req, res) => {
+module.exports.updateProfile = async (req, res) => {
     try {
         const userId = req.user.id;
         const updates = req.body;
@@ -92,7 +92,7 @@ const updateProfile = async (req, res) => {
     }
 };
 
-const verifyEmail = async (req, res) => {
+module.exports.verifyEmail = async (req, res) => {
     try {
         const { token } = req.query;
         if (!token) {
@@ -112,7 +112,7 @@ const verifyEmail = async (req, res) => {
     }
 };
 
-const updateProfileImage = async (req, res) => {
+module.exports.updateProfileImage = async (req, res) => {
     const userId = req.user.id;
 
     if (!req.file) {
@@ -121,7 +121,7 @@ const updateProfileImage = async (req, res) => {
 
     const { filename } = req.file;
     const uploadFolder = path.join(process.cwd(), 'uploads/profile');
-    const fullFilePath = path.join(uploadFolder, filename);    
+    const fullFilePath = path.join(uploadFolder, filename);
 
     try {
         // Update DB with the file name or relative path if you want to store URL
@@ -133,7 +133,7 @@ const updateProfileImage = async (req, res) => {
             if (fs.existsSync(fullFilePath)) {
                 fs.unlinkSync(fullFilePath);
                 console.log('🧹 Uploaded image removed due to DB failure:', fullFilePath);
-            }else{
+            } else {
                 console.log('file not exist')
             }
 
@@ -160,4 +160,40 @@ const updateProfileImage = async (req, res) => {
     }
 };
 
-module.exports = { register, login, getUserInfo, verifyEmail, updateProfile, updateProfileImage };
+module.exports.forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return apiResponse.validation(res, [], 'Email is required');
+        }
+        const result = await authService.initiatePasswordReset(email);
+
+        if (result.success) {
+            return apiResponse.success(res, result.message || 'Password reset email sent successfully');
+        } else {
+            return apiResponse.error(res, result.message || 'Failed to initiate password reset');
+        }
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        return apiResponse.error(res, 'Server error during password reset initiation');
+    }
+};
+
+// Reset password (JWT token, no DB token storage)
+module.exports.resetPassword = async (req, res) => {
+    try {
+        const { token, password } = req.body;
+        if (!token || !password) {
+            return apiResponse.validation(res, [], 'Token and new password are required');
+        }
+        const result = await authService.resetPassword(token, password);
+        if (result.success) {
+            return apiResponse.success(res, result.message || 'Password reset successfully');
+        } else {
+            return apiResponse.error(res, result.message || 'Failed to reset password');
+        }
+    } catch (error) {
+        console.error('Reset password error:', error);
+        return apiResponse.error(res, 'Server error during password reset');
+    }
+};
