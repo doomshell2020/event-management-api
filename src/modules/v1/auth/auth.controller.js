@@ -1,5 +1,8 @@
 const authService = require('./auth.service');
 const apiResponse = require('../../../common/utils/apiResponse');
+const path = require('path');
+const fs = require('fs');
+
 
 const register = async (req, res) => {
     try {
@@ -55,14 +58,48 @@ const getUserInfo = async (req, res) => {
     }
 };
 
+const updateProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const updates = req.body;
+
+        // 1️⃣ Check if body is empty
+        if (!updates || Object.keys(updates).length === 0) {
+            return apiResponse.validation(res, [], 'No data provided to update');
+        }
+
+        const result = await authService.updateUserProfile(userId, updates);
+
+        if (!result.success) {
+            // Map service code to proper apiResponse
+            switch (result.code) {
+                case 'USER_NOT_FOUND':
+                    return apiResponse.notFound(res, result.message);
+                case 'INVALID_FIELDS':
+                case 'SAME_PASSWORD':
+                    return apiResponse.validation(res, [], result.message);
+                case 'UPDATE_FAILED':
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(res, 'Profile updated successfully', result.data);
+
+    } catch (error) {
+        console.error('Update profile error:', error);
+        return apiResponse.error(res, 'Server error while updating profile', 500);
+    }
+};
+
 const verifyEmail = async (req, res) => {
     try {
         const { token } = req.query;
         if (!token) {
             return apiResponse.validation(res, [], 'Verification token is required');
         }
-        const result = await authService.verifyEmailToken(token);        
-        
+        const result = await authService.verifyEmailToken(token);
+
         if (result.success) {
             return apiResponse.success(res, result.message || 'Email verified successfully');
         } else {
@@ -75,4 +112,52 @@ const verifyEmail = async (req, res) => {
     }
 };
 
-module.exports = { register, login, getUserInfo, verifyEmail };
+const updateProfileImage = async (req, res) => {
+    const userId = req.user.id;
+
+    if (!req.file) {
+        return apiResponse.validation(res, [], 'No profile image uploaded');
+    }
+
+    const { filename } = req.file;
+    const uploadFolder = path.join(process.cwd(), 'uploads/profile');
+    const fullFilePath = path.join(uploadFolder, filename);    
+
+    try {
+        // Update DB with the file name or relative path if you want to store URL
+        const relativePathForDB = `/uploads/profile/${filename}`;
+        const result = await authService.updateUserProfile(userId, { profile_image: filename }, uploadFolder);
+
+        if (!result.success) {
+            // If DB update failed, delete the uploaded file
+            if (fs.existsSync(fullFilePath)) {
+                fs.unlinkSync(fullFilePath);
+                console.log('🧹 Uploaded image removed due to DB failure:', fullFilePath);
+            }else{
+                console.log('file not exist')
+            }
+
+            switch (result.code) {
+                case 'USER_NOT_FOUND':
+                    return apiResponse.notFound(res, result.message);
+                case 'UPDATE_FAILED':
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(res, 'Profile image updated successfully', result.data);
+
+    } catch (error) {
+        // Delete uploaded file if any error occurs
+        if (fs.existsSync(fullFilePath)) {
+            fs.unlinkSync(fullFilePath);
+            console.log('🧹 Uploaded image removed due to server error:', fullFilePath);
+        }
+
+        console.error('Update profile image error:', error);
+        return apiResponse.error(res, 'Server error while updating profile image', 500);
+    }
+};
+
+module.exports = { register, login, getUserInfo, verifyEmail, updateProfile, updateProfileImage };

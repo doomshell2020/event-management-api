@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/app'); // contains jwtSecret
+const apiResponse = require('../common/utils/apiResponse');
 
 const authenticate = (req, res, next) => {
   try {
@@ -12,7 +13,7 @@ const authenticate = (req, res, next) => {
       if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
         token = parts[1];
       } else {
-        token = authHeader; // If token is directly sent without "Bearer"
+        token = authHeader; // Token directly sent without "Bearer"
       }
     }
 
@@ -26,13 +27,9 @@ const authenticate = (req, res, next) => {
       token = req.cookies.token;
     }
 
-    // Optionally: 4️⃣ Check query or body (uncomment if you want)
-    // if (!token && req.query && req.query.token) token = req.query.token;
-    // if (!token && req.body && req.body.token) token = req.body.token;
-
     // If still no token found
     if (!token) {
-      return res.status(401).json({ success: false, message: 'Unauthorized: Token not provided' });
+      return apiResponse.unauthorized(res, 'Unauthorized: Token not provided');
     }
 
     // Verify token
@@ -43,7 +40,7 @@ const authenticate = (req, res, next) => {
     next();
   } catch (err) {
     console.error('JWT verification failed:', err.message);
-    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    return apiResponse.unauthorized(res, 'Invalid or expired token');
   }
 };
 

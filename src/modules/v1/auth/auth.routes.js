@@ -4,6 +4,7 @@ const authController = require('./auth.controller');
 const { body } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
+const uploadFiles = require('../../../middlewares/upload.middleware');
 
 // ----------------------
 // Register a new user
@@ -52,5 +53,35 @@ router.post(
 
 router.get('/me', authenticate, authController.getUserInfo);
 router.get('/verify-email', authController.verifyEmail);
+router.patch(
+  '/update-profile',
+  authenticate,
+  [
+    body('first_name')
+      .optional()
+      .isLength({ min: 2 }).withMessage('First name must be at least 2 characters long'),
+    body('last_name')
+      .optional()
+      .isLength({ min: 2 }).withMessage('Last name must be at least 2 characters long'),
+    body('gender')
+      .optional()
+      .isIn(['Male', 'Female', 'Other']).withMessage('Gender must be Male, Female, or Other'),
+    body('dob')
+      .optional()
+      .isDate({ format: 'YYYY-MM-DD' }).withMessage('DOB must be a valid date in YYYY-MM-DD format'),
+    body('password')
+      .optional()
+      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
+  ],
+  validate,
+  authController.updateProfile
+);
+// 🖼️ PATCH /update-profile-image
+router.patch(
+  '/update-profile-image',
+  authenticate,
+  uploadFiles({ folder: 'uploads/profile', type: 'single', fieldName: 'profile_image' }),
+  authController.updateProfileImage
+);
 
 module.exports = router;
