@@ -125,16 +125,12 @@ module.exports.updateProfileImage = async (req, res) => {
 
     try {
         // Update DB with the file name or relative path if you want to store URL
-        const relativePathForDB = `/uploads/profile/${filename}`;
         const result = await authService.updateUserProfile(userId, { profile_image: filename }, uploadFolder);
-
         if (!result.success) {
             // If DB update failed, delete the uploaded file
             if (fs.existsSync(fullFilePath)) {
                 fs.unlinkSync(fullFilePath);
                 console.log('🧹 Uploaded image removed due to DB failure:', fullFilePath);
-            } else {
-                console.log('file not exist')
             }
 
             switch (result.code) {

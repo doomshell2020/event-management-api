@@ -14,7 +14,8 @@ dotenv.config();
 
 // Import Routes
 const authRoutesV1 = require('./modules/v1/auth/auth.routes');
-// const eventsRoutesV1 = require('./modules/v1/events/events.routes');
+const eventsRoutesV1 = require('./modules/v1/events/events.routes');
+const commonRoutesV1 = require('./modules/v1/common/common.routes');
 // const ticketsRoutesV1 = require('./modules/v1/tickets/tickets.routes');
 // const addonsRoutesV1 = require('./modules/v1/addons/addons.routes');
 // const subscriptionsRoutesV1 = require('./modules/v1/subscriptions/subscriptions.routes');
@@ -40,12 +41,13 @@ app.use((req, res, next) => {
 
 // Test route
 app.get('/', (req, res) => {
-    res.send('Event Management API is running!');
+    return apiResponse.success(res, 'Event Management API is running!');
 });
 
 // API v1 routes
 app.use('/api/v1/auth', authRoutesV1);
-// app.use('/api/v1/events', eventsRoutesV1);
+app.use('/api/v1/events', eventsRoutesV1);
+app.use('/api/v1/common', commonRoutesV1);
 // app.use('/api/v1/tickets', ticketsRoutesV1);
 // app.use('/api/v1/addons', addonsRoutesV1);
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);

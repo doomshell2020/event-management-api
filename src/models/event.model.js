@@ -32,15 +32,15 @@ const Event = sequelize.define(
         },
         sale_start: {
             type: DataTypes.DATE,
-            allowNull: false
+            allowNull: true
         },
         sale_end: {
             type: DataTypes.DATE,
-            allowNull: false
+            allowNull: true
         },
         request_rsvp: {
             type: DataTypes.BOOLEAN,
-            allowNull: false
+            allowNull: true
         },
         feat_image: {
             type: DataTypes.STRING,
@@ -56,11 +56,11 @@ const Event = sequelize.define(
         },
         no_of_seats: {
             type: DataTypes.INTEGER,
-            allowNull: false
+            allowNull: true
         },
         amount: {
             type: DataTypes.DECIMAL(10, 2),
-            allowNull: false
+            allowNull: true
         },
         location: {
             type: DataTypes.STRING,
@@ -68,11 +68,11 @@ const Event = sequelize.define(
         },
         lat: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: true
         },
         longs: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: true
         },
         created: {
             type: DataTypes.DATE,
@@ -97,27 +97,28 @@ const Event = sequelize.define(
         },
         approve_timer: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: true
         },
         fee_assign: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: true
         },
-        committee_memberId: {
+        committee_memmberId: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: true
         },
         payment_currency: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: true
         },
         banner_image: {
             type: DataTypes.STRING,
-            allowNull: false
+            allowNull: true
         },
         status: {
-            type: DataTypes.STRING,
-            allowNull: false
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: true,
+            defaultValue: 'N'
         },
         featured: {
             type: DataTypes.ENUM('Y', 'N'),
@@ -166,7 +167,7 @@ const Event = sequelize.define(
 
         submit_count: {
             type: DataTypes.INTEGER,
-            allowNull: false
+            allowNull: true
         }
     },
     {

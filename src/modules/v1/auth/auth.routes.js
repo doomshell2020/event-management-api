@@ -6,9 +6,7 @@ const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
 
-// ----------------------
 // Register a new user
-// ----------------------
 router.post(
   '/register',
   [
@@ -35,9 +33,7 @@ router.post(
   authController.register
 );
 
-// ----------------------
 // Login user
-// ----------------------
 router.post(
   '/login',
   [
