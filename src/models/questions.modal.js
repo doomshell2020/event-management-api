@@ -1,39 +1,43 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
-const Countries = sequelize.define(
-    'Countries',
+const Questions = sequelize.define(
+    'Questions',
     {
         id: {
             type: DataTypes.INTEGER,
             autoIncrement: true,
             primaryKey: true,
         },
-        CountryName: {
+        event_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+        },
+        type: {
             type: DataTypes.STRING(255),
             allowNull: false,
         },
-        TwoCharCountryCode: {
-            type: DataTypes.STRING(2),
-            allowNull: false,
-        },
-        ThreeCharCountryCode: {
-            type: DataTypes.STRING(3),
-            allowNull: false,
-        },
-        words: {
+        name: {
             type: DataTypes.STRING(255),
+            allowNull: false,
+        },
+        question: {
+            type: DataTypes.STRING(255),
+            allowNull: false,
+        },
+        ticket_type_id: {
+            type: DataTypes.STRING(100),
             allowNull: true,
-        },
-        Created: {
-            type: DataTypes.DATE,
-            allowNull: false,
-            defaultValue: DataTypes.NOW,
         },
         Status: {
             type: DataTypes.ENUM('Y', 'N'),
             allowNull: false,
             defaultValue: 'Y',
+        },
+        createdAt: {
+            type: DataTypes.DATE,
+            allowNull: false,
+            defaultValue: DataTypes.NOW,
         },
         updatedAt: {
             type: DataTypes.DATE,
@@ -41,9 +45,9 @@ const Countries = sequelize.define(
         },
     },
     {
-        tableName: 'tbl_Countries', // replace with your actual table name
-        timestamps: true,         // disable automatic createdAt/updatedAt
+        tableName: 'tblquestions',
+        timestamps: true, // you're managing manually
     }
 );
 
-module.exports = Countries;
+module.exports = Questions;

@@ -2,7 +2,9 @@ const Event = require('../../../models/Event.model');
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const Company = require('../../../models/company.model');
+// const Company = require('../../../models/company.model');
+const { Company } = require('../../../models');
+
 
 module.exports.createEvent = async (req, res) => {
     try {

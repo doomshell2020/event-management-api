@@ -5,8 +5,8 @@ const { body } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
-const Event = require('../../../models/event.model');
-
+// const Event = require('../../../models/event.model');
+const { Event } = require('../../../models');
 
 // ✅ Create Event Route
 

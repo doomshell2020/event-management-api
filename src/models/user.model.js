@@ -201,6 +201,7 @@ const User = sequelize.define(
   },
   {
     tableName: 'users',
+    timestamps: true,       // ✅ Enable automatic management
     createdAt: 'created',    // map createdAt → created
     updatedAt: 'updateAt',   // map updatedAt → updateAt
   });

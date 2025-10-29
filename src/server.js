@@ -4,7 +4,9 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const sequelize = require('./config/database');
+const { sequelize } = require('./models'); // ✅ connection + models + associations
+// const sequelize = require('./config/database');
+
 const config = require('./config/app');
 const apiResponse = require('../src/common/utils/apiResponse');
 const cookieParser = require('cookie-parser');
@@ -16,8 +18,11 @@ dotenv.config();
 const authRoutesV1 = require('./modules/v1/auth/auth.routes');
 const eventsRoutesV1 = require('./modules/v1/events/events.routes');
 const commonRoutesV1 = require('./modules/v1/common/common.routes');
-// const ticketsRoutesV1 = require('./modules/v1/tickets/tickets.routes');
-// const addonsRoutesV1 = require('./modules/v1/addons/addons.routes');
+const ticketsRoutesV1 = require('./modules/v1/tickets/tickets.routes');
+const addonsRoutesV1 = require('./modules/v1/addons/addons.routes');
+const questionsRoutesV1 = require('./modules/v1/questions/questions.routes');
+const packagesRoutesV1 = require('./modules/v1/package/package.routes');
+
 // const subscriptionsRoutesV1 = require('./modules/v1/subscriptions/subscriptions.routes');
 // const apiKeysRoutesV1 = require('./modules/v1/apiKeys/apiKeys.routes');
 
@@ -45,11 +50,13 @@ app.get('/', (req, res) => {
 });
 
 // API v1 routes
+app.use('/api/v1/common', commonRoutesV1);
 app.use('/api/v1/auth', authRoutesV1);
 app.use('/api/v1/events', eventsRoutesV1);
-app.use('/api/v1/common', commonRoutesV1);
-// app.use('/api/v1/tickets', ticketsRoutesV1);
-// app.use('/api/v1/addons', addonsRoutesV1);
+app.use('/api/v1/tickets', ticketsRoutesV1);
+app.use('/api/v1/addons', addonsRoutesV1);
+app.use('/api/v1/questions', questionsRoutesV1);
+app.use('/api/v1/packages', packagesRoutesV1);
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);
 // app.use('/api/v1/api-keys', apiKeysRoutesV1);
 

@@ -1,5 +1,6 @@
 // controllers/common.controller.js
-const Country = require('../../../models/Country.model');
+// const Country = require('../../../models/Country.model');
+const { Countries } = require('../../../models');
 const apiResponse = require('../../../common/utils/apiResponse');
 
 module.exports.getList = async (req, res) => {
@@ -11,7 +12,7 @@ module.exports.getList = async (req, res) => {
         let data;
         switch (key.toLowerCase()) {
             case 'country':
-                data = await Country.findAll({ attributes: ['id', 'CountryName','TwoCharCountryCode','words','ThreeCharCountryCode'] });
+                data = await Countries.findAll({ attributes: ['id', 'CountryName','TwoCharCountryCode','words','ThreeCharCountryCode'] });
                 break;
             default:
                 return apiResponse.validation(res, [], 'Invalid key provided');

@@ -23,6 +23,7 @@ const Company = sequelize.define(
     },
     {
         tableName: 'tblcompany',
+        timestamps: true,       // ✅ Enable automatic management
         createdAt: 'created',    // map createdAt → created
     }
 );
