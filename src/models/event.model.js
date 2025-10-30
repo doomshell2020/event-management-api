@@ -164,11 +164,14 @@ const Event = sequelize.define(
             allowNull: false,
             defaultValue: 'Y'
         },
-
         submit_count: {
             type: DataTypes.INTEGER,
             allowNull: true
-        }
+        },
+        event_timezone: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
     },
     {
         tableName: 'tblevent',

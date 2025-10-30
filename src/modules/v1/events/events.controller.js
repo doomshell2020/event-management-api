@@ -32,13 +32,24 @@ module.exports.createEvent = async (req, res) => {
             approve_timer,
             allow_register,
             request_rsvp,
-            video_url
+            video_url,
+            event_timezone
         } = req.body;
 
-        // ✅ Validate common required fields
-        if (!name || !desp || !date_from || !date_to || !location || !company_id || !country_id || !slug) {
-            return apiResponse.validation(res, [], 'Required fields are missing');
+        // ✅ Required field validation
+        if (
+            !name ||
+            !desp ||
+            !date_from ||
+            !date_to ||
+            !location ||
+            !company_id ||
+            !country_id ||
+            !slug
+        ) {
+            return apiResponse.validation(res, [], 'Please complete all required fields before submitting the form');
         }
+
 
         // ✅ Conditional validation for paid events
         if (is_free !== 'Y') {

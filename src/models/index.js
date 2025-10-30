@@ -6,10 +6,10 @@ const sequelize = require('../config/database');
 const Questions = require('./questions.modal');
 const QuestionItems = require('./question_items.modal');
 const AddonTypes = require('./addon.model');
+const TicketType = require('./ticket.model');
 const Company = require('./company.model');
 const Countries = require('./country.model');
 const Event = require('./event.model');
-const TicketType = require('./ticket.model');
 const User = require('./user.model');
 const Package = require('./package.model');
 const PackageDetails = require('./package_details.model');
@@ -33,11 +33,21 @@ QuestionItems.belongsTo(Questions, {
   as: 'question'
 });
 
-// In Package model
+// ✅ Package ↔ PackageDetails (already defined)
 Package.hasMany(PackageDetails, { foreignKey: 'package_id', as: 'details' });
 PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
 
+// ✅ PackageDetails ↔ TicketType
+PackageDetails.belongsTo(TicketType, { foreignKey: 'ticket_type_id', as: 'ticketType' });
+TicketType.hasMany(PackageDetails, { foreignKey: 'ticket_type_id', as: 'packageDetails' });
 
+// ✅ PackageDetails ↔ AddonTypes
+PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
+AddonTypes.hasMany(PackageDetails, { foreignKey: 'addon_id', as: 'packageDetails' });
+
+// ✅ Package ↔ Event
+Package.belongsTo(Event, { foreignKey: 'event_id', as: 'event' });
+Event.hasMany(Package, { foreignKey: 'event_id', as: 'packages' });
 
 // =============================
 // ✅ Export all

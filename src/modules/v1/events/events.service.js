@@ -1,10 +1,8 @@
-const Event = require('../../../models/Event.model');
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-// const Company = require('../../../models/company.model');
-const { Company } = require('../../../models');
-
+const { Company, Event } = require('../../../models');
+const { convertToUTC } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 
 module.exports.createEvent = async (req, res) => {
     try {
@@ -25,53 +23,65 @@ module.exports.createEvent = async (req, res) => {
             approve_timer,
             is_free,
             allow_register,
-            request_rsvp
+            request_rsvp,
+            event_timezone
         } = req.body;
 
         const user_id = req.user?.id;
+        // ✅ Set default timezone if missing or empty
+        const finalTimezone = event_timezone && event_timezone.trim() !== ''
+            ? event_timezone
+            : 'UTC';
 
-        // ✅ Validate required fields
-        if (!name || !desp || !date_from || !date_to || !location || !company_id || !country_id || !slug) {
+
+        // ✅ Required field validation
+        if (
+            !name ||
+            !desp ||
+            !date_from ||
+            !date_to ||
+            !location ||
+            !company_id ||
+            !country_id ||
+            !slug) {
             return {
                 success: false,
-                message: 'Please complete all required fields before submitting the form',
-                code: 'VALIDATION_FAILED'
+                message:
+                    'Please complete all required fields before submitting the form (including timezone)',
+                code: 'VALIDATION_FAILED',
             };
         }
 
-        // ✅ Image required for all events
+        // ✅ Image required
         if (!req.file) {
             return {
                 success: false,
                 message: 'Event image (feat_image) is required',
-                code: 'VALIDATION_FAILED'
+                code: 'VALIDATION_FAILED',
             };
         }
 
-        // ✅ Conditional validation: request_rsvp required for free events
-        if (is_free === 'Y' && !request_rsvp) {
+        // ✅ RSVP validation for free events
+        if (is_free == 'Y' && !request_rsvp) {
             return {
                 success: false,
                 message: 'request_rsvp is required for free events',
-                code: 'VALIDATION_FAILED'
+                code: 'VALIDATION_FAILED',
             };
         }
 
-        // ✅ Duplicate check (by name or slug)
+        // ✅ Duplicate check
         const existingEvent = await Event.findOne({
             where: {
-                [Op.or]: [
-                    { name: name.trim() },
-                    { slug: slug.trim() }
-                ]
-            }
+                [Op.or]: [{ name: name.trim() }, { slug: slug.trim() }],
+            },
         });
 
         if (existingEvent) {
             return {
                 success: false,
                 message: 'An event with the same name or slug already exists',
-                code: 'DUPLICATE_ERROR'
+                code: 'DUPLICATE_ERROR',
             };
         }
 
@@ -82,33 +92,36 @@ module.exports.createEvent = async (req, res) => {
         if (!allowedExt.includes(ext)) {
             return {
                 success: false,
-                message: 'Uploaded file is not a valid image. Only JPG, PNG, and JPEG files are allowed.',
-                code: 'INVALID_IMAGE'
+                message:
+                    'Uploaded file is not a valid image. Only JPG, PNG, and JPEG files are allowed.',
+                code: 'INVALID_IMAGE',
             };
         }
 
         const feat_image = filename;
 
-        // ✅ Conditional validation for paid events
+        // ✅ Extra validation for paid events
         if (is_free !== 'Y') {
             if (!ticket_limit || !payment_currency || !sale_start || !sale_end || !approve_timer) {
                 return {
                     success: false,
-                    message: 'Paid events require ticket_limit, payment_currency, sale_start, sale_end, and approve_timer',
-                    code: 'VALIDATION_FAILED'
+                    message:
+                        'Paid events require ticket_limit, payment_currency, sale_start, sale_end, and approve_timer',
+                    code: 'VALIDATION_FAILED',
                 };
             }
         }
 
-        // ✅ Format dates
-        const formatted_date_from = new Date(date_from);
-        const formatted_date_to = new Date(date_to);
-        const formatted_sale_start = sale_start ? new Date(sale_start) : null;
-        const formatted_sale_end = sale_end ? new Date(sale_end) : null;
-        const formatted_request_rsvp = request_rsvp ? new Date(request_rsvp) : null;
-        const admin_status = is_free === 'Y' ? 'Y' : 'N';
+        // ✅ Convert all date/time fields → UTC using timezone
+        const formatted_date_from = convertToUTC(date_from, finalTimezone);
+        const formatted_date_to = convertToUTC(date_to, finalTimezone);
+        const formatted_sale_start = sale_start ? convertToUTC(sale_start, finalTimezone) : null;
+        const formatted_sale_end = sale_end ? convertToUTC(sale_end, finalTimezone) : null;
+        const formatted_request_rsvp = request_rsvp ? convertToUTC(request_rsvp, finalTimezone) : null;
 
-        // ✅ Create event object
+        const admin_status = is_free == 'Y' ? 'Y' : 'N';
+
+        // ✅ Build final event object
         const eventData = {
             name: name.trim(),
             desp: desp.trim(),
@@ -130,17 +143,20 @@ module.exports.createEvent = async (req, res) => {
             is_free: is_free === 'Y' ? 'Y' : 'N',
             allow_register: allow_register === 'Y' ? 'Y' : 'N',
             admineventstatus: admin_status,
-            request_rsvp: formatted_request_rsvp
+            request_rsvp: formatted_request_rsvp,
+            event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
         };
 
-        // ✅ Create event in DB
+        console.log('>>>>>>>>>>>>>>>>>',eventData);
+        
+        // ✅ Save to DB
         const newEvent = await Event.create(eventData);
 
         if (!newEvent) {
             return {
                 success: false,
                 message: 'Event creation failed',
-                code: 'CREATION_FAILED'
+                code: 'CREATION_FAILED',
             };
         }
 
@@ -151,7 +167,7 @@ module.exports.createEvent = async (req, res) => {
         return {
             success: false,
             message: 'Internal server error: ' + error.message,
-            code: 'INTERNAL_ERROR'
+            code: 'INTERNAL_ERROR',
         };
     }
 };
@@ -161,7 +177,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         const existingEvent = await Event.findByPk(eventId);
         if (!existingEvent) {
             return { success: false, message: 'Event not found', code: 'NOT_FOUND' };
-        }        
+        }
 
         const {
             name,
@@ -203,7 +219,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
 
         // ✅ Determine effective values for validation
         const effectiveIsFree = is_free !== undefined ? is_free : existingEvent.is_free;
-        const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;        
+        const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;
 
         // ✅ Free event validation
         if (effectiveIsFree === 'Y' && !effectiveRequestRsvp) {
@@ -269,6 +285,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         return { success: false, message: 'Internal server error: ' + error.message, code: 'INTERNAL_ERROR' };
     }
 };
+
 module.exports.companyCreateEvent = async (req, res) => {
     try {
         const { name } = req.body;

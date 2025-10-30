@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const packageController = require('./package.controller');
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 
@@ -112,5 +112,32 @@ router.put(
     validate,
     packageController.updatePackage
 );
+
+
+// ✅ Get Package List or Single Package (event_id required, id optional)
+router.get(
+    '/list',
+    authenticate,
+    [
+        query('event_id')
+            .notEmpty()
+            .withMessage('Event ID is required')
+            .isInt()
+            .withMessage('Event ID must be a valid number'),
+
+        query('id')
+            .optional()
+            .isInt()
+            .withMessage('Package ID must be a valid number'),
+
+        query('hidden')
+            .optional()
+            .isIn(['Y', 'N'])
+            .withMessage('Hidden must be either Y or N'),
+    ],
+    validate,
+    packageController.getAllPackages
+);
+
 
 module.exports = router;

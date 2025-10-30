@@ -45,6 +45,10 @@ router.post(
             .notEmpty().withMessage('Slug is required')
             .matches(/^[a-z0-9-]+$/).withMessage('Slug must contain only lowercase letters, numbers, and hyphens'),
 
+        body('event_timezone')
+            .optional()
+            .isLength({ min: 2 }).withMessage('Event event_timezone is required'),
+            
         // ✅ Make feat_image required
         body('feat_image').custom((value, { req }) => {
             if (!req.file) {
