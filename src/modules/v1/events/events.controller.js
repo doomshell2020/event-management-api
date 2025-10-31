@@ -3,6 +3,32 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const path = require('path');
 const fs = require('fs');
 
+module.exports.eventList = async (req, res) => {
+  try {
+    const result = await eventService.eventList(req, res);
+
+    if (!result.success) {
+      switch (result.code) {
+        case 'VALIDATION_FAILED':
+          return apiResponse.validation(res, [], result.message);
+        default:
+          return apiResponse.error(res, result.message);
+      }
+    }
+
+    return apiResponse.success(
+      res,
+      result.message || 'Event list fetched successfully',
+      { events: result.data }  // plural naming convention
+    );
+
+  } catch (error) {
+    console.log('Error in eventList controller:', error);
+    return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+  }
+};
+
+
 module.exports.createEvent = async (req, res) => {
     try {
         // ✅ Check if image is uploaded
@@ -147,7 +173,6 @@ module.exports.updateEvent = async (req, res) => {
         return apiResponse.error(res, 'Internal server error', 500);
     }
 };
-
 
 module.exports.companyCreateEvent = async (req, res) => {
     try {

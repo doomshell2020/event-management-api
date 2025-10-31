@@ -43,6 +43,8 @@ const Countries = sequelize.define(
     {
         tableName: 'tbl_Countries', // replace with your actual table name
         timestamps: true,         // disable automatic createdAt/updatedAt
+        createdAt: 'Created',    // map createdAt → created
+        updatedAt: 'updateAt',   // map updatedAt → updateAt
     }
 );
 

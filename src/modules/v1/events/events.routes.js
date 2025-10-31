@@ -10,8 +10,7 @@ const { Event } = require('../../../models');
 
 // ✅ Create Event Route
 
-router.post(
-    '/create',
+router.post('/create',
     authenticate,
     uploadFiles({ folder: 'uploads/events', type: 'single', fieldName: 'feat_image' }),
     [
@@ -48,7 +47,12 @@ router.post(
         body('event_timezone')
             .optional()
             .isLength({ min: 2 }).withMessage('Event event_timezone is required'),
-            
+
+        body('event_type')
+            .notEmpty()
+            .isIn(['single', 'recurring', 'timed_entry'])
+            .withMessage('Event type must be one of: single, recurring, timed_entry'),
+
         // ✅ Make feat_image required
         body('feat_image').custom((value, { req }) => {
             if (!req.file) {
@@ -86,8 +90,7 @@ router.post(
 );
 
 // ✅ Update Event Route
-router.put(
-    '/update/:id',
+router.put('/update/:id',
     authenticate,
     uploadFiles({ folder: 'uploads/events', type: 'single', fieldName: 'feat_image' }),
     [
@@ -149,7 +152,6 @@ router.put(
     eventController.updateEvent
 );
 
-
 router.post('/company-create',
     authenticate,
     [
@@ -167,5 +169,19 @@ router.get('/company-list',
     eventController.companyList
 );
 
+router.post('/event-list',
+    authenticate,
+    [
+        body('search')
+            .optional()
+            .isLength({ min: 2 }).withMessage('Event name must be at least 2 characters long'),
+        body('status')
+            .optional()
+            .isIn(['Y', 'N'])
+            .withMessage('Status must be either Y or N'),
+    ],
+    validate,
+    eventController.eventList
+)
 
 module.exports = router;

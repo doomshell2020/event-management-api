@@ -4,6 +4,49 @@ const { Op } = require('sequelize');
 const { Company, Event } = require('../../../models');
 const { convertToUTC } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 
+module.exports.eventList = async (req, res) => {
+    try {
+        const user = req.user;
+        const { search, status } = req.body || {};
+        let whereCondition = {};
+
+        // ✅ Organizer can only see their own events for admin 1 role id
+        if (user.role_id != 1) {
+            whereCondition.event_org_id = user.id;
+        }
+
+        // ✅ Optional filters
+        if (search && search.trim() !== '') {
+            whereCondition.name = { [Op.like]: `%${search.trim()}%` };
+        }
+
+        if (status && status.trim() !== '') {
+            whereCondition.status = status; // e.g., 'Y' or 'N'
+        }
+
+        // console.log('>>>>>>>>>>>',whereCondition);
+
+        // ✅ Fetch events with company details
+        const events = await Event.findAll({
+            where: whereCondition,
+            order: [['date_from', 'DESC']],
+        });
+
+        return {
+            success: true,
+            message: 'Event list fetched successfully',
+            data: events,
+        };
+    } catch (error) {
+        console.error('Error fetching event list:', error.message);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'INTERNAL_ERROR',
+        };
+    }
+};
+
 module.exports.createEvent = async (req, res) => {
     try {
         const {
@@ -24,7 +67,8 @@ module.exports.createEvent = async (req, res) => {
             is_free,
             allow_register,
             request_rsvp,
-            event_timezone
+            event_timezone,
+            event_type
         } = req.body;
 
         const user_id = req.user?.id;
@@ -147,8 +191,8 @@ module.exports.createEvent = async (req, res) => {
             event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
         };
 
-        console.log('>>>>>>>>>>>>>>>>>',eventData);
-        
+        // console.log('>>>>>>>>>>>>>>>>>', eventData);
+
         // ✅ Save to DB
         const newEvent = await Event.create(eventData);
 
