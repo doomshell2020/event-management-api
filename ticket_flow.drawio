@@ -1,0 +1,61 @@
+<mxfile host="65bd71144e">
+    <diagram id="EventSystemFull" name="Event System with Examples">
+        <mxGraphModel dx="1147" dy="668" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2970" pageHeight="2100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="event" value="📅 EVENTS&#xa;event_id | name | start_date | end_date | entry_type&#xa;&#xa;Example: Tech Fest 2025&#xa;17-11-2025 → 19-11-2025&#xa;Entry Type: Multi (Multi-day event)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4b183;strokeColor=#a65d00;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="100" width="330" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="event_days" value="🗓️ EVENT_DAYS&#xa;day_id | event_id | date&#xa;&#xa;Example:&#xa;1 → 17-11-2025&#xa;2 → 18-11-2025&#xa;3 → 19-11-2025" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe699;strokeColor=#b59b00;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="280" width="330" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="event_slots" value="⏰ EVENT_SLOTS&#xa;slot_id | day_id | start_time | end_time&#xa;&#xa;Example (for 01-11-2025):&#xa;Slot 1: 09:00–10:00&#xa;Slot 2: 11:00–12:00" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c6e0b4;strokeColor=#4f6228;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="440" width="330" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="tickets" value="🎫 TICKETS&#xa;ticket_id | event_id | day_id | slot_id | price | validity_type | entry_type&#xa;&#xa;Examples:&#xa;• Day1 Pass ₹100 → day_id=1 (Case 1)&#xa;• Day2 Pass ₹200 → day_id=2 (Case 1)&#xa;• 2-Day Pass ₹2000 → event_id=1 (Case 2)&#xa;• Slot A ₹100 → slot_id=1 (Case 3)&#xa;• Slot B ₹1500 → slot_id=2 (Case 3)&#xa;• 3-Day VIP ₹8000 → event_id=1 (Case 4)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bdd7ee;strokeColor=#2e75b6;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="250" width="400" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="scan_logs" value="📱 SCAN_LOGS&#xa;scan_id | ticket_id | user_id | scan_time | scan_status&#xa;&#xa;Examples:&#xa;• User 22 (Ticket 3) → scanned 17-11 ✅&#xa;• User 22 (Ticket 3) → scanned 18-11 ✅ (multi entry)&#xa;• User 45 (Ticket 6) → scanned twice → ❌ (single entry)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9d2e9;strokeColor=#5f497a;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="280" width="330" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="addons" value="➕ ADDONS&#xa;addon_id | event_id | addon_name | price&#xa;&#xa;Example:&#xa;1 → Food Coupon ₹300&#xa;2 → Parking ₹200" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cbad;strokeColor=#c65911;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="510" width="280" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="case1" value="Case 1️⃣ Day-wise Pricing&#xa;17-11 Ticket A ₹100, Ticket B ₹150&#xa;18-11 Ticket A ₹200, Ticket B ₹250" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#fff2cc;strokeColor=#b59b00;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="661" width="350" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="case2" value="Case 2️⃣ Multi-day Multi-entry&#xa;17–18 Nov: ₹2000 Pass, entry=multi&#xa;User can scan multiple times both days" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#deebf7;strokeColor=#2e75b6;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="660" width="350" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="case3" value="Case 3️⃣ Slot-based Tickets&#xa;01–05 Nov, daily slots&#xa;Slot 1 (09–10): ₹100, ₹150, ₹200&#xa;Slot 2 (11–12): ₹1000, ₹1500, ₹2000" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#e2f0d9;strokeColor=#4f6228;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="890" y="660" width="350" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="case4" value="Case 4️⃣ Multi-day Single Entry&#xa;3-Day VIP Ticket ₹8000&#xa;User enters once → enjoys full event" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#fce4d6;strokeColor=#c65911;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="1280" y="660" width="330" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge1" style="endArrow=classic;html=1;strokeWidth=2;" parent="1" source="event" target="event_days" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge2" style="endArrow=classic;html=1;strokeWidth=2;" parent="1" source="event_days" target="event_slots" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge3" style="endArrow=classic;html=1;strokeWidth=2;entryX=0.028;entryY=0.023;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="event" target="tickets" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge4" style="endArrow=classic;html=1;strokeWidth=2;" parent="1" source="event_days" target="tickets" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge5" style="endArrow=classic;html=1;strokeWidth=2;" parent="1" source="event_slots" target="tickets" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge6" style="endArrow=classic;html=1;strokeWidth=2;" parent="1" source="tickets" target="scan_logs" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge7" style="endArrow=classic;html=1;strokeWidth=2;" parent="1" source="event" target="addons" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
