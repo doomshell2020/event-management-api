@@ -13,7 +13,7 @@ const Event = require('./event.model');
 const User = require('./user.model');
 const Package = require('./package.model');
 const PackageDetails = require('./package_details.model');
-const EventDays = require('./event_days.model');
+// const EventDays = require('./event_days.model');
 const EventSlots = require('./event_slots.modal');
 const TicketPricing = require('./ticket_pricing.model');
 
@@ -57,5 +57,5 @@ Event.hasMany(Package, { foreignKey: 'event_id', as: 'packages' });
 module.exports = {
   sequelize,
   Questions,  QuestionItems,  AddonTypes,  Company,  Countries,  Event,  TicketType,
-  User,  Package,  PackageDetails, TicketPricing, EventDays, EventSlots
+  User,  Package,  PackageDetails, TicketPricing, EventSlots
 };

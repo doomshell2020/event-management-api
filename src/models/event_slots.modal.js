@@ -9,29 +9,34 @@ const EventSlots = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
-    event_date_id: {
+    event_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'tbl_event_days', // name of the related table
+        model: 'tbl_events', // directly link to event
         key: 'id',
       },
-      onDelete: 'CASCADE', // if an event day is deleted, its slots also get deleted
+      onDelete: 'CASCADE',
     },
     slot_start_utc: {
       type: DataTypes.DATE,
       allowNull: false,
-      comment: 'Start time in UTC',
+      comment: 'Full start datetime in UTC (e.g., 2025-11-17T10:00:00Z)',
     },
+
     slot_end_utc: {
       type: DataTypes.DATE,
       allowNull: false,
-      comment: 'End time in UTC',
+      comment: 'Full end datetime in UTC (e.g., 2025-11-17T12:00:00Z)',
+    },
+    description: {
+      type: DataTypes.STRING,
+      allowNull: false
     },
   },
   {
     tableName: 'tbl_event_slots',
-    timestamps: false, // ✅ no createdAt or updatedAt
+    timestamps: false, // no createdAt or updatedAt
   }
 );
 

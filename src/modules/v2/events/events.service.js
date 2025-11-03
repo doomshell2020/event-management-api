@@ -1,49 +1,203 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event } = require('../../../models');
+const { Company, Event, EventSlots } = require('../../../models');
 const { convertToUTC } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+const moment = require('moment');
 
-module.exports.eventList = async (req, res) => {
+
+module.exports.deleteSlotById = async (event_id, slot_id) => {
     try {
-        const user = req.user;
-        const { search, status } = req.body || {};
-        let whereCondition = {};
-
-        // ✅ Organizer can only see their own events for admin 1 role id
-        if (user.role_id != 1) {
-            whereCondition.event_org_id = user.id;
+        // ✅ 1. Validate event existence
+        const event = await Event.findByPk(event_id);
+        if (!event) {
+            return { success: false, code: "NOT_FOUND", message: "Event not found" };
         }
 
-        // ✅ Optional filters
-        if (search && search.trim() !== '') {
-            whereCondition.name = { [Op.like]: `%${search.trim()}%` };
-        }
-
-        if (status && status.trim() !== '') {
-            whereCondition.status = status; // e.g., 'Y' or 'N'
-        }
-
-        // console.log('>>>>>>>>>>>',whereCondition);
-
-        // ✅ Fetch events with company details
-        const events = await Event.findAll({
-            where: whereCondition,
-            order: [['date_from', 'DESC']],
+        // ✅ 2. Find the slot
+        const slot = await EventSlots.findOne({
+            where: { id: slot_id, event_id },
         });
+
+        if (!slot) {
+            return {
+                success: false,
+                code: "NOT_FOUND",
+                message: `Slot with ID ${slot_id} not found for event ${event_id}`,
+            };
+        }
+
+        // ✅ 3. Delete the slot
+        await slot.destroy();
 
         return {
             success: true,
-            message: 'Event list fetched successfully',
-            data: events,
+            message: `Slot (ID: ${slot_id}) deleted successfully`,
+            data: {
+                event_id,
+                slot_id,
+                description: slot.description,
+                slot_start_utc: slot.slot_start_utc,
+                slot_end_utc: slot.slot_end_utc,
+            },
         };
     } catch (error) {
-        console.error('Error fetching event list:', error.message);
+        console.error("❌ Error in deleteSlotById service:", error);
         return {
             success: false,
-            message: 'Internal server error: ' + error.message,
-            code: 'INTERNAL_ERROR',
+            code: "SERVER_ERROR",
+            message: "Internal server error",
         };
+    }
+};
+
+module.exports.deleteSlotsByDate = async (event_id, date) => {
+    try {
+        // ✅ Validate Event
+        const event = await Event.findByPk(event_id, {
+            attributes: ["id", "event_timezone"]
+        });
+
+        if (!event) {
+            return { success: false, code: 'NOT_FOUND', message: 'Event not found' };
+        }
+
+        const timezone = event.event_timezone || "UTC"; // fallback
+        const dateOnly = date.split('T')[0]; // e.g. "2025-11-17"
+        const startLocal = moment.tz(`${dateOnly} 00:00:00`, timezone);
+        const endLocal = moment.tz(`${dateOnly} 23:59:59`, timezone);
+        const startOfDayUTC = convertToUTC(startLocal.format(), timezone);
+        const endOfDayUTC = convertToUTC(endLocal.format(), timezone);
+
+        console.log("🕒 Deleting slots in UTC range:", startOfDayUTC, "→", endOfDayUTC, timezone);
+
+        const slots = await EventSlots.findAll({
+            where: {
+                event_id,
+                slot_start_utc: { [Op.between]: [startOfDayUTC, endOfDayUTC] }
+            }
+        });
+        if (!slots.length) {
+            return {
+                success: false,
+                code: 'NOT_FOUND',
+                message: `No slots found for ${dateOnly} (UTC range: ${startOfDayUTC.toISOString()} - ${endOfDayUTC.toISOString()})`
+            };
+        }
+        const deletedCount = await EventSlots.destroy({
+            where: {
+                event_id,
+                slot_start_utc: { [Op.between]: [startOfDayUTC, endOfDayUTC] }
+            }
+        });
+        return {
+            success: true,
+            message: `${deletedCount} slot(s) deleted successfully for ${dateOnly}`,
+            data: { event_id, date: dateOnly, deletedCount }
+        };
+
+    } catch (error) {
+        console.error('❌ Error in deleteSlotsByDate service:', error);
+        return { success: false, code: 'SERVER_ERROR', message: 'Internal server error' };
+    }
+};
+
+module.exports.getEventSlots = async (event_id) => {
+    try {
+        // ✅ 1. Validate event
+        const event = await Event.findByPk(event_id);
+        if (!event) {
+            return { success: false, code: 'NOT_FOUND', message: 'Event not found' };
+        }
+
+        // ✅ 2. Fetch slots for event
+        const slots = await EventSlots.findAll({
+            where: { event_id },
+            order: [['slot_start_utc', 'ASC']],
+            attributes: ['id', 'event_id', 'slot_start_utc', 'slot_end_utc', 'description']
+        });
+
+        if (!slots.length) {
+            return { success: false, code: 'NOT_FOUND', message: 'No slots found for this event' };
+        }
+
+        // ✅ 3. Return formatted data
+        return {
+            success: true,
+            message: 'Slots fetched successfully',
+            data: { event_id, total_slots: slots.length, slots }
+        };
+
+    } catch (error) {
+        console.error('❌ Error in getEventSlots service:', error);
+        return { success: false, code: 'SERVER_ERROR', message: 'Internal server error' };
+    }
+};
+
+module.exports.createSlot = async (event_id, slotArray) => {
+    try {
+        // ✅ 1. Validate event
+        const event = await Event.findByPk(event_id);
+        if (!event) {
+            return { success: false, code: 'VALIDATION_FAILED', message: 'Event not found' };
+        }
+
+        // ✅ 2. Validate slots array
+        if (!Array.isArray(slotArray) || slotArray.length === 0) {
+            return { success: false, code: 'VALIDATION_FAILED', message: 'No slot data provided' };
+        }
+
+        const { event_timezone } = event;
+
+        const slotRecords = [];
+
+        // ✅ 3. Validate and prepare slot data (prevent duplicates)
+        for (const slot of slotArray) {
+            if (!slot.slot_start_utc || !slot.slot_end_utc) {
+                return { success: false, code: 'VALIDATION_FAILED', message: 'Each slot must include start and end time.' };
+            }
+
+            const formatted_start = convertToUTC(slot.slot_start_utc, event_timezone);
+            const formatted_end = convertToUTC(slot.slot_end_utc, event_timezone);
+
+            // 🔍 Check if a slot already exists for same event + time range
+            const existingSlot = await EventSlots.findOne({
+                where: {
+                    event_id,
+                    slot_start_utc: formatted_start,
+                    slot_end_utc: formatted_end,
+                },
+            });
+
+            if (existingSlot) {
+                return {
+                    success: false,
+                    code: 'DUPLICATE_ERROR',
+                    message: `Slot already exists for ${formatted_start} → ${formatted_end}.`,
+                };
+            }
+
+            // ✅ Add to slotRecords for batch creation
+            slotRecords.push({
+                event_id,
+                slot_start_utc: formatted_start,
+                slot_end_utc: formatted_end,
+                description: slot.description || null,
+            });
+        }
+
+        // ✅ 4. Bulk insert into DB
+        const createdSlots = await EventSlots.bulkCreate(slotRecords);
+
+        return {
+            success: true,
+            message: 'Slot(s) created successfully',
+            slots: createdSlots,
+        };
+
+    } catch (error) {
+        console.error('❌ Error creating slots:', error.message);
+        return { success: false, code: 'SERVER_ERROR', message: 'Internal server error' };
     }
 };
 
@@ -63,10 +217,6 @@ module.exports.createEvent = async (req, res) => {
             slug,
             sale_start,
             sale_end,
-            approve_timer,
-            is_free,
-            allow_register,
-            request_rsvp,
             event_timezone,
             event_type
         } = req.body;
@@ -105,14 +255,6 @@ module.exports.createEvent = async (req, res) => {
             };
         }
 
-        // ✅ RSVP validation for free events
-        if (is_free == 'Y' && !request_rsvp) {
-            return {
-                success: false,
-                message: 'request_rsvp is required for free events',
-                code: 'VALIDATION_FAILED',
-            };
-        }
 
         // ✅ Duplicate check
         const existingEvent = await Event.findOne({
@@ -145,15 +287,14 @@ module.exports.createEvent = async (req, res) => {
         const feat_image = filename;
 
         // ✅ Extra validation for paid events
-        if (is_free !== 'Y') {
-            if (!ticket_limit || !payment_currency || !sale_start || !sale_end || !approve_timer) {
-                return {
-                    success: false,
-                    message:
-                        'Paid events require ticket_limit, payment_currency, sale_start, sale_end, and approve_timer',
-                    code: 'VALIDATION_FAILED',
-                };
-            }
+        if (!ticket_limit || !payment_currency || !sale_start || !sale_end) {
+            return {
+                success: false,
+                message:
+                    'Paid events require ticket_limit, payment_currency, sale_start, sale_end',
+                code: 'VALIDATION_FAILED',
+            };
+
         }
 
         // ✅ Convert all date/time fields → UTC using timezone
@@ -161,9 +302,6 @@ module.exports.createEvent = async (req, res) => {
         const formatted_date_to = convertToUTC(date_to, finalTimezone);
         const formatted_sale_start = sale_start ? convertToUTC(sale_start, finalTimezone) : null;
         const formatted_sale_end = sale_end ? convertToUTC(sale_end, finalTimezone) : null;
-        const formatted_request_rsvp = request_rsvp ? convertToUTC(request_rsvp, finalTimezone) : null;
-
-        const admin_status = is_free == 'Y' ? 'Y' : 'N';
 
         // ✅ Build final event object
         const eventData = {
@@ -171,27 +309,21 @@ module.exports.createEvent = async (req, res) => {
             desp: desp.trim(),
             date_from: formatted_date_from,
             date_to: formatted_date_to,
+            sale_start: formatted_sale_start,
+            sale_end: formatted_sale_end,
             location,
+            event_type,
             company_id,
             country_id,
             ticket_limit: ticket_limit || 0,
             video_url,
             payment_currency,
             slug: slug.trim(),
-            sale_start: formatted_sale_start,
-            sale_end: formatted_sale_end,
-            approve_timer,
             feat_image,
             event_org_id: user_id,
             fee_assign: 'user',
-            is_free: is_free == 'Y' ? 'Y' : 'N',
-            allow_register: allow_register == 'Y' ? 'Y' : 'N',
-            admineventstatus: admin_status,
-            request_rsvp: formatted_request_rsvp,
             event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
         };
-
-        // console.log('>>>>>>>>>>>>>>>>>', eventData);
 
         // ✅ Save to DB
         const newEvent = await Event.create(eventData);
@@ -228,6 +360,9 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             desp,
             date_from,
             date_to,
+            sale_start,
+            sale_end,
+            feat_image,
             location,
             company_id,
             country_id,
@@ -235,13 +370,6 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             video_url,
             payment_currency,
             slug,
-            sale_start,
-            sale_end,
-            approve_timer,
-            is_free,
-            allow_register,
-            request_rsvp,
-            feat_image
         } = updateData;
 
         // ✅ Conditional duplicate check (only if name or slug is changed)
@@ -261,29 +389,19 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             }
         }
 
-        // ✅ Determine effective values for validation
-        const effectiveIsFree = is_free !== undefined ? is_free : existingEvent.is_free;
-        const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;
-
-        // ✅ Free event validation
-        if (effectiveIsFree === 'Y' && !effectiveRequestRsvp) {
-            return { success: false, message: 'request_rsvp is required for free events', code: 'VALIDATION_FAILED' };
-        }
 
         // ✅ Paid event validation
-        if (effectiveIsFree !== 'Y') {
-            if ((ticket_limit == undefined && !existingEvent.ticket_limit) ||
-                (payment_currency == undefined && !existingEvent.payment_currency) ||
-                (sale_start == undefined && !existingEvent.sale_start) ||
-                (sale_end == undefined && !existingEvent.sale_end) ||
-                (approve_timer == undefined && !existingEvent.approve_timer)) {
-                return {
-                    success: false,
-                    message: 'Paid events require ticket_limit, payment_currency, sale_start, sale_end, and approve_timer',
-                    code: 'VALIDATION_FAILED'
-                };
-            }
+        if ((ticket_limit == undefined && !existingEvent.ticket_limit) ||
+            (payment_currency == undefined && !existingEvent.payment_currency) ||
+            (sale_start == undefined && !existingEvent.sale_start) ||
+            (sale_end == undefined && !existingEvent.sale_end)) {
+            return {
+                success: false,
+                message: 'Events require ticket_limit, payment_currency, sale_start, sale_end',
+                code: 'VALIDATION_FAILED'
+            };
         }
+
 
         // ✅ Update only provided fields
         if (name) existingEvent.name = name.trim();
@@ -299,10 +417,6 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (slug) existingEvent.slug = slug.trim();
         if (sale_start) existingEvent.sale_start = new Date(sale_start);
         if (sale_end) existingEvent.sale_end = new Date(sale_end);
-        if (approve_timer !== undefined) existingEvent.approve_timer = approve_timer;
-        if (allow_register !== undefined) existingEvent.allow_register = allow_register == 'Y' ? 'Y' : 'N';
-        if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
-        if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
 
         // ✅ Handle optional image update
         if (feat_image) {
@@ -430,3 +544,47 @@ module.exports.companyList = async (req, res) => {
     }
 
 }
+
+module.exports.eventList = async (req, res) => {
+    try {
+        const user = req.user;
+        const { search, status } = req.body || {};
+        let whereCondition = {};
+
+        // ✅ Organizer can only see their own events for admin 1 role id
+        if (user.role_id != 1) {
+            whereCondition.event_org_id = user.id;
+        }
+
+        // ✅ Optional filters
+        if (search && search.trim() !== '') {
+            whereCondition.name = { [Op.like]: `%${search.trim()}%` };
+        }
+
+        if (status && status.trim() !== '') {
+            whereCondition.status = status; // e.g., 'Y' or 'N'
+        }
+
+        // console.log('>>>>>>>>>>>',whereCondition);
+
+        // ✅ Fetch events with company details
+        const events = await Event.findAll({
+            where: whereCondition,
+            order: [['date_from', 'DESC']],
+        });
+
+        return {
+            success: true,
+            message: 'Event list fetched successfully',
+            data: events,
+        };
+    } catch (error) {
+        console.error('Error fetching event list:', error.message);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'INTERNAL_ERROR',
+        };
+    }
+};
+

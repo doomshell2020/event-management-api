@@ -3,31 +3,112 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const path = require('path');
 const fs = require('fs');
 
-module.exports.eventList = async (req, res) => {
+
+module.exports.getEventSlots = async (req, res) => {
+    try {
+        const { event_id } = req.params;
+
+        const result = await eventService.getEventSlots(event_id);
+        if (!result.success) {
+            switch (result.code) {
+                case 'NOT_FOUND':
+                    return apiResponse.notFound(res, result.message);
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+        return apiResponse.success(res, result.message, result.data);
+    } catch (error) {
+        console.error('❌ Error in getEventSlots controller:', error);
+        return apiResponse.error(res, 'Internal server error');
+    }
+};
+
+module.exports.deleteSlotsByDate = async (req, res) => {
+    try {
+        const { event_id } = req.params;
+        const { date } = req.query; // e.g. ?date=2025-11-17       
+
+        // ✅ Validation
+        if (!event_id || !date) {
+            return apiResponse.validation(res, [], 'Event ID and date are required.');
+        }
+
+        // ✅ Call service
+        const result = await eventService.deleteSlotsByDate(event_id, date);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'NOT_FOUND':
+                    return apiResponse.notFound(res, result.message);
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(res, result.message, result.data);
+    } catch (error) {
+        console.error('❌ Error in deleteSlotsByDate controller:', error);
+        return apiResponse.error(res, 'Internal server error');
+    }
+};
+
+module.exports.deleteSlotById = async (req, res) => {
   try {
-    const result = await eventService.eventList(req, res);
+    const { event_id, slot_id } = req.params;
+
+    if (!event_id || !slot_id) {
+      return apiResponse.validation(res, [], "Event ID and Slot ID are required");
+    }
+
+    const result = await eventService.deleteSlotById(event_id, slot_id);
 
     if (!result.success) {
       switch (result.code) {
-        case 'VALIDATION_FAILED':
+        case "NOT_FOUND":
+          return apiResponse.notFound(res, result.message);
+        case "VALIDATION_FAILED":
           return apiResponse.validation(res, [], result.message);
         default:
           return apiResponse.error(res, result.message);
       }
     }
 
-    return apiResponse.success(
-      res,
-      result.message || 'Event list fetched successfully',
-      { events: result.data }  // plural naming convention
-    );
-
+    return apiResponse.success(res, result.message, result.data);
   } catch (error) {
-    console.log('Error in eventList controller:', error);
-    return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    console.error("❌ Error in deleteSlotById controller:", error);
+    return apiResponse.error(res, "Internal server error");
   }
 };
 
+module.exports.eventList = async (req, res) => {
+    try {
+        const result = await eventService.eventList(req, res);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event list fetched successfully',
+            { events: result.data }  // plural naming convention
+        );
+
+    } catch (error) {
+        console.log('Error in eventList controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
 
 module.exports.createEvent = async (req, res) => {
     try {
@@ -51,13 +132,9 @@ module.exports.createEvent = async (req, res) => {
             country_id,
             payment_currency,
             slug,
-            is_free,
             ticket_limit,
             sale_start,
             sale_end,
-            approve_timer,
-            allow_register,
-            request_rsvp,
             video_url,
             event_timezone
         } = req.body;
@@ -78,10 +155,8 @@ module.exports.createEvent = async (req, res) => {
 
 
         // Conditional validation for paid events
-        if (is_free !== 'Y') {
-            if (!ticket_limit || !payment_currency || !sale_start || !sale_end || !approve_timer) {
-                return apiResponse.validation(res, [], 'Paid events require ticket_limit, payment_currency, sale_start, sale_end, and approve_timer');
-            }
+        if (!ticket_limit || !payment_currency || !sale_start || !sale_end) {
+            return apiResponse.validation(res, [], 'Paid events require ticket_limit, payment_currency, sale_start, sale_end');
         }
 
         // Call service to create event
@@ -224,3 +299,50 @@ module.exports.companyList = async (req, res) => {
         return apiResponse.error(res, 'Internal server error', 500);
     }
 }
+
+module.exports.createSlot = async (req, res) => {
+    try {
+        const { event_id, slots } = req.body;
+
+        // ✅ Validation
+        if (!event_id || !slots) {
+            return apiResponse.validation(res, [], 'Event ID and slot details are required.');
+        }
+
+        // ✅ Normalize single → array
+        const slotArray = Array.isArray(slots) ? slots : [slots];
+
+        // ✅ Basic validation inside each slot
+        for (const s of slotArray) {
+            if (!s.slot_start_utc || !s.slot_end_utc) {
+                return apiResponse.validation(res, [], 'Each slot must include slot_start_utc and slot_end_utc.');
+            }
+        }
+
+        // ✅ Call service layer
+        const result = await eventService.createSlot(event_id, slotArray);
+
+        // ✅ Handle service-level errors
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        // ✅ Success response
+        return apiResponse.success(
+            res,
+            result.message || 'Slot(s) created successfully!',
+            { slots: result.slots }
+        );
+
+    } catch (error) {
+        console.error('❌ Error in createSlot controller:', error);
+        return apiResponse.error(res, 'Internal server error', 500);
+    }
+};
+
+

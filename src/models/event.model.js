@@ -2,8 +2,7 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
 
-const Event = sequelize.define(
-    'Event',
+const Event = sequelize.define('Event',
     {
         id: {
             type: DataTypes.INTEGER,
@@ -120,6 +119,11 @@ const Event = sequelize.define(
             allowNull: true,
             defaultValue: 'N'
         },
+        entry_type: {
+            type: DataTypes.ENUM('single', 'recurring', 'timed_entry'),
+            allowNull: true,
+            defaultValue: 'single'
+        },
         featured: {
             type: DataTypes.ENUM('Y', 'N'),
             allowNull: false,
@@ -151,8 +155,9 @@ const Event = sequelize.define(
             defaultValue: 'N'
         },
         admineventstatus: {
-            type: DataTypes.STRING,
-            allowNull: false
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N'
         },
         is_free: {
             type: DataTypes.ENUM('Y', 'N'),

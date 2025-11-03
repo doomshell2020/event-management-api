@@ -23,6 +23,7 @@ const addonsRoutesV1 = require('./modules/v1/addons/addons.routes');
 const questionsRoutesV1 = require('./modules/v1/questions/questions.routes');
 const packagesRoutesV1 = require('./modules/v1/package/package.routes');
 
+const eventsRoutesV2 = require('./modules/v2/events/events.routes');
 // const subscriptionsRoutesV1 = require('./modules/v1/subscriptions/subscriptions.routes');
 // const apiKeysRoutesV1 = require('./modules/v1/apiKeys/apiKeys.routes');
 
@@ -60,6 +61,8 @@ app.use('/api/v1/packages', packagesRoutesV1);
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);
 // app.use('/api/v1/api-keys', apiKeysRoutesV1);
 
+// API v2 routes
+app.use('/api/v2/events', eventsRoutesV2);
 
 // Handle 404 errors
 app.use((req, res) => {
