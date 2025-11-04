@@ -39,7 +39,11 @@ const TicketType = sequelize.define(
         },
         type: {
             type: DataTypes.ENUM('open_sales', 'committee_sales', 'comps'),
-            allowNull: false
+            defaultValue: 'open_sales'
+        },
+        entry_type: {
+            type: DataTypes.ENUM('single', 'multi', 'slot'),
+            defaultValue: 'single'
         },
         hidden: {
             type: DataTypes.ENUM('Y', 'N'),

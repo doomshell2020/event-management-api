@@ -1,32 +1,26 @@
-
-const { TicketType, Event } = require('../../../models/index');
-
+const { TicketType, Event, EventSlots, TicketPricing } = require('../../../models/index');
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
+
 
 module.exports.createTicket = async (req) => {
     try {
         const {
             event_id,
             title,
+            entry_type,
             type,
             count,
             price,
-            hidden,
-            sale_start,
-            sale_end,
-            sold_out,
-            is_active,
-            description,
-            status
+            hidden
         } = req.body;
 
         const user_id = req.user?.id || null;
         const ticketImage = req.file?.filename;
 
         // ✅ Validate required fields
-        if (!event_id || !title || !type) {
+        if (!event_id || !title || !entry_type) {
             return {
                 success: false,
                 message: 'Please fill all required fields',
@@ -78,19 +72,13 @@ module.exports.createTicket = async (req) => {
             eventid: event_id,
             userid: user_id,
             title: title.trim(),
+            entry_type,
+            type: type ?? type,
             ticket_image: ticketImage || null,
-            description: description?.trim() || '',
-
             // ✅ Price and Count logic
-            price: type == 'open_sales' ? parseFloat(price) || 0 : null,
-            count: type == 'open_sales' ? parseInt(count) || 0 : null,
-
-            type,
+            price: parseFloat(price) || 0,
+            count: parseInt(count) || 0,
             hidden: hidden == 'Y' ? 'Y' : 'N',
-            sold_out: sold_out == 'Y' ? 'Y' : 'N',
-            status: status || 'N',
-            // sale_start: sale_start ? new Date(sale_start) : null,
-            // sale_end: sale_end ? new Date(sale_end) : null,
         });
 
 
@@ -115,16 +103,10 @@ module.exports.updateTicket = async (req) => {
         const ticketId = req.params.id;
         const {
             title,
-            type,
             count,
             price,
             hidden,
-            sold_out,
-            is_active,
-            description,
-            status,
-            sale_start,
-            sale_end,
+            type
         } = req.body;
 
         const user_id = req.user?.id || null;
@@ -140,7 +122,7 @@ module.exports.updateTicket = async (req) => {
             };
         }
 
-        // ✅ Check for duplicate title for same event (excluding current ticket)
+        // ✅ Check for duplicate title for the same event (excluding current ticket)
         if (existingTicket.eventid && title) {
             const duplicateTicket = await TicketType.findOne({
                 where: {
@@ -159,7 +141,8 @@ module.exports.updateTicket = async (req) => {
             }
         }
 
-        // ✅ Validate image extension only if new image is uploaded
+
+        // ✅ Validate image extension only if a new image is uploaded
         if (ticketImage) {
             const allowedExt = ['png', 'jpg', 'jpeg'];
             const ext = ticketImage.split('.').pop().toLowerCase();
@@ -172,24 +155,30 @@ module.exports.updateTicket = async (req) => {
             }
         }
 
-        // ✅ Prepare update data
+        // ✅ Handle price based on ticket type
+        let validatedPrice = price ? parseFloat(price) : existingTicket.price;
+
+        // If type is 'comps', set price to null
+        if (type == 'comps') {
+            validatedPrice = null;
+        } else if (type == 'open_sales' && !price) {
+            // Price is required for 'open_sales'
+            return {
+                success: false,
+                message: 'Price is required for tickets with type "open_sales".',
+                code: 'PRICE_REQUIRED'
+            };
+        }
+
+        // ✅ Prepare update data, including the type field
         const updateData = {
             eventid: existingTicket.eventid,
             userid: user_id || existingTicket.userid,
             title: title ? title.trim() : existingTicket.title,
-            description: description ? description.trim() : existingTicket.description,
-            type: type || existingTicket.type,
             hidden: hidden ? (hidden == 'Y' ? 'Y' : 'N') : existingTicket.hidden,
-            sold_out: sold_out ? (sold_out == 'Y' ? 'Y' : 'N') : existingTicket.sold_out,
-            status: status || existingTicket.status,
-            price: type == 'open_sales'
-                ? parseFloat(price) || existingTicket.price
-                : (type && type !== 'open_sales' ? null : existingTicket.price),
-            count: type == 'open_sales'
-                ? parseInt(count) || existingTicket.count
-                : (type && type !== 'open_sales' ? null : existingTicket.count),
-            // sale_start: sale_start ? new Date(sale_start) : existingTicket.sale_start,
-            // sale_end: sale_end ? new Date(sale_end) : existingTicket.sale_end,
+            price: validatedPrice,
+            count: count ? parseInt(count) : existingTicket.count,
+            type: type || existingTicket.type, // Ensure 'type' is updated
         };
 
         // ✅ Handle ticket image replacement
@@ -271,6 +260,59 @@ module.exports.deleteTicket = async (req) => {
             success: false,
             message: 'Internal server error: ' + error.message,
             code: 'DB_ERROR'
+        };
+    }
+};
+
+module.exports.setTicketPricing = async ({ event_id, ticket_type_id, event_slot_id, price }) => {
+    try {
+        const ticket = await TicketType.findOne({
+            where: { id: ticket_type_id, eventid: event_id }
+        });
+        if (!ticket) {
+            return { success: false, code: 'TICKET_NOT_FOUND', message: 'Ticket type not found' };
+        }
+        const slot = await EventSlots.findOne({
+            where: { id: event_slot_id, event_id: event_id }
+        });
+        if (!slot) {
+            return { success: false, code: 'SLOT_NOT_FOUND', message: 'Event slot not found' };
+        }
+        let pricing = await TicketPricing.findOne({
+            where: {
+                ticket_type_id,
+                event_slot_id
+            }
+        });
+
+        let resMessage = 'Ticket pricing set successfully';
+
+        if (pricing) {
+            pricing.price = price;
+            await pricing.save();
+            resMessage = 'Ticket pricing update successfully';
+
+        } else {
+            pricing = await TicketPricing.create({
+                event_id,
+                ticket_type_id,
+                event_slot_id,
+                price
+            });
+        }
+
+        return {
+            success: true,
+            message: resMessage,
+            data: pricing
+        };
+
+    } catch (error) {
+        console.error('Error setting ticket pricing:', error);
+        return {
+            success: false,
+            code: 'DB_ERROR',
+            message: 'Database error: ' + error.message
         };
     }
 };

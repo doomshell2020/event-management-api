@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event, EventSlots } = require('../../../models');
+const { Company, Event, EventSlots, TicketType, TicketPricing } = require('../../../models');
 const { convertToUTC } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const moment = require('moment');
 
@@ -143,7 +143,7 @@ module.exports.createSlot = async (event_id, slotArray) => {
         }
 
         // ✅ 2. Validate slots array
-        if (!Array.isArray(slotArray) || slotArray.length === 0) {
+        if (!Array.isArray(slotArray) || slotArray.length == 0) {
             return { success: false, code: 'VALIDATION_FAILED', message: 'No slot data provided' };
         }
 
@@ -588,3 +588,65 @@ module.exports.eventList = async (req, res) => {
     }
 };
 
+module.exports.getEventDetails = async (req, res) => {
+    try {
+        const { event_id } = req.params;
+
+        if (!event_id) {
+            return {
+                success: false,
+                code: 'VALIDATION_FAILED',
+                message: 'Event ID is required'
+            };
+        }
+
+        // Fetch event with slots -> ticket pricing -> ticket type
+        const event = await Event.findOne({
+            where: { id: event_id },
+            include: [
+                {
+                    model: EventSlots,
+                    as: 'slots',
+                    include: [
+                        {
+                            model: TicketPricing,
+                            as: 'pricings',
+                            include: [
+                                {
+                                    model: TicketType,
+                                    as: 'ticket'
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    model: TicketType,
+                    as: 'tickets'
+                }
+            ]
+        });
+
+        if (!event) {
+            return {
+                success: false,
+                code: 'EVENT_NOT_FOUND',
+                message: 'Event not found'
+            };
+        }
+
+        return {
+            success: true,
+            message: 'Event details fetched successfully',
+            data: event
+        };
+
+    } catch (error) {
+        console.error('Error fetching event details:', error.message);
+        return {
+            success: false,
+            code: 'DB_ERROR',
+            message: 'Internal server error: ' + error.message
+        };
+    }
+};

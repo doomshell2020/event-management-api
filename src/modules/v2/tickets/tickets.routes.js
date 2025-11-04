@@ -8,8 +8,7 @@ const uploadFiles = require('../../../middlewares/upload.middleware');
 
 
 // 🎟️ Create Ticket Route
-router.post(
-    '/create',
+router.post('/create',
     authenticate,
     uploadFiles({ folder: 'uploads/tickets', type: 'single', fieldName: 'ticketImage' }),
     [
@@ -17,11 +16,6 @@ router.post(
         body('event_id')
             .notEmpty().withMessage('Event ID is required')
             .isInt().withMessage('Event ID must be a number'),
-
-        body('type')
-            .notEmpty().withMessage('Ticket type is required')
-            .isIn(['open_sales', 'committee_sales', 'comps'])
-            .withMessage('Invalid ticket type'),
 
         body('title')
             .notEmpty().withMessage('Ticket title is required')
@@ -36,30 +30,31 @@ router.post(
             .optional()
             .isInt({ min: 1 }).withMessage('Ticket count must be at least 1'),
 
-        // body('sale_start')
-        //     .optional()
-        //     .isISO8601().withMessage('Sale start date must be a valid ISO date'),
+        body('entry_type')
+            .notEmpty().withMessage('Ticket type is required')
+            .isIn(['single', 'multi', 'slot'])
+            .withMessage('Invalid ticket entry_type'),
 
-        // body('sale_end')
-        //     .optional()
-        //     .isISO8601().withMessage('Sale end date must be a valid ISO date')
+        body('type')
+            .optional()
+            .isIn(['open_sales', 'comps'])
+            .withMessage('Invalid ticket type open_sales is paid and the comps is for free'),
+
+        body('hidden')
+            .optional()
+            .isIn(['Y', 'N'])
+            .withMessage('Invalid hidden type Y,N'),
     ],
     validate,
     ticketController.createTicket
 );
 
 // 🎟️ Update Ticket Route
-router.put(
-    '/update/:id',
+router.put('/update/:id',
     authenticate,
     uploadFiles({ folder: 'uploads/tickets', type: 'single', fieldName: 'ticketImage' }),
     [
         param('id').isInt({ min: 1 }).withMessage('Valid Ticket ID is required'),
-
-        body('type')
-            .optional()
-            .isIn(['open_sales', 'committee_sales', 'comps'])
-            .withMessage('Invalid ticket type'),
 
         body('title')
             .optional()
@@ -73,13 +68,16 @@ router.put(
             .optional()
             .isInt({ min: 1 }).withMessage('Ticket count must be at least 1'),
 
-        // body('sale_start')
-        //     .optional()
-        //     .isISO8601().withMessage('Sale start date must be a valid ISO date'),
+        body('hidden')
+            .optional()
+            .isIn(['Y', 'N'])
+            .withMessage('Invalid hidden type Y,N'),
 
-        // body('sale_end')
-        //     .optional()
-        //     .isISO8601().withMessage('Sale end date must be a valid ISO date'),
+        body('type')
+            .optional()
+            .isIn(['open_sales', 'comps'])
+            .withMessage('Invalid ticket type open_sales is paid and the comps is for free'),
+
     ],
     validate,
     ticketController.updateTicket
@@ -87,9 +85,8 @@ router.put(
 
 // 🎟️ Delete Ticket Route
 router.delete('/delete/:id',
-    authenticate, // ✅ Require authentication
+    authenticate,
     [
-        // ✅ Validate Ticket ID
         param('id')
             .isInt({ min: 1 })
             .withMessage('Valid Ticket ID is required'),
@@ -98,11 +95,30 @@ router.delete('/delete/:id',
     ticketController.deleteTicket // 👈 You’ll implement this in your controller
 );
 
+// 🎟️ Set Ticket Pricing Route
+router.post('/ticket-pricing/set',
+    authenticate,
+    [
+        body('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt({ min: 1 }).withMessage('Event ID must be a valid number'),
 
-// router.get('/', ticketController.getAllTickets);
-// router.get('/:id', ticketController.getTicketById);
+        body('ticket_type_id')
+            .notEmpty().withMessage('Ticket Type ID is required')
+            .isInt({ min: 1 }).withMessage('Ticket Type ID must be a valid number'),
 
-// router.delete('/:id', ticketController.deleteTicket);
+        body('event_slot_id')
+            .notEmpty().withMessage('Event Slot ID is required')
+            .isInt({ min: 1 }).withMessage('Event Slot ID must be a valid number'),
+
+        body('price')
+            .notEmpty().withMessage('Price is required')
+            .isFloat({ min: 0 }).withMessage('Price must be a valid number')
+    ],
+    validate,
+    ticketController.setTicketPricing // 👈 Implement this in your controller/service
+);
+
 
 module.exports = router;
 

@@ -51,6 +51,62 @@ AddonTypes.hasMany(PackageDetails, { foreignKey: 'addon_id', as: 'packageDetails
 Package.belongsTo(Event, { foreignKey: 'event_id', as: 'event' });
 Event.hasMany(Package, { foreignKey: 'event_id', as: 'packages' });
 
+
+
+// =============================
+// ✅ Event ↔ TicketType
+// =============================
+Event.hasMany(TicketType, { 
+  foreignKey: 'eventid', 
+  as: 'tickets',   // fetch tickets via event.tickets
+  onDelete: 'CASCADE' 
+});
+
+TicketType.belongsTo(Event, { 
+  foreignKey: 'eventid', 
+  as: 'event' 
+});
+
+
+TicketType.hasMany(TicketPricing, { 
+  foreignKey: 'ticket_type_id', 
+  as: 'pricings',  // fetch pricing via ticket.pricings
+  onDelete: 'CASCADE' 
+});
+
+// =============================
+// ✅ Event ↔ EventSlots
+// =============================
+Event.hasMany(EventSlots, { 
+  foreignKey: 'event_id', 
+  as: 'slots',     // fetch slots via event.slots
+  onDelete: 'CASCADE' 
+});
+
+EventSlots.belongsTo(Event, { 
+  foreignKey: 'event_id', 
+  as: 'event' 
+});
+
+EventSlots.hasMany(TicketPricing, {
+  foreignKey: 'event_slot_id',
+  as: 'pricings',
+  onDelete: 'CASCADE'
+});
+
+
+TicketPricing.belongsTo(TicketType, { 
+  foreignKey: 'ticket_type_id', 
+  as: 'ticket' 
+});
+
+TicketPricing.belongsTo(EventSlots, {
+  foreignKey: 'event_slot_id',
+  as: 'slot'
+});
+
+
+
 // =============================
 // ✅ Export all
 // =============================

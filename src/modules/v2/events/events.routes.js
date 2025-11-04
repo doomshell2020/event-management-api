@@ -142,7 +142,6 @@ router.put('/update/:id',
     eventController.updateEvent
 );
 
-
 router.post('/create-slot',
     authenticate,
     [
@@ -197,22 +196,6 @@ router.delete('/:event_id/slots-by-date',
     eventController.deleteSlotsByDate
 );
 
-router.post('/company-create',
-    authenticate,
-    [
-        body('companyName')
-            .notEmpty().withMessage('Company name is required')
-            .isLength({ min: 4 }).withMessage('Company name must be at least 4 characters long'),
-    ],
-    validate,
-    eventController.companyCreateEvent
-);
-
-// company list api 
-router.get('/company-list',
-    authenticate,
-    eventController.companyList
-);
 
 router.post('/event-list',
     authenticate,
@@ -227,6 +210,18 @@ router.post('/event-list',
     ],
     validate,
     eventController.eventList
-)
+);
+
+// ✅ 2️⃣ Get All Slots for an Event
+router.get('/event-details/:event_id',
+    authenticate,
+    [
+        param('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be numeric'),
+    ],
+    validate,
+    eventController.getEventDetails
+);
 
 module.exports = router;

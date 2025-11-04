@@ -11,14 +11,13 @@ module.exports.createTicket = async (req, res) => {
         const fullFilePath = filename ? path.join(uploadFolder, filename) : null;
 
         // ✅ Validate required fields
-        const { event_id, title, type, price, count } = req.body;
+        const { event_id, title, entry_type, price, count, hidden } = req.body;
 
-        if (!event_id || !title || !type) {
+        if (!event_id || !title || !entry_type) {
             return apiResponse.validation(res, [], 'Required fields are missing');
         }
 
-        // ✅ If type is "open_sales", then price and count are mandatory
-        if (type == 'open_sales' && (!price || !count)) {
+        if ((!price || !count)) {
             if (fullFilePath && fs.existsSync(fullFilePath)) {
                 fs.unlinkSync(fullFilePath);
                 console.log('🧹 Uploaded image removed due to DB failure:', fullFilePath);
@@ -75,12 +74,24 @@ module.exports.updateTicket = async (req, res) => {
         }
 
         // ✅ Validate fields
-        const { title, type, price, count } = req.body;
+        const { title, price, count, type } = req.body;
 
-        if (type == 'open_sales' && (!price || !count)) {
-            if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
-            return apiResponse.validation(res, [], 'Price and count are required for open_sales type');
+        // ✅ If type is open_sales → price and count are required
+        if (type == 'open_sales') {
+            if (!price || !count) {
+                if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
+                return apiResponse.validation(res, [], 'Price and count are required for open_sales type');
+            }
         }
+
+        // ✅ If type is comps → price should be ignored (set to null), but count is still required
+        if (type == 'comps') {
+            if (!count) {
+                if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
+                return apiResponse.validation(res, [], 'Count is required for comps type');
+            }
+        }
+
 
         // ✅ Call service to update ticket
         const result = await ticketService.updateTicket(req);
@@ -145,6 +156,39 @@ module.exports.deleteTicket = async (req, res) => {
 
     } catch (error) {
         console.error('Error in deleteTicket:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
+
+module.exports.setTicketPricing = async (req, res) => {
+    try {
+        const { event_id, ticket_type_id, event_slot_id, price } = req.body;
+
+        // ✅ Validate required fields (extra safety, though route already validates)
+        if (!event_id || !ticket_type_id || !event_slot_id || price == undefined) {
+            return apiResponse.validation(res, [], 'All fields are required: event_id, ticket_type_id, event_slot_id, price');
+        }
+
+        const result = await ticketService.setTicketPricing(req.body);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'TICKET_NOT_FOUND':
+                    return apiResponse.notFound(res, 'Ticket type not found');
+                case 'SLOT_NOT_FOUND':
+                    return apiResponse.notFound(res, 'Event slot not found');
+                case 'DB_ERROR':
+                    return apiResponse.error(res, 'Database error while setting ticket pricing');
+                default:
+                    return apiResponse.error(res, result.message || 'An unknown error occurred');
+            }
+        }
+
+        // ✅ Success response
+        return apiResponse.success(res, result.message || 'Ticket pricing set successfully', result.data);
+
+    } catch (error) {
+        console.error('Error in setTicketPricing:', error);
         return apiResponse.error(res, 'Internal Server Error', 500);
     }
 };

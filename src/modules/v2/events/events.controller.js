@@ -58,31 +58,31 @@ module.exports.deleteSlotsByDate = async (req, res) => {
 };
 
 module.exports.deleteSlotById = async (req, res) => {
-  try {
-    const { event_id, slot_id } = req.params;
+    try {
+        const { event_id, slot_id } = req.params;
 
-    if (!event_id || !slot_id) {
-      return apiResponse.validation(res, [], "Event ID and Slot ID are required");
+        if (!event_id || !slot_id) {
+            return apiResponse.validation(res, [], "Event ID and Slot ID are required");
+        }
+
+        const result = await eventService.deleteSlotById(event_id, slot_id);
+
+        if (!result.success) {
+            switch (result.code) {
+                case "NOT_FOUND":
+                    return apiResponse.notFound(res, result.message);
+                case "VALIDATION_FAILED":
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(res, result.message, result.data);
+    } catch (error) {
+        console.error("❌ Error in deleteSlotById controller:", error);
+        return apiResponse.error(res, "Internal server error");
     }
-
-    const result = await eventService.deleteSlotById(event_id, slot_id);
-
-    if (!result.success) {
-      switch (result.code) {
-        case "NOT_FOUND":
-          return apiResponse.notFound(res, result.message);
-        case "VALIDATION_FAILED":
-          return apiResponse.validation(res, [], result.message);
-        default:
-          return apiResponse.error(res, result.message);
-      }
-    }
-
-    return apiResponse.success(res, result.message, result.data);
-  } catch (error) {
-    console.error("❌ Error in deleteSlotById controller:", error);
-    return apiResponse.error(res, "Internal server error");
-  }
 };
 
 module.exports.eventList = async (req, res) => {
@@ -109,6 +109,32 @@ module.exports.eventList = async (req, res) => {
         return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
     }
 };
+
+module.exports.getEventDetails = async (req, res) => {
+    try {
+        const result = await eventService.getEventDetails(req, res);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event details fetched successfully',
+            { event: result.data } // singular for single event
+        );
+
+    } catch (error) {
+        console.log('Error in getEventDetails controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
+
 
 module.exports.createEvent = async (req, res) => {
     try {
