@@ -30,10 +30,10 @@ router.post('/create',
             .optional()
             .isInt({ min: 1 }).withMessage('Ticket count must be at least 1'),
 
-        body('entry_type')
-            .notEmpty().withMessage('Ticket type is required')
-            .isIn(['single', 'multi', 'slot'])
-            .withMessage('Invalid ticket entry_type'),
+        body('access_type')
+            .notEmpty().withMessage('Ticket access_type is required')
+            .isIn(['event', 'day', 'slot'])
+            .withMessage('Invalid ticket access_type event, day, slot'),
 
         body('type')
             .optional()
@@ -96,7 +96,8 @@ router.delete('/delete/:id',
 );
 
 // 🎟️ Set Ticket Pricing Route
-router.post('/ticket-pricing/set',
+router.post(
+    '/ticket-pricing/set',
     authenticate,
     [
         body('event_id')
@@ -108,16 +109,21 @@ router.post('/ticket-pricing/set',
             .isInt({ min: 1 }).withMessage('Ticket Type ID must be a valid number'),
 
         body('event_slot_id')
-            .notEmpty().withMessage('Event Slot ID is required')
+            .optional()
             .isInt({ min: 1 }).withMessage('Event Slot ID must be a valid number'),
 
         body('price')
             .notEmpty().withMessage('Price is required')
-            .isFloat({ min: 0 }).withMessage('Price must be a valid number')
+            .isFloat({ min: 0 }).withMessage('Price must be a valid number'),
+
+        body('date')
+            .optional()
+            .isISO8601().withMessage('Date must be a valid date format (YYYY-MM-DD)')
     ],
     validate,
-    ticketController.setTicketPricing // 👈 Implement this in your controller/service
+    ticketController.setTicketPricing
 );
+
 
 
 module.exports = router;

@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="EventSystemFull" name="Event System with Examples">
-        <mxGraphModel dx="1532" dy="534" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2970" pageHeight="2100" math="0" shadow="0">
+        <mxGraphModel dx="1626" dy="609" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2970" pageHeight="2100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -14,13 +14,13 @@
                     <mxGeometry x="120" y="440" width="330" height="110" as="geometry"/>
                 </mxCell>
                 <mxCell id="tickets" value="🎫 TICKETS&#xa;ticket_id | event_id | day_id | slot_id | price | validity_type | entry_type&#xa;&#xa;Examples:&#xa;• Day1 Pass ₹100 → day_id=1 (Case 1)&#xa;• Day2 Pass ₹200 → day_id=2 (Case 1)&#xa;• 2-Day Pass ₹2000 → event_id=1 (Case 2)&#xa;• Slot A ₹100 → slot_id=1 (Case 3)&#xa;• Slot B ₹1500 → slot_id=2 (Case 3)&#xa;• 3-Day VIP ₹8000 → event_id=1 (Case 4)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bdd7ee;strokeColor=#2e75b6;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="540" y="250" width="400" height="200" as="geometry"/>
+                    <mxGeometry x="540" y="220" width="400" height="200" as="geometry"/>
                 </mxCell>
                 <mxCell id="scan_logs" value="📱 SCAN_LOGS&#xa;scan_id | ticket_id | user_id | scan_time | scan_status&#xa;&#xa;Examples:&#xa;• User 22 (Ticket 3) → scanned 17-11 ✅&#xa;• User 22 (Ticket 3) → scanned 18-11 ✅ (multi entry)&#xa;• User 45 (Ticket 6) → scanned twice → ❌ (single entry)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9d2e9;strokeColor=#5f497a;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="1000" y="280" width="330" height="150" as="geometry"/>
+                    <mxGeometry x="990" y="250" width="330" height="150" as="geometry"/>
                 </mxCell>
                 <mxCell id="addons" value="➕ ADDONS&#xa;addon_id | event_id | addon_name | price&#xa;&#xa;Example:&#xa;1 → Food Coupon ₹300&#xa;2 → Parking ₹200" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cbad;strokeColor=#c65911;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="600" y="510" width="280" height="110" as="geometry"/>
+                    <mxGeometry x="600" y="470" width="280" height="110" as="geometry"/>
                 </mxCell>
                 <mxCell id="case1" value="Case 1️⃣ Day-wise Pricing&#xa;17-11 Ticket A ₹100, Ticket B ₹150&#xa;18-11 Ticket A ₹200, Ticket B ₹250" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#fff2cc;strokeColor=#b59b00;fontSize=13;" parent="1" vertex="1">
                     <mxGeometry x="120" y="661" width="350" height="80" as="geometry"/>

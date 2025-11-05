@@ -154,17 +154,20 @@ router.post('/create-slot',
     eventController.createSlot
 );
 
-// ✅ 2️⃣ Get All Slots for an Event
+// Get Slots for an Event
 router.get('/:event_id/slots',
     authenticate,
     [
         param('event_id')
-            .notEmpty().withMessage('Event ID is required')
-            .isInt().withMessage('Event ID must be numeric'),
+            .notEmpty()
+            .withMessage('Event ID is required')
+            .isInt()
+            .withMessage('Event ID must be numeric')
     ],
     validate,
     eventController.getEventSlots
 );
+
 
 // ✅ 3️⃣ Delete a Single Slot by ID
 router.delete('/:event_id/slots/:slot_id',

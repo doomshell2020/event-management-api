@@ -79,3 +79,100 @@ event-management-api/
 ├─ package.json
 ├─ .env
 └─ README.md
+
+
+
+
+Perfect 👍 You want a **realistic example** showing both **single-day** and **multi-day** event structures — including **slots**, **ticket types**, and **slot-based ticket pricing**.
+Here’s a clean and clear example 👇
+
+---
+
+## 🎟️ **Example 1: Single-Day Event**
+
+**Event:**
+
+```
+Tech Meetup 2025  
+Date: 2025-11-17  
+Location: San Francisco  
+Entry Type: single_day
+```
+
+### 🕒 Slots (Single-Day)
+
+| Slot ID | Description      | Start (UTC)         | End (UTC)           |
+| ------- | ---------------- | ------------------- | ------------------- |
+| 1       | Opening Session  | 2025-11-17 09:00:00 | 2025-11-17 10:30:00 |
+| 2       | Networking Break | 2025-11-17 10:30:00 | 2025-11-17 11:00:00 |
+| 3       | Keynote Session  | 2025-11-17 11:00:00 | 2025-11-17 13:00:00 |
+
+### 🎫 Ticket Types
+
+| Ticket ID | Title             | Type       | Entry Type | Base Price | Count | Hidden |
+| --------- | ----------------- | ---------- | ---------- | ---------- | ----- | ------ |
+| 10        | General Admission | open_sales | single     | 100        | 100   | N      |
+| 11        | Student Pass      | comps      | single     | 0          | 50    | N      |
+
+### 💰 Ticket Pricing (Per Slot)
+
+| Ticket Type       | Slot            | Price |
+| ----------------- | --------------- | ----- |
+| General Admission | Opening Session | 80    |
+| General Admission | Keynote Session | 120   |
+| Student Pass      | Opening Session | 0     |
+
+---
+
+## 🎟️ **Example 2: Multi-Day Event**
+
+**Event:**
+
+```
+Music Festival 2025  
+Dates: 2025-12-05 → 2025-12-07  
+Location: Los Angeles  
+Entry Type: multi_day
+```
+
+### 🕒 Slots (Per Day)
+
+| Slot ID | Description          | Date       | Start (UTC)         | End (UTC)           |
+| ------- | -------------------- | ---------- | ------------------- | ------------------- |
+| 20      | Day 1 - Opening Show | 2025-12-05 | 2025-12-05 15:00:00 | 2025-12-05 18:00:00 |
+| 21      | Day 2 - Live Concert | 2025-12-06 | 2025-12-06 17:00:00 | 2025-12-06 22:00:00 |
+| 22      | Day 3 - Closing Show | 2025-12-07 | 2025-12-07 16:00:00 | 2025-12-07 20:00:00 |
+
+### 🎫 Ticket Types
+
+| Ticket ID | Title              | Type       | Entry Type | Base Price | Count | Hidden |
+| --------- | ------------------ | ---------- | ---------- | ---------- | ----- | ------ |
+| 30        | 3-Day VIP Pass     | open_sales | multi      | 300        | 50    | N      |
+| 31        | Day Pass           | open_sales | slot       | 120        | 200   | N      |
+| 32        | Complimentary Pass | comps      | multi      | 0          | 20    | Y      |
+
+### 💰 Ticket Pricing (Per Slot)
+
+| Ticket Type        | Slot (Event Day)     | Price |
+| ------------------ | -------------------- | ----- |
+| 3-Day VIP Pass     | Day 1 - Opening Show | 300   |
+| 3-Day VIP Pass     | Day 2 - Live Concert | 300   |
+| 3-Day VIP Pass     | Day 3 - Closing Show | 300   |
+| Day Pass           | Day 1 - Opening Show | 100   |
+| Day Pass           | Day 2 - Live Concert | 120   |
+| Day Pass           | Day 3 - Closing Show | 150   |
+| Complimentary Pass | Any Slot             | 0     |
+
+---
+
+### 💡 Summary of How It Works
+
+* **Single-Day Event** → One day, multiple sessions (slots).
+* **Multi-Day Event** → Several days, each with its own slots.
+* **Ticket Types** → Define general access, free passes, VIPs, etc.
+* **Slot-based Pricing** → Adjusts ticket prices per slot/day for flexibility.
+
+---
+
+Would you like me to show how this same data structure would look in **JSON format (for API response)** too? It’ll help visualize your backend response better.
+

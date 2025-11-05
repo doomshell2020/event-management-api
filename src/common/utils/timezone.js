@@ -18,6 +18,11 @@ const convertToUTC = (dateStr, timezone) => {
  * @param {string} format - (optional) Output format, default "YYYY-MM-DD HH:mm:ss"
  * @returns {string|null} Formatted date/time string in local timezone
  */
+
+// const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// console.log(userTimezone); // e.g., "Asia/Kolkata" or "America/New_York"
+
+
 const convertUTCToLocal = (utcDate, timezone, format = 'YYYY-MM-DD HH:mm:ss') => {
     if (!utcDate || !timezone) return null;
     return moment.utc(utcDate).tz(timezone).format(format);

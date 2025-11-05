@@ -9,7 +9,7 @@ module.exports.createTicket = async (req) => {
         const {
             event_id,
             title,
-            entry_type,
+            access_type,
             type,
             count,
             price,
@@ -20,7 +20,7 @@ module.exports.createTicket = async (req) => {
         const ticketImage = req.file?.filename;
 
         // ✅ Validate required fields
-        if (!event_id || !title || !entry_type) {
+        if (!event_id || !title || !access_type) {
             return {
                 success: false,
                 message: 'Please fill all required fields',
@@ -72,7 +72,7 @@ module.exports.createTicket = async (req) => {
             eventid: event_id,
             userid: user_id,
             title: title.trim(),
-            entry_type,
+            access_type,
             type: type ?? type,
             ticket_image: ticketImage || null,
             // ✅ Price and Count logic
@@ -264,39 +264,78 @@ module.exports.deleteTicket = async (req) => {
     }
 };
 
-module.exports.setTicketPricing = async ({ event_id, ticket_type_id, event_slot_id, price }) => {
+module.exports.setTicketPricing = async (req) => {
     try {
+        const { event_id, ticket_type_id, event_slot_id, price, date } = req.body;
+
+        // ✅ 1. Validate Ticket Type
         const ticket = await TicketType.findOne({
-            where: { id: ticket_type_id, eventid: event_id }
+            where: { id: ticket_type_id, eventid:event_id }
         });
+
         if (!ticket) {
             return { success: false, code: 'TICKET_NOT_FOUND', message: 'Ticket type not found' };
         }
-        const slot = await EventSlots.findOne({
-            where: { id: event_slot_id, event_id: event_id }
-        });
-        if (!slot) {
-            return { success: false, code: 'SLOT_NOT_FOUND', message: 'Event slot not found' };
-        }
-        let pricing = await TicketPricing.findOne({
-            where: {
-                ticket_type_id,
-                event_slot_id
-            }
-        });
 
+        const { access_type } = ticket;
+
+        let finalDate = null; // date value that will go into pricing table
+
+        // ✅ 2. Conditional logic based on access_type
+        if (access_type == 'event') {
+            // No slot or date needed
+            if (event_slot_id || date) {
+                return { success: false, code: 'VALIDATION_FAILED', message: 'For event-level pricing, do not provide slot or date.' };
+            }
+        }
+        else if (access_type == 'day') {
+            // Date required, slot not allowed
+            if (!date) {
+                return { success: false, code: 'VALIDATION_FAILED', message: 'Date is required for day-based ticket pricing.' };
+            }
+            finalDate = date;
+        }
+        else if (access_type == 'slot') {
+            // Slot required, derive date from slot
+            if (!event_slot_id) {
+                return { success: false, code: 'VALIDATION_FAILED', message: 'Event Slot ID is required for slot-based ticket pricing.' };
+            }
+
+            const slot = await EventSlots.findOne({
+                where: { id: event_slot_id, event_id }
+            });
+
+            if (!slot) {
+                return { success: false, code: 'SLOT_NOT_FOUND', message: 'Event slot not found' };
+            }
+
+            finalDate = slot.slot_date; // ✅ Auto-set date from slot
+        }
+
+        // ✅ 3. Find existing record to update or create
+        let whereCondition = { event_id, ticket_type_id };
+
+        if (access_type == 'slot') {
+            whereCondition.event_slot_id = event_slot_id;
+        } else if (access_type == 'day') {
+            whereCondition.date = finalDate;
+        }
+
+        let pricing = await TicketPricing.findOne({ where: whereCondition });
         let resMessage = 'Ticket pricing set successfully';
 
         if (pricing) {
+            // Update
             pricing.price = price;
             await pricing.save();
-            resMessage = 'Ticket pricing update successfully';
-
+            resMessage = 'Ticket pricing updated successfully';
         } else {
+            // Create
             pricing = await TicketPricing.create({
                 event_id,
                 ticket_type_id,
-                event_slot_id,
+                event_slot_id: access_type == 'slot' ? event_slot_id : null,
+                date: finalDate,
                 price
             });
         }
@@ -308,7 +347,7 @@ module.exports.setTicketPricing = async ({ event_id, ticket_type_id, event_slot_
         };
 
     } catch (error) {
-        console.error('Error setting ticket pricing:', error);
+        console.error('❌ Error setting ticket pricing:', error);
         return {
             success: false,
             code: 'DB_ERROR',

@@ -11,9 +11,9 @@ module.exports.createTicket = async (req, res) => {
         const fullFilePath = filename ? path.join(uploadFolder, filename) : null;
 
         // ✅ Validate required fields
-        const { event_id, title, entry_type, price, count, hidden } = req.body;
+        const { event_id, title, access_type, price, count, hidden } = req.body;
 
-        if (!event_id || !title || !entry_type) {
+        if (!event_id || !title || !access_type) {
             return apiResponse.validation(res, [], 'Required fields are missing');
         }
 
@@ -162,19 +162,21 @@ module.exports.deleteTicket = async (req, res) => {
 
 module.exports.setTicketPricing = async (req, res) => {
     try {
-        const { event_id, ticket_type_id, event_slot_id, price } = req.body;
+        const { event_id, ticket_type_id, event_slot_id, price, date } = req.body;
 
         // ✅ Validate required fields (extra safety, though route already validates)
         if (!event_id || !ticket_type_id || !event_slot_id || price == undefined) {
             return apiResponse.validation(res, [], 'All fields are required: event_id, ticket_type_id, event_slot_id, price');
         }
 
-        const result = await ticketService.setTicketPricing(req.body);
+        const result = await ticketService.setTicketPricing(req);
 
         if (!result.success) {
             switch (result.code) {
                 case 'TICKET_NOT_FOUND':
                     return apiResponse.notFound(res, 'Ticket type not found');
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
                 case 'SLOT_NOT_FOUND':
                     return apiResponse.notFound(res, 'Event slot not found');
                 case 'DB_ERROR':

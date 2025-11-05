@@ -40,6 +40,12 @@ const TicketPricing = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
     },
+    // 👇 Split date and times for easy filtering
+    date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+      comment: 'Date (e.g., 2025-11-05)',
+    },
     currency: {
       type: DataTypes.STRING(10),
       allowNull: false,

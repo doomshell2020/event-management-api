@@ -135,7 +135,6 @@ module.exports.getEventDetails = async (req, res) => {
     }
 };
 
-
 module.exports.createEvent = async (req, res) => {
     try {
         // ✅ Check if image is uploaded
@@ -340,8 +339,12 @@ module.exports.createSlot = async (req, res) => {
 
         // ✅ Basic validation inside each slot
         for (const s of slotArray) {
-            if (!s.slot_start_utc || !s.slot_end_utc) {
-                return apiResponse.validation(res, [], 'Each slot must include slot_start_utc and slot_end_utc.');
+            if (!s.slot_date || !s.slot_name || !s.start_time || !s.end_time) {
+                return apiResponse.validation(
+                    res,
+                    [],
+                    'Each slot must include slot_date, slot_name, start_time, and end_time.'
+                );
             }
         }
 
@@ -353,6 +356,8 @@ module.exports.createSlot = async (req, res) => {
             switch (result.code) {
                 case 'VALIDATION_FAILED':
                     return apiResponse.validation(res, [], result.message);
+                case 'DUPLICATE_ERROR':
+                    return apiResponse.conflict(res, result.message); // 409
                 default:
                     return apiResponse.error(res, result.message);
             }
@@ -370,5 +375,3 @@ module.exports.createSlot = async (req, res) => {
         return apiResponse.error(res, 'Internal server error', 500);
     }
 };
-
-

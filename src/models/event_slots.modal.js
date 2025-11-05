@@ -13,30 +13,52 @@ const EventSlots = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'tbl_events', // directly link to event
+        model: 'tbl_events', // Foreign key link to event
         key: 'id',
       },
       onDelete: 'CASCADE',
     },
-    slot_start_utc: {
-      type: DataTypes.DATE,
+
+    // 👇 New slot name field
+    slot_name: {
+      type: DataTypes.STRING(100),
       allowNull: false,
-      comment: 'Full start datetime in UTC (e.g., 2025-11-17T10:00:00Z)',
+      comment: 'Label for the slot (e.g., Morning Session, Slot 1, etc.)',
     },
 
-    slot_end_utc: {
-      type: DataTypes.DATE,
+    // 👇 Split date and times for easy filtering
+    slot_date: {
+      type: DataTypes.DATEONLY,
       allowNull: false,
-      comment: 'Full end datetime in UTC (e.g., 2025-11-17T12:00:00Z)',
+      comment: 'Slot date (e.g., 2025-11-05)',
     },
+
+    start_time: {
+      type: DataTypes.TIME,
+      allowNull: false,
+      comment: 'Start time (local time, e.g., 10:00)',
+    },
+
+    end_time: {
+      type: DataTypes.TIME,
+      allowNull: false,
+      comment: 'End time (local time, e.g., 12:00)',
+    },
+
     description: {
       type: DataTypes.STRING,
-      allowNull: false
+      allowNull: true,
+      comment: 'Optional slot description or notes',
     },
   },
   {
     tableName: 'tbl_event_slots',
-    timestamps: false, // no createdAt or updatedAt
+    timestamps: false, // No createdAt or updatedAt
+    indexes: [
+      {
+        fields: ['event_id', 'date'], // For quick date-based lookups per event
+      },
+    ],
   }
 );
 

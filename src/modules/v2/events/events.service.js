@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
 const { Company, Event, EventSlots, TicketType, TicketPricing } = require('../../../models');
-const { convertToUTC } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const moment = require('moment');
 
 
@@ -33,13 +33,6 @@ module.exports.deleteSlotById = async (event_id, slot_id) => {
         return {
             success: true,
             message: `Slot (ID: ${slot_id}) deleted successfully`,
-            data: {
-                event_id,
-                slot_id,
-                description: slot.description,
-                slot_start_utc: slot.slot_start_utc,
-                slot_end_utc: slot.slot_end_utc,
-            },
         };
     } catch (error) {
         console.error("❌ Error in deleteSlotById service:", error);
@@ -71,12 +64,19 @@ module.exports.deleteSlotsByDate = async (event_id, date) => {
 
         console.log("🕒 Deleting slots in UTC range:", startOfDayUTC, "→", endOfDayUTC, timezone);
 
+        // const dateOnly = moment(date).format('YYYY-MM-DD'); // normalize to YYYY-MM-DD
+        // const slots = await EventSlots.findAll({
+        //     where: { event_id, date: dateOnly },
+        // });
+
+
         const slots = await EventSlots.findAll({
             where: {
                 event_id,
-                slot_start_utc: { [Op.between]: [startOfDayUTC, endOfDayUTC] }
+                slot_date: { [Op.between]: [startOfDayUTC, endOfDayUTC] }
             }
         });
+
         if (!slots.length) {
             return {
                 success: false,
@@ -84,12 +84,14 @@ module.exports.deleteSlotsByDate = async (event_id, date) => {
                 message: `No slots found for ${dateOnly} (UTC range: ${startOfDayUTC.toISOString()} - ${endOfDayUTC.toISOString()})`
             };
         }
+
         const deletedCount = await EventSlots.destroy({
             where: {
                 event_id,
-                slot_start_utc: { [Op.between]: [startOfDayUTC, endOfDayUTC] }
+                slot_date: { [Op.between]: [startOfDayUTC, endOfDayUTC] }
             }
         });
+
         return {
             success: true,
             message: `${deletedCount} slot(s) deleted successfully for ${dateOnly}`,
@@ -113,8 +115,8 @@ module.exports.getEventSlots = async (event_id) => {
         // ✅ 2. Fetch slots for event
         const slots = await EventSlots.findAll({
             where: { event_id },
-            order: [['slot_start_utc', 'ASC']],
-            attributes: ['id', 'event_id', 'slot_start_utc', 'slot_end_utc', 'description']
+            order: [['slot_date', 'ASC']],
+            attributes: ['id', 'event_id', 'slot_date', 'slot_name', 'start_time', 'end_time', 'description']
         });
 
         if (!slots.length) {
@@ -153,19 +155,25 @@ module.exports.createSlot = async (event_id, slotArray) => {
 
         // ✅ 3. Validate and prepare slot data (prevent duplicates)
         for (const slot of slotArray) {
-            if (!slot.slot_start_utc || !slot.slot_end_utc) {
-                return { success: false, code: 'VALIDATION_FAILED', message: 'Each slot must include start and end time.' };
+            const { slot_date, start_time, end_time, slot_name, description } = slot;
+            const formatted_slot_date = convertToUTC(slot.slot_date, event_timezone);
+            // console.log('>>>>>>>>>>>>>>>>>>>',formatted_start);
+            if (!slot_date || !slot_name || !start_time || !end_time) {
+                return {
+                    success: false,
+                    code: 'VALIDATION_FAILED',
+                    message: 'Each slot must include date, name, start time, and end time.',
+                };
             }
 
-            const formatted_start = convertToUTC(slot.slot_start_utc, event_timezone);
-            const formatted_end = convertToUTC(slot.slot_end_utc, event_timezone);
-
-            // 🔍 Check if a slot already exists for same event + time range
+            // 🔍 Check for duplicate slot (same event, same date, same time range)
             const existingSlot = await EventSlots.findOne({
                 where: {
                     event_id,
-                    slot_start_utc: formatted_start,
-                    slot_end_utc: formatted_end,
+                    slot_name,
+                    slot_date: formatted_slot_date,
+                    start_time,
+                    end_time,
                 },
             });
 
@@ -173,16 +181,18 @@ module.exports.createSlot = async (event_id, slotArray) => {
                 return {
                     success: false,
                     code: 'DUPLICATE_ERROR',
-                    message: `Slot already exists for ${formatted_start} → ${formatted_end}.`,
+                    message: `Slot "${slot_name}" already exists for ${slot_date} (${start_time} → ${end_time}).`,
                 };
             }
 
-            // ✅ Add to slotRecords for batch creation
+            // ✅ Add to records for bulk creation
             slotRecords.push({
                 event_id,
-                slot_start_utc: formatted_start,
-                slot_end_utc: formatted_end,
-                description: slot.description || null,
+                slot_date,
+                slot_name,
+                start_time,
+                end_time,
+                description: description || null,
             });
         }
 
@@ -197,7 +207,7 @@ module.exports.createSlot = async (event_id, slotArray) => {
 
     } catch (error) {
         console.error('❌ Error creating slots:', error.message);
-        return { success: false, code: 'SERVER_ERROR', message: 'Internal server error' };
+        return { success: false, code: 'SERVER_ERROR', message: 'Internal server error :' + error.message };
     }
 };
 
@@ -551,32 +561,58 @@ module.exports.eventList = async (req, res) => {
         const { search, status } = req.body || {};
         let whereCondition = {};
 
-        // ✅ Organizer can only see their own events for admin 1 role id
         if (user.role_id != 1) {
             whereCondition.event_org_id = user.id;
         }
 
-        // ✅ Optional filters
         if (search && search.trim() !== '') {
             whereCondition.name = { [Op.like]: `%${search.trim()}%` };
         }
 
         if (status && status.trim() !== '') {
-            whereCondition.status = status; // e.g., 'Y' or 'N'
+            whereCondition.status = status;
         }
 
-        // console.log('>>>>>>>>>>>',whereCondition);
-
-        // ✅ Fetch events with company details
         const events = await Event.findAll({
             where: whereCondition,
             order: [['date_from', 'DESC']],
         });
 
+        // ✅ Convert UTC → Local before sending
+        const formattedEvents = events.map(event => {
+            const data = event.toJSON();
+            const tz = data.event_timezone || 'UTC';
+
+            return {
+                ...data,
+                date_from: {
+                    utc: data.date_from,
+                    local: convertUTCToLocal(data.date_from, tz),
+                    timezone: tz
+                },
+                date_to: {
+                    utc: data.date_to,
+                    local: convertUTCToLocal(data.date_to, tz),
+                    timezone: tz
+                },
+                sale_start: data.sale_start ? {
+                    utc: data.sale_start,
+                    local: convertUTCToLocal(data.sale_start, tz),
+                    timezone: tz
+                } : null,
+                sale_end: data.sale_end ? {
+                    utc: data.sale_end,
+                    local: convertUTCToLocal(data.sale_end, tz),
+                    timezone: tz
+                } : null
+            };
+        });
+
+
         return {
             success: true,
             message: 'Event list fetched successfully',
-            data: events,
+            data: formattedEvents,
         };
     } catch (error) {
         console.error('Error fetching event list:', error.message);
