@@ -162,11 +162,11 @@ module.exports.deleteTicket = async (req, res) => {
 
 module.exports.setTicketPricing = async (req, res) => {
     try {
-        const { event_id, ticket_type_id, event_slot_id, price, date } = req.body;
+        const { event_id, ticket_type_id, price} = req.body;
 
         // ✅ Validate required fields (extra safety, though route already validates)
-        if (!event_id || !ticket_type_id || !event_slot_id || price == undefined) {
-            return apiResponse.validation(res, [], 'All fields are required: event_id, ticket_type_id, event_slot_id, price');
+        if (!event_id || !ticket_type_id || price == undefined) {
+            return apiResponse.validation(res, [], 'All fields are required: event_id, ticket_type_id, price');
         }
 
         const result = await ticketService.setTicketPricing(req);

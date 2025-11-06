@@ -120,9 +120,9 @@ const Event = sequelize.define('Event',
             defaultValue: 'N'
         },
         entry_type: {
-            type: DataTypes.ENUM('single', 'recurring', 'timed_entry'),
+            type: DataTypes.ENUM('single', 'multi', 'slot','event'),
             allowNull: true,
-            defaultValue: 'single'
+            defaultValue: 'event'
         },
         featured: {
             type: DataTypes.ENUM('Y', 'N'),

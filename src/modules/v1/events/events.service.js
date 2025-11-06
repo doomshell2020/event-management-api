@@ -68,7 +68,7 @@ module.exports.createEvent = async (req, res) => {
             allow_register,
             request_rsvp,
             event_timezone,
-            event_type
+            entry_type
         } = req.body;
 
         const user_id = req.user?.id;

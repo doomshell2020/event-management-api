@@ -48,10 +48,10 @@ router.post('/create',
             .isLength({ min: 2 })
             .withMessage('Event event_timezone is required'),
 
-        body('event_type')
+        body('entry_type')
             .notEmpty()
-            .isIn(['single', 'recurring', 'timed_entry'])
-            .withMessage('Event type must be one of: single, recurring, timed_entry'),
+            .isIn(['single', 'multi', 'slot', 'event'])
+            .withMessage('Event entry_type must be one of: single, multi, slot, event'),
 
         // ✅ Make feat_image required
         body('feat_image').custom((value, { req }) => {

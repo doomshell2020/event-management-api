@@ -228,7 +228,7 @@ module.exports.createEvent = async (req, res) => {
             sale_start,
             sale_end,
             event_timezone,
-            event_type
+            entry_type
         } = req.body;
 
         const user_id = req.user?.id;
@@ -322,7 +322,7 @@ module.exports.createEvent = async (req, res) => {
             sale_start: formatted_sale_start,
             sale_end: formatted_sale_end,
             location,
-            event_type,
+            entry_type,
             company_id,
             country_id,
             ticket_limit: ticket_limit || 0,
@@ -629,60 +629,81 @@ module.exports.getEventDetails = async (req, res) => {
         const { event_id } = req.params;
 
         if (!event_id) {
-            return {
+            return res.json({
                 success: false,
                 code: 'VALIDATION_FAILED',
                 message: 'Event ID is required'
-            };
+            });
         }
 
-        // Fetch event with slots -> ticket pricing -> ticket type
+        // Step 1️⃣: Get event basic info (to check entry_type)
         const event = await Event.findOne({
             where: { id: event_id },
-            include: [
-                {
-                    model: EventSlots,
-                    as: 'slots',
-                    include: [
-                        {
-                            model: TicketPricing,
-                            as: 'pricings',
-                            include: [
-                                {
-                                    model: TicketType,
-                                    as: 'ticket'
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    model: TicketType,
-                    as: 'tickets'
-                }
-            ]
+            include: [{ model: TicketType, as: 'tickets' }]
         });
 
         if (!event) {
-            return {
+            return res.json({
                 success: false,
                 code: 'EVENT_NOT_FOUND',
                 message: 'Event not found'
-            };
+            });
         }
 
-        return {
+        const { entry_type } = event;
+
+        // Step 2️⃣: Build dynamic includes
+        const includeConfig = [
+            {
+                model: TicketType,
+                as: 'tickets',
+                include: [
+                    {
+                        model: TicketPricing,
+                        as: 'pricings'
+                    }
+                ]
+            }
+        ];
+
+        // Only add slots if event type is slot-based
+        if (entry_type == 'slot' || entry_type == 'multi') {
+            includeConfig.push({
+                model: EventSlots,
+                as: 'slots',
+                include: [
+                    {
+                        model: TicketPricing,
+                        as: 'pricings',
+                        include: [
+                            {
+                                model: TicketType,
+                                as: 'ticket'
+                            }
+                        ]
+                    }
+                ]
+            });
+        }
+
+        // Step 3️⃣: Fetch event with proper structure
+        const eventDetails = await Event.findOne({
+            where: { id: event_id },
+            include: includeConfig
+        });
+
+        return res.json({
             success: true,
             message: 'Event details fetched successfully',
-            data: event
-        };
+            data: eventDetails
+        });
 
     } catch (error) {
-        console.error('Error fetching event details:', error.message);
-        return {
+        console.error('❌ Error fetching event details:', error.message);
+        return res.json({
             success: false,
             code: 'DB_ERROR',
             message: 'Internal server error: ' + error.message
-        };
+        });
     }
 };

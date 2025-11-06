@@ -268,9 +268,12 @@ module.exports.setTicketPricing = async (req) => {
     try {
         const { event_id, ticket_type_id, event_slot_id, price, date } = req.body;
 
-        // ✅ 1. Validate Ticket Type
+        // 1️⃣ Fetch event and ticket
+        const event = await Event.findByPk(event_id);
+        if (!event) return { success: false, message: "Event not found" };
+
         const ticket = await TicketType.findOne({
-            where: { id: ticket_type_id, eventid:event_id }
+            where: { id: ticket_type_id, eventid: event_id }
         });
 
         if (!ticket) {
@@ -278,59 +281,87 @@ module.exports.setTicketPricing = async (req) => {
         }
 
         const { access_type } = ticket;
+        const { entry_type, date_from } = event;
+        let finalDate = null;
 
-        let finalDate = null; // date value that will go into pricing table
+        // 2️⃣ Conditional Logic Based on Event + Access Type
+        switch (entry_type) {
+            // 🟩 Case 1: Full event only (6–9 valid for all days)
+            case 'event':
+                if (access_type !== 'event') {
+                    return { success: false, code: 'VALIDATION_FAILED', message: 'Only event-level tickets allowed for event type.' };
+                }
+                if (event_slot_id || date) {
+                    return { success: false, code: 'VALIDATION_FAILED', message: 'Do not provide date or slot for full-event pricing.' };
+                }
+                break;
 
-        // ✅ 2. Conditional logic based on access_type
-        if (access_type == 'event') {
-            // No slot or date needed
-            if (event_slot_id || date) {
-                return { success: false, code: 'VALIDATION_FAILED', message: 'For event-level pricing, do not provide slot or date.' };
-            }
+            // 🟩 Case 2: Multi-day event (per-day / per-slot / full-event)
+            case 'multi':
+                if (access_type == 'day') {
+                    if (!date)
+                        return { success: false, code: 'VALIDATION_FAILED', message: 'Date required for day-based ticket pricing.' };
+                    finalDate = date;
+                } else if (access_type == 'slot') {
+                    if (!event_slot_id)
+                        return { success: false, code: 'VALIDATION_FAILED', message: 'Event Slot ID is required for slot-based pricing.' };
+
+                    const slot = await EventSlots.findOne({ where: { id: event_slot_id, event_id } });
+                    if (!slot) return { success: false, code: 'VALIDATION_FAILED', message: 'Slot not found.' };
+
+                    finalDate = slot.slot_date; // ✅ use slot_date
+                } else if (access_type == 'event') {
+                    if (event_slot_id || date)
+                        return { success: false, code: 'VALIDATION_FAILED', message: 'Do not provide date or slot for full-event pricing.' };
+                } else {
+                    return { success: false, code: 'VALIDATION_FAILED', message: 'Invalid access type for multi-day event.' };
+                }
+                break;
+
+            // 🟩 Case 3: Single-day event
+            case 'single':
+                if (access_type !== 'event') {
+                    return { success: false, code: 'VALIDATION_FAILED', message: 'Single-day events only support event-level tickets.' };
+                }
+                if (event_slot_id)
+                    return { success: false, code: 'VALIDATION_FAILED', message: 'Slot not allowed for single-day event.' };
+
+                // ✅ Auto-assign event date
+                finalDate = date_from || date;
+                break;
+
+            // 🟩 Case 4: Slot-based event (single day, multiple slots)
+            case 'slot':
+                if (access_type !== 'slot') {
+                    return { success: false, code: 'VALIDATION_FAILED', message: 'Slot-based access required for slot-type event.' };
+                }
+                if (!event_slot_id) {
+                    return { success: false, code: 'VALIDATION_FAILED', message: 'Event Slot ID is required for slot-based pricing.' };
+                }
+
+                const slotData = await EventSlots.findOne({ where: { id: event_slot_id, event_id } });
+                if (!slotData) return { success: false, code: 'VALIDATION_FAILED', message: 'Slot not found.' };
+
+                finalDate = slotData.slot_date; // ✅ fixed field
+                break;
+
+            default:
+                return { success: false, message: 'Invalid event type.' };
         }
-        else if (access_type == 'day') {
-            // Date required, slot not allowed
-            if (!date) {
-                return { success: false, code: 'VALIDATION_FAILED', message: 'Date is required for day-based ticket pricing.' };
-            }
-            finalDate = date;
-        }
-        else if (access_type == 'slot') {
-            // Slot required, derive date from slot
-            if (!event_slot_id) {
-                return { success: false, code: 'VALIDATION_FAILED', message: 'Event Slot ID is required for slot-based ticket pricing.' };
-            }
 
-            const slot = await EventSlots.findOne({
-                where: { id: event_slot_id, event_id }
-            });
-
-            if (!slot) {
-                return { success: false, code: 'SLOT_NOT_FOUND', message: 'Event slot not found' };
-            }
-
-            finalDate = slot.slot_date; // ✅ Auto-set date from slot
-        }
-
-        // ✅ 3. Find existing record to update or create
-        let whereCondition = { event_id, ticket_type_id };
-
-        if (access_type == 'slot') {
-            whereCondition.event_slot_id = event_slot_id;
-        } else if (access_type == 'day') {
-            whereCondition.date = finalDate;
-        }
+        // 3️⃣ Upsert (Create or Update)
+        const whereCondition = { event_id, ticket_type_id };
+        if (access_type == 'slot') whereCondition.event_slot_id = event_slot_id;
+        else if (access_type == 'day' || entry_type == 'single') whereCondition.date = finalDate;
 
         let pricing = await TicketPricing.findOne({ where: whereCondition });
         let resMessage = 'Ticket pricing set successfully';
 
         if (pricing) {
-            // Update
             pricing.price = price;
             await pricing.save();
             resMessage = 'Ticket pricing updated successfully';
         } else {
-            // Create
             pricing = await TicketPricing.create({
                 event_id,
                 ticket_type_id,
@@ -340,11 +371,7 @@ module.exports.setTicketPricing = async (req) => {
             });
         }
 
-        return {
-            success: true,
-            message: resMessage,
-            data: pricing
-        };
+        return { success: true, message: resMessage, data: pricing };
 
     } catch (error) {
         console.error('❌ Error setting ticket pricing:', error);
@@ -355,3 +382,99 @@ module.exports.setTicketPricing = async (req) => {
         };
     }
 };
+
+// module.exports.setTicketPricing = async (req) => {
+//     try {
+//         const { event_id, ticket_type_id, event_slot_id, price, date } = req.body;
+
+//         // 1️⃣ Fetch event and ticket
+//         const event = await Event.findByPk(event_id);
+//         if (!event) return { success: false, message: "Event not found" };
+
+//         // ✅ 1. Validate Ticket Type
+//         const ticket = await TicketType.findOne({
+//             where: { id: ticket_type_id, eventid: event_id }
+//         });
+
+//         if (!ticket) {
+//             return { success: false, code: 'TICKET_NOT_FOUND', message: 'Ticket type not found' };
+//         }
+
+//         const { access_type } = ticket;
+
+//         let finalDate = null; // date value that will go into pricing table
+
+//         // ✅ 2. Conditional logic based on access_type
+//         if (access_type == 'event') {
+//             // No slot or date needed
+//             if (event_slot_id || date) {
+//                 return { success: false, code: 'VALIDATION_FAILED', message: 'For event-level pricing, do not provide slot or date.' };
+//             }
+//         }
+//         else if (access_type == 'day') {
+//             // Date required, slot not allowed
+//             if (!date) {
+//                 return { success: false, code: 'VALIDATION_FAILED', message: 'Date is required for day-based ticket pricing.' };
+//             }
+//             finalDate = date;
+//         }
+//         else if (access_type == 'slot') {
+//             // Slot required, derive date from slot
+//             if (!event_slot_id) {
+//                 return { success: false, code: 'VALIDATION_FAILED', message: 'Event Slot ID is required for slot-based ticket pricing.' };
+//             }
+
+//             const slot = await EventSlots.findOne({
+//                 where: { id: event_slot_id, event_id }
+//             });
+
+//             if (!slot) {
+//                 return { success: false, code: 'SLOT_NOT_FOUND', message: 'Event slot not found' };
+//             }
+
+//             finalDate = slot.slot_date; // ✅ Auto-set date from slot
+//         }
+
+//         // ✅ 3. Find existing record to update or create
+//         let whereCondition = { event_id, ticket_type_id };
+
+//         if (access_type == 'slot') {
+//             whereCondition.event_slot_id = event_slot_id;
+//         } else if (access_type == 'day') {
+//             whereCondition.date = finalDate;
+//         }
+
+//         let pricing = await TicketPricing.findOne({ where: whereCondition });
+//         let resMessage = 'Ticket pricing set successfully';
+
+//         if (pricing) {
+//             // Update
+//             pricing.price = price;
+//             await pricing.save();
+//             resMessage = 'Ticket pricing updated successfully';
+//         } else {
+//             // Create
+//             pricing = await TicketPricing.create({
+//                 event_id,
+//                 ticket_type_id,
+//                 event_slot_id: access_type == 'slot' ? event_slot_id : null,
+//                 date: finalDate,
+//                 price
+//             });
+//         }
+
+//         return {
+//             success: true,
+//             message: resMessage,
+//             data: pricing
+//         };
+
+//     } catch (error) {
+//         console.error('❌ Error setting ticket pricing:', error);
+//         return {
+//             success: false,
+//             code: 'DB_ERROR',
+//             message: 'Database error: ' + error.message
+//         };
+//     }
+// };
