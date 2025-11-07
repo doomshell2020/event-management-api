@@ -1,9 +1,10 @@
 // src/server.js
 
+const dotenv = require('dotenv');
+dotenv.config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const { sequelize } = require('./models'); // ✅ connection + models + associations
 // const sequelize = require('./config/database');
 
@@ -12,7 +13,6 @@ const apiResponse = require('../src/common/utils/apiResponse');
 const cookieParser = require('cookie-parser');
 
 // Load environment variables
-dotenv.config();
 
 
 console.log('🔍 ENV CHECK ---');
