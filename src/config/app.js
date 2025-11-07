@@ -1,6 +1,4 @@
-const dotenv = require('dotenv');
-dotenv.config(); // Load .env variables
-
+require('dotenv').config(); // must be first line
 const config = {
   // Server
   port: process.env.PORT || 5000,
