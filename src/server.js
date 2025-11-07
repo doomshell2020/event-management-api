@@ -12,17 +12,13 @@ const cookieParser = require('cookie-parser');
 
 // Load environment variables
 
-
-console.log('🔍 ENV CHECK ---');
-console.log('DB_HOST:', process.env.DB_HOST);
-console.log('DB_NAME:', process.env.DB_NAME);
-console.log('DB_USER:', process.env.DB_USER);
-console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***' : 'NOT FOUND');
-console.log('PORT:', process.env.PORT);
-console.log('----------------');
-
-
-
+// console.log('🔍 ENV CHECK ---');
+// console.log('DB_HOST:', process.env.DB_HOST);
+// console.log('DB_NAME:', process.env.DB_NAME);
+// console.log('DB_USER:', process.env.DB_USER);
+// console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***' : 'NOT FOUND');
+// console.log('PORT:', process.env.PORT);
+// console.log('----------------');
 
 // Import Routes
 const authRoutesV1 = require('./modules/v1/auth/auth.routes');
