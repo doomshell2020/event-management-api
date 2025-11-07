@@ -14,6 +14,18 @@ const cookieParser = require('cookie-parser');
 // Load environment variables
 dotenv.config();
 
+
+console.log('🔍 ENV CHECK ---');
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_NAME:', process.env.DB_NAME);
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***' : 'NOT FOUND');
+console.log('PORT:', process.env.PORT);
+console.log('----------------');
+
+
+
+
 // Import Routes
 const authRoutesV1 = require('./modules/v1/auth/auth.routes');
 const eventsRoutesV1 = require('./modules/v1/events/events.routes');
@@ -68,13 +80,13 @@ app.use('/api/v2/tickets', ticketsRoutesV2);
 
 // Handle 404 errors
 app.use((req, res) => {
-  return apiResponse.notFound(res, 'API endpoint not found');
+    return apiResponse.notFound(res, 'API endpoint not found');
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('Global Error:', err);
-  return apiResponse.error(res, err.message || 'Internal Server Error', err.status || 500);
+    console.error('Global Error:', err);
+    return apiResponse.error(res, err.message || 'Internal Server Error', err.status || 500);
 });
 
 
