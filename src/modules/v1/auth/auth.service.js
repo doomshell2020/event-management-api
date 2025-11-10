@@ -131,7 +131,7 @@ module.exports.loginUser = async ({ email, password }) => {
 
 module.exports.getUserInfo = async (userId) => {
     const user = await User.findByPk(userId, {
-        attributes: ['id', 'first_name', 'last_name', 'email', 'gender', 'dob'],
+        attributes: ['id', 'first_name', 'last_name', 'email', 'gender', 'dob','emailNewsLetter','emailRelatedEvents'],
     });
     return user;
 };
