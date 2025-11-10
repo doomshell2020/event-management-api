@@ -130,10 +130,35 @@ module.exports.loginUser = async ({ email, password }) => {
 };
 
 module.exports.getUserInfo = async (userId) => {
-    const user = await User.findByPk(userId, {
-        attributes: ['id', 'first_name', 'last_name', 'email', 'gender', 'dob','emailNewsLetter','emailRelatedEvents'],
-    });
-    return user;
+  const imagePath = 'uploads/profile';
+  const baseUrl = process.env.BASE_URL || 'http://localhost:5000/'; // ✅ fallback base URL
+
+  const user = await User.findByPk(userId, {
+    attributes: [
+      'id',
+      'profile_image',
+      'first_name',
+      'last_name',
+      'email',
+      'gender',
+      'dob',
+      'emailNewsLetter',
+      'emailRelatedEvents',
+    ],
+  });
+
+  if (!user) return null;
+
+  // ✅ Add full image URL or default placeholder
+  const profileImage = user.profile_image
+    ? `${baseUrl}${imagePath}/${user.profile_image}`
+    : `${baseUrl}${imagePath}/no-image.jpg`;
+
+  // ✅ Return merged data
+  return {
+    ...user.toJSON(),
+    profile_image: profileImage,
+  };
 };
 
 module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) => {
