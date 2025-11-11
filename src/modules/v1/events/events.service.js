@@ -2,61 +2,117 @@ const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
 const { Company, Event } = require('../../../models');
-const { convertToUTC } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+
 
 module.exports.eventList = async (req, res) => {
     try {
         const user = req.user;
-        const { search, status } = req.body || {};
-        let whereCondition = {};
-        const imagePath = 'uploads/events';
-        const baseUrl = process.env.BASE_URL || 'http://localhost:5000/'; // ✅ fallback base URL
+        const {
+            search,
+            status,
+            id,
+            company_id,
+            slug,
+            org_id,
+            date_from,
+            date_to,
+            sale_start,
+            sale_end
+        } = req.body || {};
 
-        // ✅ Organizer can only see their own events for admin 1 role id
-        if (user.role_id != 1) {
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+        let whereCondition = {};
+
+        // ✅ Role-based restriction (non-admins see only their own events)
+        if (user.role_id !== 1) {
             whereCondition.event_org_id = user.id;
         }
 
-        // ✅ Optional filters
-        if (search && search.trim() !== '') {
+        // ✅ ID Filter
+        if (id) whereCondition.id = id;
+
+        // ✅ Organizer ID
+        if (org_id) whereCondition.event_org_id = org_id;
+
+        // ✅ Company ID
+        if (company_id) whereCondition.company_id = company_id;
+
+        // ✅ Slug
+        if (slug && slug.trim() !== "") whereCondition.slug = slug.trim();
+
+        // ✅ Status
+        if (status && status.trim() !== "") whereCondition.status = status.trim();
+
+        // ✅ Search by Name
+        if (search && search.trim() !== "") {
             whereCondition.name = { [Op.like]: `%${search.trim()}%` };
         }
 
-        if (status && status.trim() !== '') {
-            whereCondition.status = status; // e.g., 'Y' or 'N'
+        // ✅ Event Date Range Filter
+        if (date_from && date_to) {
+            whereCondition.date_from = { [Op.between]: [new Date(date_from), new Date(date_to)] };
+        } else if (date_from) {
+            whereCondition.date_from = { [Op.gte]: new Date(date_from) };
+        } else if (date_to) {
+            whereCondition.date_from = { [Op.lte]: new Date(date_to) };
         }
 
-        // console.log('>>>>>>>>>>>',whereCondition);
+        // ✅ Sale Start / End Date Range Filters
+        if (sale_start && sale_end) {
+            whereCondition.sale_start = { [Op.between]: [new Date(sale_start), new Date(sale_end)] };
+        } else if (sale_start) {
+            whereCondition.sale_start = { [Op.gte]: new Date(sale_start) };
+        } else if (sale_end) {
+            whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
+        }
 
-        // ✅ Fetch events with company details
+        // ✅ Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
-            order: [['date_from', 'DESC']],
+            order: [["date_from", "DESC"]],
         });
 
-        // ✅ Add full feat_image URL
-        const formattedEvents = events.map(event => {
-            const eventData = event.toJSON();
-            if (eventData.feat_image) {
-                eventData.feat_image = `${baseUrl.replace(/\/$/, '')}/${imagePath}/${eventData.feat_image}`;
-            } else {
-                eventData.feat_image = `${baseUrl.replace(/\/$/, '')}/${imagePath}/default.jpg`;
-            }
-            return eventData;
+        // ✅ Format and Convert Dates
+        const formattedEvents = events.map((event) => {
+            const data = event.toJSON();
+            const tz = data.event_timezone || "UTC";
+
+            const formatDate = (date) =>
+                date
+                    ? {
+                        utc: date,
+                        local: convertUTCToLocal(date, tz),
+                        timezone: tz,
+                    }
+                    : null;
+
+            return {
+                ...data,
+                feat_image: data.feat_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                    : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+                date_from: formatDate(data.date_from),
+                date_to: formatDate(data.date_to),
+                sale_start: formatDate(data.sale_start),
+                sale_end: formatDate(data.sale_end),
+            };
         });
 
-        return res.json({
+        // ✅ Send Response
+        return {
             success: true,
-            message: 'Event list fetched successfully',
+            message: "Event list fetched successfully",
             data: formattedEvents,
-        });
-
+            filters_used: whereCondition, // optional debug info
+        };
     } catch (error) {
-        console.error('Error fetching event list:', error.message);
+
         return {
             success: false,
-            message: 'Internal server error: ' + error.message,
-            code: 'INTERNAL_ERROR',
+            message: "Internal server error: " + error.message,
+            code: "INTERNAL_ERROR",
         };
     }
 };

@@ -558,71 +558,108 @@ module.exports.companyList = async (req, res) => {
 module.exports.eventList = async (req, res) => {
     try {
         const user = req.user;
-        const { search, status } = req.body || {};
+        const {
+            search,
+            status,
+            id,
+            company_id,
+            slug,
+            org_id,
+            date_from,
+            date_to
+        } = req.body || {};
+
         let whereCondition = {};
 
-        if (user.role_id != 1) {
+        // 🔒 Restrict organizer (if not admin)
+        if (user.role_id !== 1) {
             whereCondition.event_org_id = user.id;
         }
 
-        if (search && search.trim() !== '') {
+        // 🔍 Search by event name
+        if (search && search.trim() !== "") {
             whereCondition.name = { [Op.like]: `%${search.trim()}%` };
         }
 
-        if (status && status.trim() !== '') {
+        // 🏷️ Filter by event status
+        if (status && status.trim() !== "") {
             whereCondition.status = status;
         }
 
+        // 🆔 Filter by event ID
+        if (id) {
+            whereCondition.id = id;
+        }
+
+        // 🏢 Filter by company
+        if (company_id) {
+            whereCondition.company_id = company_id;
+        }
+
+        // 🧩 Filter by slug
+        if (slug && slug.trim() !== "") {
+            whereCondition.slug = slug.trim();
+        }
+
+        // 👨‍💼 Filter by organizer ID
+        if (org_id) {
+            whereCondition.event_org_id = org_id;
+        }
+
+        // 📅 Date range filters
+        if (date_from && date_to) {
+            whereCondition.date_from = { [Op.between]: [date_from, date_to] };
+        } else if (date_from) {
+            whereCondition.date_from = { [Op.gte]: date_from };
+        } else if (date_to) {
+            whereCondition.date_to = { [Op.lte]: date_to };
+        }
+
+        // 🧾 Fetch events
         const events = await Event.findAll({
             where: whereCondition,
-            order: [['date_from', 'DESC']],
+            order: [["date_from", "DESC"]],
         });
 
-        // ✅ Convert UTC → Local before sending
-        const formattedEvents = events.map(event => {
+        // 🕒 Convert UTC → Local
+        const formattedEvents = events.map((event) => {
             const data = event.toJSON();
-            const tz = data.event_timezone || 'UTC';
+            const tz = data.event_timezone || "UTC";
+
+            const convertDate = (date) =>
+                date
+                    ? {
+                        utc: date,
+                        local: convertUTCToLocal(date, tz),
+                        timezone: tz,
+                    }
+                    : null;
 
             return {
                 ...data,
-                date_from: {
-                    utc: data.date_from,
-                    local: convertUTCToLocal(data.date_from, tz),
-                    timezone: tz
-                },
-                date_to: {
-                    utc: data.date_to,
-                    local: convertUTCToLocal(data.date_to, tz),
-                    timezone: tz
-                },
-                sale_start: data.sale_start ? {
-                    utc: data.sale_start,
-                    local: convertUTCToLocal(data.sale_start, tz),
-                    timezone: tz
-                } : null,
-                sale_end: data.sale_end ? {
-                    utc: data.sale_end,
-                    local: convertUTCToLocal(data.sale_end, tz),
-                    timezone: tz
-                } : null
+                date_from: convertDate(data.date_from),
+                date_to: convertDate(data.date_to),
+                sale_start: convertDate(data.sale_start),
+                sale_end: convertDate(data.sale_end),
             };
         });
 
-
+        // ✅ Response
         return {
             success: true,
-            message: 'Event list fetched successfully',
+            message: "Event list fetched successfully",
             data: formattedEvents,
         };
     } catch (error) {
-        console.error('Error fetching event list:', error.message);
+        console.error("Error fetching event list:", error);
         return {
             success: false,
-            message: 'Internal server error: ' + error.message,
-            code: 'INTERNAL_ERROR',
+            message: "Internal server error: " + error.message,
+            code: "INTERNAL_ERROR",
         };
     }
 };
+
 
 module.exports.getEventDetails = async (req, res) => {
     try {
