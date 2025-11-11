@@ -311,7 +311,8 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             is_free,
             allow_register,
             request_rsvp,
-            feat_image
+            feat_image,
+            status
         } = updateData;
 
         // ✅ Conditional duplicate check (only if name or slug is changed)
@@ -334,9 +335,10 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         // ✅ Determine effective values for validation
         const effectiveIsFree = is_free !== undefined ? is_free : existingEvent.is_free;
         const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;
-
+        // console.log('>>>>>>>',effectiveIsFree);
+        
         // ✅ Free event validation
-        if (effectiveIsFree === 'Y' && !effectiveRequestRsvp) {
+        if (effectiveIsFree == 'Y' && !effectiveRequestRsvp) {
             return { success: false, message: 'request_rsvp is required for free events', code: 'VALIDATION_FAILED' };
         }
 
@@ -373,6 +375,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (allow_register !== undefined) existingEvent.allow_register = allow_register == 'Y' ? 'Y' : 'N';
         if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
         if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
+        if (status !== undefined && status !== null) existingEvent.status = status;
 
         // ✅ Handle optional image update
         if (feat_image) {

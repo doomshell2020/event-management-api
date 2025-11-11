@@ -380,6 +380,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             video_url,
             payment_currency,
             slug,
+            status
         } = updateData;
 
         // ✅ Conditional duplicate check (only if name or slug is changed)
@@ -427,6 +428,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (slug) existingEvent.slug = slug.trim();
         if (sale_start) existingEvent.sale_start = new Date(sale_start);
         if (sale_end) existingEvent.sale_end = new Date(sale_end);
+        if (status !== undefined && status !== null) existingEvent.status = status;
 
         // ✅ Handle optional image update
         if (feat_image) {
