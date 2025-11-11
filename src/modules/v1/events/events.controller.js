@@ -28,7 +28,6 @@ module.exports.eventList = async (req, res) => {
   }
 };
 
-
 module.exports.createEvent = async (req, res) => {
     try {
         // ✅ Check if image is uploaded

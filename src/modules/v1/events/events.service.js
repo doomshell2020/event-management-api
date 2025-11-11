@@ -9,6 +9,8 @@ module.exports.eventList = async (req, res) => {
         const user = req.user;
         const { search, status } = req.body || {};
         let whereCondition = {};
+        const imagePath = 'uploads/events';
+        const baseUrl = process.env.BASE_URL || 'http://localhost:5000/'; // ✅ fallback base URL
 
         // ✅ Organizer can only see their own events for admin 1 role id
         if (user.role_id != 1) {
@@ -32,11 +34,23 @@ module.exports.eventList = async (req, res) => {
             order: [['date_from', 'DESC']],
         });
 
-        return {
+        // ✅ Add full feat_image URL
+        const formattedEvents = events.map(event => {
+            const eventData = event.toJSON();
+            if (eventData.feat_image) {
+                eventData.feat_image = `${baseUrl.replace(/\/$/, '')}/${imagePath}/${eventData.feat_image}`;
+            } else {
+                eventData.feat_image = `${baseUrl.replace(/\/$/, '')}/${imagePath}/default.jpg`;
+            }
+            return eventData;
+        });
+
+        return res.json({
             success: true,
             message: 'Event list fetched successfully',
-            data: events,
-        };
+            data: formattedEvents,
+        });
+
     } catch (error) {
         console.error('Error fetching event list:', error.message);
         return {
