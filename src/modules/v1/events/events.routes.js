@@ -193,6 +193,5 @@ router.delete('/delete/:id', authenticate,
     ],
      validate,
     eventController.deleteEvent
-
 )
 module.exports = router;

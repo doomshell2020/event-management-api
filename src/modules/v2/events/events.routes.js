@@ -227,4 +227,15 @@ router.get('/event-details/:event_id',
     eventController.getEventDetails
 );
 
+router.delete('/delete/:id', authenticate,
+    [
+        param('id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number'),
+
+    ],
+     validate,
+    eventController.deleteEvent
+)
+
 module.exports = router;
