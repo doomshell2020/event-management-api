@@ -223,3 +223,37 @@ module.exports.companyList = async (req, res) => {
         return apiResponse.error(res, 'Internal server error', 500);
     }
 }
+
+module.exports.deleteEvent = async (req, res) => {
+    try {
+        const eventId = req.params.id;
+
+        if (!eventId) {
+            return apiResponse.validation(res, [], "Event ID is required");
+        }
+
+        // ✅ Call service layer
+        const result = await eventService.deleteEvent(eventId);
+
+        // ✅ Handle service-level results
+        if (!result.success) {
+            switch (result.code) {
+                case "NOT_FOUND":
+                    return apiResponse.notFound(res, "Event not found");
+                case "DB_ERROR":
+                    return apiResponse.error(res, "Database error occurred while deleting event");
+                case "VALIDATION_FAILED":
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message || "Unknown error occurred");
+            }
+        }
+
+        // ✅ Success Response
+        return apiResponse.success(res, "Event deleted successfully", result.data);
+
+    } catch (error) {
+        console.error("Error in deleteEvent:", error);
+        return apiResponse.error(res, "Internal Server Error", 500);
+    }
+};

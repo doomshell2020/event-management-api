@@ -5,6 +5,46 @@ const { Company, Event } = require('../../../models');
 const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 
 
+module.exports.deleteEvent = async (eventId) => {
+    try {
+        // ✅ Find the event
+        const event = await Event.findByPk(eventId);
+
+        if (!event) {
+            return { success: false, code: "NOT_FOUND", message: "Event not found" };
+        }
+
+        // ✅ Delete image from filesystem (if exists)
+        if (event.feat_image) {
+            const imagePath = path.join(process.cwd(), 'uploads/events', event.feat_image);
+            if (fs.existsSync(imagePath)) {
+                try {
+                    fs.unlinkSync(imagePath);
+                    console.log("🗑️ Deleted image file:", imagePath);
+                } catch (err) {
+                    console.error("Error deleting event image:", err.message);
+                }
+            }
+        }
+
+        // ✅ Delete event record
+        await event.destroy();
+
+        return {
+            success: true,
+            message: "Event deleted successfully",
+            data: { id: eventId },
+        };
+    } catch (error) {
+        console.error("Service error in deleteEvent:", error);
+        return {
+            success: false,
+            code: "DB_ERROR",
+            message: "Database error occurred while deleting the event",
+        };
+    }
+};
+
 module.exports.eventList = async (req, res) => {
     try {
         const user = req.user;

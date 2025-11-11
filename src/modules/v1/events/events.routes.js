@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const eventController = require('./events.controller');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
@@ -184,4 +184,15 @@ router.post('/event-list',
     eventController.eventList
 )
 
+router.delete('/delete/:id', authenticate,
+    [
+        param('id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number'),
+
+    ],
+     validate,
+    eventController.deleteEvent
+
+)
 module.exports = router;
