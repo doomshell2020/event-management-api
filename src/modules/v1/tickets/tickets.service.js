@@ -274,3 +274,66 @@ module.exports.deleteTicket = async (req) => {
         };
     }
 };
+
+module.exports.listTicketsByEvent = async (event_id) => {
+    try {
+        // ✅ Check if event exists
+        const eventExists = await Event.findByPk(event_id);
+        if (!eventExists) {
+            return {
+                success: false,
+                message: 'Event not found',
+                code: 'EVENT_NOT_FOUND'
+            };
+        }
+
+        // ✅ Fetch all tickets for this event
+        const tickets = await TicketType.findAll({
+            where: { eventid: event_id },
+            order: [['createdAt', 'DESC']]
+        });
+
+        return {
+            success: true,
+            message: 'Tickets fetched successfully',
+            data: tickets
+        };
+
+    } catch (error) {
+        console.error('Error fetching tickets by event:', error);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'DB_ERROR'
+        };
+    }
+};
+
+module.exports.getTicketDetail = async (ticket_id) => {
+    try {
+        // ✅ Find ticket by ID
+        const ticket = await TicketType.findByPk(ticket_id);
+
+        if (!ticket) {
+            return {
+                success: false,
+                message: 'Ticket not found',
+                code: 'TICKET_NOT_FOUND'
+            };
+        }
+
+        return {
+            success: true,
+            message: 'Ticket details fetched successfully',
+            data: ticket
+        };
+
+    } catch (error) {
+        console.error('Error fetching ticket detail:', error);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'DB_ERROR'
+        };
+    }
+};

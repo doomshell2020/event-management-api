@@ -148,3 +148,69 @@ module.exports.deleteTicket = async (req, res) => {
         return apiResponse.error(res, 'Internal Server Error', 500);
     }
 };
+
+module.exports.listTicketsByEvent = async (req, res) => {
+    try {
+        const { event_id } = req.params;
+
+        // ✅ Validate event_id
+        if (!event_id) {
+            return apiResponse.validation(res, [], 'Event ID is required');
+        }
+
+        // ✅ Call service to fetch tickets
+        const result = await ticketService.listTicketsByEvent(event_id);
+
+        // ✅ Handle service-layer errors
+        if (!result.success) {
+            switch (result.code) {
+                case 'EVENT_NOT_FOUND':
+                    return apiResponse.notFound(res, 'Event not found');
+                case 'DB_ERROR':
+                    return apiResponse.error(res, 'Database error occurred while fetching tickets');
+                default:
+                    return apiResponse.error(res, result.message || 'An unknown error occurred');
+            }
+        }
+
+        // ✅ Success response
+        return apiResponse.success(res, 'Tickets fetched successfully', result.data);
+
+    } catch (error) {
+        console.error('Error in listTicketsByEvent:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
+
+module.exports.getTicketDetail = async (req, res) => {
+    try {
+        const { ticket_id } = req.params;
+
+        // ✅ Validate ticket_id
+        if (!ticket_id) {
+            return apiResponse.validation(res, [], 'Ticket ID is required');
+        }
+
+        // ✅ Call service to fetch ticket details
+        const result = await ticketService.getTicketDetail(ticket_id);
+
+        // ✅ Handle service-layer errors
+        if (!result.success) {
+            switch (result.code) {
+                case 'TICKET_NOT_FOUND':
+                    return apiResponse.notFound(res, 'Ticket not found');
+                case 'DB_ERROR':
+                    return apiResponse.error(res, 'Database error occurred while fetching ticket detail');
+                default:
+                    return apiResponse.error(res, result.message || 'An unknown error occurred');
+            }
+        }
+
+        // ✅ Success response
+        return apiResponse.success(res, 'Ticket details fetched successfully', result.data);
+
+    } catch (error) {
+        console.error('Error in getTicketDetail:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
