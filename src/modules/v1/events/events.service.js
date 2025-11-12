@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event } = require('../../../models');
+const { Company, Event, TicketType, AddonTypes } = require('../../../models');
 const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 
 
@@ -111,6 +111,115 @@ module.exports.eventList = async (req, res) => {
         // ✅ Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
+            order: [["date_from", "DESC"]],
+        });
+
+        // ✅ Format and Convert Dates
+        const formattedEvents = events.map((event) => {
+            const data = event.toJSON();
+            const tz = data.event_timezone || "UTC";
+
+            const formatDate = (date) =>
+                date
+                    ? {
+                        utc: date,
+                        local: convertUTCToLocal(date, tz),
+                        timezone: tz,
+                    }
+                    : null;
+
+            return {
+                ...data,
+                feat_image: data.feat_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                    : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+                date_from: formatDate(data.date_from),
+                date_to: formatDate(data.date_to),
+                sale_start: formatDate(data.sale_start),
+                sale_end: formatDate(data.sale_end),
+            };
+        });
+
+        // ✅ Send Response
+        return {
+            success: true,
+            message: "Event list fetched successfully",
+            data: formattedEvents,
+            filters_used: whereCondition, // optional debug info
+        };
+    } catch (error) {
+
+        return {
+            success: false,
+            message: "Internal server error: " + error.message,
+            code: "INTERNAL_ERROR",
+        };
+    }
+};
+
+module.exports.publicEventList = async (req, res) => {
+    try {
+        const user = req.user;
+        const {
+            search,
+            status,
+            id,
+            company_id,
+            slug,
+            org_id,
+            date_from,
+            date_to,
+            sale_start,
+            sale_end
+        } = req.body || {};
+
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+        let whereCondition = {};
+
+        // ✅ ID Filter
+        if (id) whereCondition.id = id;
+
+        // ✅ Organizer ID
+        if (org_id) whereCondition.event_org_id = org_id;
+
+        // ✅ Company ID
+        if (company_id) whereCondition.company_id = company_id;
+
+        // ✅ Slug
+        if (slug && slug.trim() !== "") whereCondition.slug = slug.trim();
+
+        // ✅ Status
+        if (status && status.trim() !== "") whereCondition.status = status.trim();
+
+        // ✅ Search by Name
+        if (search && search.trim() !== "") {
+            whereCondition.name = { [Op.like]: `%${search.trim()}%` };
+        }
+
+        // ✅ Event Date Range Filter
+        if (date_from && date_to) {
+            whereCondition.date_from = { [Op.between]: [new Date(date_from), new Date(date_to)] };
+        } else if (date_from) {
+            whereCondition.date_from = { [Op.gte]: new Date(date_from) };
+        } else if (date_to) {
+            whereCondition.date_from = { [Op.lte]: new Date(date_to) };
+        }
+
+        // ✅ Sale Start / End Date Range Filters
+        if (sale_start && sale_end) {
+            whereCondition.sale_start = { [Op.between]: [new Date(sale_start), new Date(sale_end)] };
+        } else if (sale_start) {
+            whereCondition.sale_start = { [Op.gte]: new Date(sale_start) };
+        } else if (sale_end) {
+            whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
+        }
+
+        // ✅ Fetch Events
+        const events = await Event.findAll({
+            where: whereCondition,
+            include: [{ model: TicketType, as: 'tickets' },
+            { model: AddonTypes, as: 'addons' }],
             order: [["date_from", "DESC"]],
         });
 
@@ -376,7 +485,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         const effectiveIsFree = is_free !== undefined ? is_free : existingEvent.is_free;
         const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;
         // console.log('>>>>>>>',effectiveIsFree);
-        
+
         // ✅ Free event validation
         if (effectiveIsFree == 'Y' && !effectiveRequestRsvp) {
             return { success: false, message: 'request_rsvp is required for free events', code: 'VALIDATION_FAILED' };

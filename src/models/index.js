@@ -67,6 +67,12 @@ TicketType.belongsTo(Event, {
   as: 'event' 
 });
 
+Event.hasMany(AddonTypes, { 
+  foreignKey: 'event_id', 
+  as: 'addons',    // fetch addons via event.addons
+  onDelete: 'CASCADE' 
+});
+
 
 TicketType.hasMany(TicketPricing, { 
   foreignKey: 'ticket_type_id', 

@@ -4,28 +4,53 @@ const path = require('path');
 const fs = require('fs');
 
 module.exports.eventList = async (req, res) => {
-  try {
-    const result = await eventService.eventList(req, res);
+    try {
+        const result = await eventService.eventList(req, res);
 
-    if (!result.success) {
-      switch (result.code) {
-        case 'VALIDATION_FAILED':
-          return apiResponse.validation(res, [], result.message);
-        default:
-          return apiResponse.error(res, result.message);
-      }
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event list fetched successfully',
+            { events: result.data }  // plural naming convention
+        );
+
+    } catch (error) {
+        console.log('Error in eventList controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
     }
+};
 
-    return apiResponse.success(
-      res,
-      result.message || 'Event list fetched successfully',
-      { events: result.data }  // plural naming convention
-    );
+module.exports.publicEventList = async (req, res) => {
+    try {
+        const result = await eventService.publicEventList(req, res);
 
-  } catch (error) {
-    console.log('Error in eventList controller:', error);
-    return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
-  }
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event list fetched successfully',
+            { events: result.data }  // plural naming convention
+        );
+
+    } catch (error) {
+        console.log('Error in eventList controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
 };
 
 module.exports.createEvent = async (req, res) => {

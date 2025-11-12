@@ -184,6 +184,23 @@ router.post('/event-list',
     eventController.eventList
 )
 
+// ✅ Public Event List (No Authentication)
+router.post('/public-event-list',
+    [
+        body('search')
+            .optional()
+            .isLength({ min: 2 }).withMessage('Search term must be at least 2 characters long'),
+
+        body('status')
+            .optional()
+            .isIn(['Y', 'N'])
+            .withMessage('Status must be either Y or N'),
+    ],
+    validate,
+    eventController.publicEventList
+);
+
+
 router.delete('/delete/:id', authenticate,
     [
         param('id')
@@ -194,4 +211,5 @@ router.delete('/delete/:id', authenticate,
      validate,
     eventController.deleteEvent
 )
+
 module.exports = router;
