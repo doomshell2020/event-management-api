@@ -38,7 +38,6 @@ module.exports.createAddons = async (req, res) => {
     }
 };
 
-
 module.exports.updateAddons = async (req, res) => {
     try {
         const addonId = req.params.id;
@@ -72,5 +71,38 @@ module.exports.updateAddons = async (req, res) => {
     } catch (error) {
         console.error('Error in updateAddons:', error);
         return apiResponse.error(res, 'Internal Server Error');
+    }
+};
+
+module.exports.listAddonsByEvent = async (req, res) => {
+    try {
+        const { event_id } = req.params;
+
+        // ✅ Validate event_id
+        if (!event_id) {
+            return apiResponse.validation(res, [], 'Event ID is required');
+        }
+
+        // ✅ Call service to fetch tickets
+        const result = await addonService.listAddonsByEvent(event_id);
+
+        // ✅ Handle service-layer errors
+        if (!result.success) {
+            switch (result.code) {
+                case 'EVENT_NOT_FOUND':
+                    return apiResponse.notFound(res, 'Event not found');
+                case 'DB_ERROR':
+                    return apiResponse.error(res, 'Database error occurred while fetching addons');
+                default:
+                    return apiResponse.error(res, result.message || 'An unknown error occurred');
+            }
+        }
+
+        // ✅ Success response
+        return apiResponse.success(res, 'Addons fetched successfully', result.data);
+
+    } catch (error) {
+        console.error('Error in listAddonsByEvent:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
     }
 };
