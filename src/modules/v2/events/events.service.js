@@ -662,7 +662,6 @@ module.exports.eventList = async (req, res) => {
     }
 };
 
-
 module.exports.getEventDetails = async (req, res) => {
     try {
         const { event_id } = req.params;

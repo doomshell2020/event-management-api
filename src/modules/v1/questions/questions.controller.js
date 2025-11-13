@@ -2,6 +2,40 @@ const questionsService = require('./questions.service');
 const apiResponse = require('../../../common/utils/apiResponse');
 const { body } = require('express-validator');
 
+module.exports.listQuestions = async (req, res) => {
+    try {
+        const { event_id, question_id } = req.query;
+
+        // ✅ If no filter provided
+        if (!event_id && !question_id) {
+            return apiResponse.validation(res, [], 'Please provide either event_id or question_id');
+        }
+
+        // ✅ Call service layer
+        const result = await questionsService.listQuestions({ event_id, question_id });
+
+        // ✅ Handle service errors
+        if (!result.success) {
+            switch (result.code) {
+                case 'QUESTION_NOT_FOUND':
+                    return apiResponse.notFound(res, [], 'No questions found');
+                case 'DB_ERROR':
+                    return apiResponse.error(res, [], 'Database error occurred while fetching questions');
+                default:
+                    return apiResponse.error(res, [], result.message || 'Unknown error occurred');
+            }
+        }
+
+        // ✅ Success response
+        return apiResponse.success(res, 'Questions fetched successfully', result.data);
+
+    } catch (error) {
+        console.error('❌ Error in listQuestions:', error);
+        return apiResponse.error(res, [], 'Internal Server Error: ' + error.message);
+    }
+};
+
+
 module.exports.createQuestions = async (req, res) => {
     try {
 

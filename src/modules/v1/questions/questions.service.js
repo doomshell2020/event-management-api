@@ -1,7 +1,51 @@
-const { Questions, QuestionItems } = require('../../../models');
+const { Questions, QuestionItems,Event } = require('../../../models');
 
 const { Op } = require('sequelize');
 
+// 📋 List Questions (by event_id or question_id)
+module.exports.listQuestions = async ({ event_id, question_id }) => {
+    try {
+        const whereClause = {};
+
+        // ✅ Add filters dynamically
+        if (event_id) whereClause.event_id = event_id;
+        if (question_id) whereClause.id = question_id;
+
+        // ✅ Fetch questions with relations
+        const questions = await Questions.findAll({
+            where: whereClause,
+            include: [
+                {
+                    model: QuestionItems,
+                    as: 'questionItems',
+                    attributes: ['id', 'items']
+                }
+            ],
+            order: [['id', 'DESC']]
+        });
+
+        if (!questions || questions.length == 0) {
+            return {
+                success: false,
+                code: 'QUESTION_NOT_FOUND',
+                message: 'No questions found for the given filter'
+            };
+        }
+
+        return {
+            success: true,
+            message: 'Questions fetched successfully',
+            data: questions
+        };
+    } catch (error) {
+        console.error('❌ Error in listQuestions service:', error);
+        return {
+            success: false,
+            code: 'DB_ERROR',
+            message: error.message
+        };
+    }
+};
 
 module.exports.linkQuestionToTickets = async (questionId, ticketIds) => {
     try {

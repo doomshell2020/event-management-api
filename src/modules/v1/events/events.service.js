@@ -215,6 +215,10 @@ module.exports.publicEventList = async (req, res) => {
             whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
         }
 
+        // console.log('>>>>>>>>>>>>',whereCondition);
+        
+
+
         // ✅ Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
@@ -222,6 +226,8 @@ module.exports.publicEventList = async (req, res) => {
             { model: AddonTypes, as: 'addons' }],
             order: [["date_from", "DESC"]],
         });
+
+        // console.log('>>>>>>>>>>>', events.length);
 
         // ✅ Format and Convert Dates
         const formattedEvents = events.map((event) => {

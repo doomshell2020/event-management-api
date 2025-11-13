@@ -1,13 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const questionsController = require('./questions.controller');
-const { body, param } = require('express-validator');
+const { body, param,query } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 
 // 🎟️ Create Ticket Route
-router.post(
-    '/create',
+router.post('/create',
     authenticate,
     [
         // ✅ Required fields
@@ -37,8 +36,7 @@ router.post(
 );
 
 // 📝 Update Question Route
-router.put(
-    '/update/:id',
+router.put('/update/:id',
     authenticate,
     [
         // ✅ Validate Question ID from params
@@ -68,8 +66,7 @@ router.put(
 );
 
 // 🔗 Link Question to multiple tickets
-router.put(
-    '/link-tickets/:question_id',
+router.put('/link-tickets/:question_id',
     authenticate,
     [
         param('question_id')
@@ -84,5 +81,20 @@ router.put(
     questionsController.linkQuestionToTickets
 );
 
+// 📋 Get Questions by Event ID or Question ID
+router.get('/list',
+    authenticate,
+    [
+        query('event_id')
+            .optional()
+            .isInt().withMessage('Event ID must be a number'),
+
+        query('question_id')
+            .optional()
+            .isInt().withMessage('Question ID must be a number'),
+    ],
+    validate,
+    questionsController.listQuestions
+);
 
 module.exports = router;
