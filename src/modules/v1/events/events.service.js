@@ -215,19 +215,24 @@ module.exports.publicEventList = async (req, res) => {
             whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
         }
 
-        // console.log('>>>>>>>>>>>>',whereCondition);
-        
+        // ✅ EXCLUDE expired events (date_to < today)
+        const today = new Date();
+        whereCondition.date_to = {
+            ...(whereCondition.date_to || {}),
+            [Op.gte]: today, // only events whose end date >= today
+        };
 
+        // console.log("Applied Filters:", whereCondition);
 
         // ✅ Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
-            include: [{ model: TicketType, as: 'tickets' },
-            { model: AddonTypes, as: 'addons' }],
+            include: [
+                { model: TicketType, as: "tickets" },
+                { model: AddonTypes, as: "addons" },
+            ],
             order: [["date_from", "DESC"]],
         });
-
-        // console.log('>>>>>>>>>>>', events.length);
 
         // ✅ Format and Convert Dates
         const formattedEvents = events.map((event) => {
@@ -237,10 +242,10 @@ module.exports.publicEventList = async (req, res) => {
             const formatDate = (date) =>
                 date
                     ? {
-                        utc: date,
-                        local: convertUTCToLocal(date, tz),
-                        timezone: tz,
-                    }
+                          utc: date,
+                          local: convertUTCToLocal(date, tz),
+                          timezone: tz,
+                      }
                     : null;
 
             return {
@@ -258,12 +263,11 @@ module.exports.publicEventList = async (req, res) => {
         // ✅ Send Response
         return {
             success: true,
-            message: "Event list fetched successfully",
+            message: "Active/Upcoming events fetched successfully",
             data: formattedEvents,
-            filters_used: whereCondition, // optional debug info
+            filters_used: whereCondition,
         };
     } catch (error) {
-
         return {
             success: false,
             message: "Internal server error: " + error.message,
