@@ -3,6 +3,35 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const path = require('path');
 const fs = require('fs');
 
+// getTicketPricing
+module.exports.getTicketPricing = async (req, res) => {
+    try {
+        const eventId = req.params.event_id;
+        // ✅ Validate ID param
+        if (!eventId) {
+            return apiResponse.validation(res, [], 'Event ID is required');
+        }
+        // ✅ Call service to get ticket pricing
+        const result = await ticketService.getTicketPricing(req);
+        // ✅ Handle service-layer errors
+        if (!result.success) {
+            switch (result.code) {
+                case 'EVENT_NOT_FOUND':
+                    return apiResponse.notFound(res, 'Event not found');
+                case 'DB_ERROR':
+                    return apiResponse.error(res, 'Database error occurred while fetching ticket pricing');
+                default:
+                    return apiResponse.error(res, result.message || 'An unknown error occurred');
+            }
+        }
+        // ✅ Success response
+        return apiResponse.success(res, 'Ticket pricing fetched successfully', result.data);
+    } catch (error) {
+        console.error('Error in getTicketPricing:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
+
 module.exports.createTicket = async (req, res) => {
     try {
         // ✅ Handle optional file safely
