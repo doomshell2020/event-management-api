@@ -7,8 +7,7 @@ const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
 
 // Register a new user
-router.post(
-  '/register',
+router.post('/register',
   [
     body('firstName')
       .notEmpty().withMessage('First name is required')
@@ -34,8 +33,7 @@ router.post(
 );
 
 // Login user
-router.post(
-  '/login',
+router.post('/login',
   [
     body('email')
       .notEmpty().withMessage('Email is required')
@@ -49,8 +47,7 @@ router.post(
 
 router.get('/me', authenticate, authController.getUserInfo);
 router.get('/verify-email', authController.verifyEmail);
-router.patch(
-  '/update-profile',
+router.patch('/update-profile',
   authenticate,
   [
     body('first_name')
@@ -80,24 +77,21 @@ router.patch(
 );
 
 // 🖼️ PATCH /update-profile-image
-router.patch(
-  '/update-profile-image',
+router.patch('/update-profile-image',
   authenticate,
   uploadFiles({ folder: 'uploads/profile', type: 'single', fieldName: 'profile_image' }),
   authController.updateProfileImage
 );
 
 // Forgot password
-router.post(
-  '/forgot-password',
+router.post('/forgot-password',
   [body('email').notEmpty().withMessage('Email is required').isEmail().withMessage('Invalid email')],
   validate,
   authController.forgotPassword
 );
 
 // Reset password
-router.post(
-  '/reset-password',
+router.post('/reset-password',
   [
     body('token').notEmpty().withMessage('Token is required'),
     body('password').notEmpty().withMessage('Password is required').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')

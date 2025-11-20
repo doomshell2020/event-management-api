@@ -78,7 +78,7 @@ module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, 
 
     // Generate email verification token (JWT)
     const token = generateVerificationToken(email);
-    const verifyLink = `${config.clientUrl}/api/v1/auth/verify-email?token=${token}`;
+    const verifyLink = `${config.clientUrl}/verify-email?token=${token}`;
     // Send verification email
     const html = verifyEmailTemplate(fullName, verifyLink);
     await sendEmail(email, 'Verify your email address', html);
@@ -144,6 +144,7 @@ module.exports.getUserInfo = async (userId) => {
       'dob',
       'emailNewsLetter',
       'emailRelatedEvents',
+      'PhoneNumber'
     ],
   });
 
@@ -177,7 +178,8 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
             'password',
             'emailRelatedEvents',
             'emailNewsLetter',
-            'profile_image'
+            'profile_image',
+            'PhoneNumber'
         ];
 
         // Check for invalid fields
