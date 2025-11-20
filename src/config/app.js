@@ -18,7 +18,7 @@ const config = {
   // CORS
   corsOptions: {
     origin: '*', // Change to your client URL in production
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE',"PATCH"],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
   },
   // Email verification / client URL
