@@ -97,7 +97,6 @@ module.exports.updateProfile = async (req, res) => {
     }
 };
 
-
 module.exports.verifyEmail = async (req, res) => {
     try {
         const { token } = req.query;

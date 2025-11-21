@@ -176,7 +176,6 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
             'gender',
             'dob',
             'password',        // new password
-            'old_password',    // old password verification
             'emailRelatedEvents',
             'emailNewsLetter',
             'profile_image',
