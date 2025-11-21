@@ -169,14 +169,16 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
             return { success: false, message: 'User not found', code: 'USER_NOT_FOUND' };
         }
 
+        let newPasswordPlainText = null; // 📌 store new password before hashing
+
         // Allowed DB fields
         const allowedFields = [
             'first_name',
             'last_name',
             'gender',
             'dob',
-            'password',        // new password
-            'old_password',    // old password verification
+            'password',
+            'old_password',
             'emailRelatedEvents',
             'emailNewsLetter',
             'profile_image',
@@ -189,55 +191,60 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
             return { success: false, message: `Invalid field(s) provided: ${invalidFields.join(', ')}`, code: 'INVALID_FIELDS' };
         }
 
-        // 🛡️ PASSWORD CHANGE LOGIC
+        // 🔐 PASSWORD CHANGE LOGIC
         if (updates.password) {
+
             if (!updates.old_password) {
                 return { success: false, message: 'Old password is required to change password', code: 'OLD_PASSWORD_REQUIRED' };
             }
 
-            // Compare old password
             const isOldPasswordCorrect = await bcrypt.compare(updates.old_password, user.password);
             if (!isOldPasswordCorrect) {
                 return { success: false, message: 'Old password does not match', code: 'OLD_PASSWORD_INCORRECT' };
             }
 
-            // Check if new password same as existing password
             const isSamePassword = await bcrypt.compare(updates.password, user.password);
             if (isSamePassword) {
                 return { success: false, message: 'New password cannot be the same as current password', code: 'SAME_PASSWORD' };
             }
 
+            // 📌 Save raw password BEFORE hashing
+            newPasswordPlainText = updates.password;
+
             // Hash new password
             updates.password = await bcrypt.hash(updates.password, 10);
         }
 
-        // 🧹 Delete old image if needed
+        // 🧹 Delete old image
         if (updates.profile_image && user.profile_image && user.profile_image !== updates.profile_image && uploadFolder) {
             try {
                 const oldImagePath = path.join(uploadFolder, user.profile_image);
-                if (fs.existsSync(oldImagePath)) {
-                    fs.unlinkSync(oldImagePath);
-                    console.log('🧹 Old profile image deleted:', oldImagePath);
-                }
+                if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
             } catch (err) {
                 console.warn('⚠️ Failed to delete old image:', err.message);
             }
         }
 
-        // Always store only filename
+        // Only store filename
         if (updates.profile_image) {
             updates.profile_image = path.basename(updates.profile_image);
         }
 
-        // Keep only allowed fields
+        // Filter fields
         const filteredUpdates = {};
         allowedFields.forEach(field => {
             if (updates[field] !== undefined) filteredUpdates[field] = updates[field];
         });
 
-        delete filteredUpdates.old_password; // never store old_password
+        delete filteredUpdates.old_password;
 
         await user.update(filteredUpdates);
+
+        // 📧 SEND EMAIL ONLY IF PASSWORD CHANGED
+        if (newPasswordPlainText) {
+            const html = passwordChangedTemplate(user.first_name, newPasswordPlainText);
+            await sendEmail(user.email, 'Your Password Has Been Changed', html);
+        }
 
         // Remove password from response
         const { password, ...userData } = user.toJSON();
@@ -248,6 +255,7 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
         return { success: false, message: 'Failed to update profile', code: 'UPDATE_FAILED' };
     }
 };
+
 
 module.exports.initiatePasswordReset = async (email) => {
     try {
