@@ -65,6 +65,9 @@ router.patch('/update-profile',
     body('password')
       .optional()
       .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'), // ✅ COMMA ADDED
+    body('old_password')
+      .optional()
+      .isLength({ min: 6 }).withMessage('Old Password must be at least 6 characters long'), // ✅ COMMA ADDED
     body('emailRelatedEvents')
       .optional()
       .isIn(['Y', 'N']).withMessage('emailRelatedEvents must be Y or N'),

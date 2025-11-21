@@ -169,39 +169,52 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
             return { success: false, message: 'User not found', code: 'USER_NOT_FOUND' };
         }
 
-        // Allowed DB column fields
+        // Allowed DB fields
         const allowedFields = [
             'first_name',
             'last_name',
             'gender',
             'dob',
-            'password',
+            'password',        // new password
+            'old_password',    // old password verification
             'emailRelatedEvents',
             'emailNewsLetter',
             'profile_image',
             'mobile'
         ];
 
-        // Check for invalid fields
+        // Validate fields
         const invalidFields = Object.keys(updates).filter(field => !allowedFields.includes(field));
         if (invalidFields.length > 0) {
             return { success: false, message: `Invalid field(s) provided: ${invalidFields.join(', ')}`, code: 'INVALID_FIELDS' };
         }
 
-        // Handle password separately
+        // 🛡️ PASSWORD CHANGE LOGIC
         if (updates.password) {
+            if (!updates.old_password) {
+                return { success: false, message: 'Old password is required to change password', code: 'OLD_PASSWORD_REQUIRED' };
+            }
+
+            // Compare old password
+            const isOldPasswordCorrect = await bcrypt.compare(updates.old_password, user.password);
+            if (!isOldPasswordCorrect) {
+                return { success: false, message: 'Old password does not match', code: 'OLD_PASSWORD_INCORRECT' };
+            }
+
+            // Check if new password same as existing password
             const isSamePassword = await bcrypt.compare(updates.password, user.password);
             if (isSamePassword) {
                 return { success: false, message: 'New password cannot be the same as current password', code: 'SAME_PASSWORD' };
             }
+
+            // Hash new password
             updates.password = await bcrypt.hash(updates.password, 10);
         }
 
-        // 🧹 Handle old profile image deletion if a new image is uploaded
+        // 🧹 Delete old image if needed
         if (updates.profile_image && user.profile_image && user.profile_image !== updates.profile_image && uploadFolder) {
             try {
                 const oldImagePath = path.join(uploadFolder, user.profile_image);
-                // Only delete if file exists in the provided upload folder
                 if (fs.existsSync(oldImagePath)) {
                     fs.unlinkSync(oldImagePath);
                     console.log('🧹 Old profile image deleted:', oldImagePath);
@@ -211,20 +224,22 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
             }
         }
 
-        // Only store the filename in DB
+        // Always store only filename
         if (updates.profile_image) {
             updates.profile_image = path.basename(updates.profile_image);
         }
 
-        // Filter only allowed fields
+        // Keep only allowed fields
         const filteredUpdates = {};
         allowedFields.forEach(field => {
             if (updates[field] !== undefined) filteredUpdates[field] = updates[field];
         });
 
+        delete filteredUpdates.old_password; // never store old_password
+
         await user.update(filteredUpdates);
 
-        // Return user without password
+        // Remove password from response
         const { password, ...userData } = user.toJSON();
         return { success: true, data: userData };
 
