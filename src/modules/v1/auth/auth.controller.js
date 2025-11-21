@@ -73,11 +73,16 @@ module.exports.updateProfile = async (req, res) => {
         if (!result.success) {
             // Map service code to proper apiResponse
             switch (result.code) {
+
                 case 'USER_NOT_FOUND':
                     return apiResponse.notFound(res, result.message);
+
                 case 'INVALID_FIELDS':
                 case 'SAME_PASSWORD':
+                case 'OLD_PASSWORD_REQUIRED':
+                case 'OLD_PASSWORD_INCORRECT':
                     return apiResponse.validation(res, [], result.message);
+
                 case 'UPDATE_FAILED':
                 default:
                     return apiResponse.error(res, result.message);
@@ -91,6 +96,7 @@ module.exports.updateProfile = async (req, res) => {
         return apiResponse.error(res, 'Server error while updating profile', 500);
     }
 };
+
 
 module.exports.verifyEmail = async (req, res) => {
     try {
