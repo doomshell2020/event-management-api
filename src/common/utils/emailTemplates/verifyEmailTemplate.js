@@ -24,9 +24,9 @@ const verifyEmailTemplate = (name, verifyLink) => `
       </div>
 
       <!-- Footer -->
-      <div style="background-color:#f4f4f7; color:#888888; text-align:center; padding:20px; font-size:14px;">
-        &copy; ${new Date().getFullYear()} eboxtickets. All rights reserved.
-      </div>
+        <div style="background:#f4f4f7; color:#888; text-align:center; padding:20px; font-size:14px;">
+          &copy; ${new Date().getFullYear()} Event Management. All rights reserved.
+        </div>
 
     </div>
   </div>

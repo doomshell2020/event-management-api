@@ -1,4 +1,4 @@
-const emailVerifiedTemplate = (name) => `
+const emailVerifiedTemplate = (name,loginUrl) => `
   <div style="font-family:'Arial',sans-serif; background:#f4f4f7; padding:40px 0; width:100%;">
     <div style="max-width:600px; margin:0 auto; background:#fff; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1); overflow:hidden;">
       
@@ -10,7 +10,7 @@ const emailVerifiedTemplate = (name) => `
         <p>Hello ${name},</p>
         <p>Your email has been successfully verified. You can now log in and access your account.</p>
         <p style="text-align:center; margin-top:30px;">
-          <a href="http://localhost:5000/login" 
+          <a href=${loginUrl} 
              style="background-color:#28a745; color:#fff; padding:15px 30px; text-decoration:none; border-radius:8px; font-weight:bold;">
              Login Now
           </a>

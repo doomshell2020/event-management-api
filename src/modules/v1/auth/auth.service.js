@@ -36,8 +36,10 @@ module.exports.verifyEmailToken = async (token) => {
         user.is_email_verified = 'Y';
         await user.save();
 
+        const loginUrl = CLIENT_URL + '/login';
+
         // Send email notification for successful verification
-        const html = emailVerifiedTemplate(user.first_name);
+        const html = emailVerifiedTemplate(user.first_name, loginUrl);
         await sendEmail(user.email, 'Your email has been verified!', html);
 
         return {
@@ -255,7 +257,6 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
         return { success: false, message: 'Failed to update profile', code: 'UPDATE_FAILED' };
     }
 };
-
 
 module.exports.initiatePasswordReset = async (email) => {
     try {
