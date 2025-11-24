@@ -9,7 +9,6 @@ const uploadFiles = require('../../../middlewares/upload.middleware');
 const { Event } = require('../../../models');
 
 // ✅ Create Event Route
-
 router.post('/create',
     authenticate,
     uploadFiles({ folder: 'uploads/events', type: 'single', fieldName: 'feat_image' }),
@@ -200,7 +199,6 @@ router.post('/public-event-list',
     eventController.publicEventList
 );
 
-
 router.delete('/delete/:id', authenticate,
     [
         param('id')
@@ -208,8 +206,20 @@ router.delete('/delete/:id', authenticate,
             .isInt().withMessage('Event ID must be a number'),
 
     ],
-     validate,
+    validate,
     eventController.deleteEvent
 )
+
+// ✅ Public Event Full Details (Cart Page Access - No Auth Required)
+router.get('/public-event-detail/:id',
+    [
+        param('id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Invalid Event ID'),
+    ],
+    validate,
+    eventController.publicEventDetail
+);
+
 
 module.exports = router;

@@ -157,6 +157,76 @@ module.exports.eventList = async (req, res) => {
     }
 };
 
+module.exports.publicEventDetail = async (req, res) => {
+    try {
+        const { id } = req.params || {}; // ✅ correct param usage
+
+        if (!id) {
+            return {
+                success: false,
+                code: "VALIDATION_FAILED",
+                message: "Event ID is required"
+            };
+        }
+
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+
+        const event = await Event.findOne({
+            where: { id },
+            include: [
+                { model: TicketType, as: "tickets" },
+                { model: AddonTypes, as: "addons" }
+            ]
+        });
+
+        if (!event) {
+            return {
+                success: false,
+                code: "NOT_FOUND",
+                message: "Event not found"
+            };
+        }
+
+        const data = event.toJSON();
+        const tz = data.event_timezone || "UTC";
+
+        const formatDate = (date) =>
+            date
+                ? {
+                    utc: date,
+                    local: convertUTCToLocal(date, tz),
+                    timezone: tz
+                }
+                : null;
+
+        const formattedEvent = {
+            ...data,
+            feat_image: data.feat_image
+                ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
+            date_from: formatDate(data.date_from),
+            date_to: formatDate(data.date_to),
+            sale_start: formatDate(data.sale_start),
+            sale_end: formatDate(data.sale_end)
+        };
+
+        return {
+            success: true,
+            message: "Event details fetched successfully",
+            data: formattedEvent
+        };
+
+    } catch (error) {
+        return {
+            success: false,
+            code: "INTERNAL_ERROR",
+            message: "Internal server error: " + error.message
+        };
+    }
+};
+
 module.exports.publicEventList = async (req, res) => {
     try {
         const user = req.user;
@@ -242,10 +312,10 @@ module.exports.publicEventList = async (req, res) => {
             const formatDate = (date) =>
                 date
                     ? {
-                          utc: date,
-                          local: convertUTCToLocal(date, tz),
-                          timezone: tz,
-                      }
+                        utc: date,
+                        local: convertUTCToLocal(date, tz),
+                        timezone: tz,
+                    }
                     : null;
 
             return {

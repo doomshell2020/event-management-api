@@ -227,6 +227,17 @@ router.get('/event-details/:event_id',
     eventController.getEventDetails
 );
 
+// ✅ 2️⃣ Get All Slots for an Event
+router.get('/public-event-detail/:event_id',
+    [
+        param('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be numeric'),
+    ],
+    validate,
+    eventController.getEventDetails
+);
+
 router.delete('/delete/:id', authenticate,
     [
         param('id')
@@ -234,7 +245,7 @@ router.delete('/delete/:id', authenticate,
             .isInt().withMessage('Event ID must be a number'),
 
     ],
-     validate,
+    validate,
     eventController.deleteEvent
 )
 

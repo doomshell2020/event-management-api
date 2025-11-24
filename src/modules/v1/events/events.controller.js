@@ -28,6 +28,36 @@ module.exports.eventList = async (req, res) => {
     }
 };
 
+module.exports.publicEventDetail = async (req, res) => {
+    try {
+        const result = await eventService.publicEventDetail(req, res);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+
+                case 'NOT_FOUND':
+                    return apiResponse.error(res, result.message, 404);
+
+                case 'INTERNAL_ERROR':
+                default:
+                    return apiResponse.error(res, result.message, 500);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event details fetched successfully',
+            { event: result.data } // renamed to event (single)
+        );
+
+    } catch (error) {
+        console.log('Error in publicEventDetail controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
+
 module.exports.publicEventList = async (req, res) => {
     try {
         const result = await eventService.publicEventList(req, res);
