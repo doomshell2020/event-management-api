@@ -383,6 +383,20 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             status
         } = updateData;
 
+        if (
+            Object.keys(updateData).length == 1 &&      // only one key in object
+            updateData.hasOwnProperty("status")          // that key is "status"
+        ) {
+            existingEvent.status = updateData.status;
+            await existingEvent.save();
+
+            return {
+                success: true,
+                message: "Event status updated successfully",
+                event: existingEvent
+            };
+        }
+
         // ✅ Conditional duplicate check (only if name or slug is changed)
         if (name || slug) {
             const duplicateEvent = await Event.findOne({
