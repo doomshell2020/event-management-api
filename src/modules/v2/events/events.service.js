@@ -667,11 +667,11 @@ module.exports.getEventDetails = async (req, res) => {
         const { event_id } = req.params;
 
         if (!event_id) {
-            return res.json({
+            return {
                 success: false,
                 code: 'VALIDATION_FAILED',
                 message: 'Event ID is required'
-            });
+            };
         }
 
         // Step 1️⃣: Get event basic info (to check entry_type)
@@ -681,11 +681,11 @@ module.exports.getEventDetails = async (req, res) => {
         });
 
         if (!event) {
-            return res.json({
+            return {
                 success: false,
                 code: 'EVENT_NOT_FOUND',
                 message: 'Event not found'
-            });
+            };
         }
 
         const { entry_type } = event;
@@ -730,19 +730,19 @@ module.exports.getEventDetails = async (req, res) => {
             include: includeConfig
         });
 
-        return res.json({
+        return {
             success: true,
             message: 'Event details fetched successfully',
             data: eventDetails
-        });
+        };
 
     } catch (error) {
         console.error('❌ Error fetching event details:', error.message);
-        return res.json({
+        return {
             success: false,
             code: 'DB_ERROR',
             message: 'Internal server error: ' + error.message
-        });
+        };
     }
 };
 
