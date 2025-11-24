@@ -730,10 +730,38 @@ module.exports.getEventDetails = async (req, res) => {
             include: includeConfig
         });
 
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+
+
+        const data = eventDetails.toJSON();
+        const tz = data.event_timezone || "UTC";
+
+        const formatDate = (date) =>
+            date
+                ? {
+                    utc: date,
+                    local: convertUTCToLocal(date, tz),
+                    timezone: tz
+                }
+                : null;
+
+        const formattedEvent = {
+            ...data,
+            feat_image: data.feat_image
+                ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
+            date_from: formatDate(data.date_from),
+            date_to: formatDate(data.date_to),
+            sale_start: formatDate(data.sale_start),
+            sale_end: formatDate(data.sale_end)
+        };
+
         return {
             success: true,
-            message: 'Event details fetched successfully',
-            data: eventDetails
+            message: "Event details fetched successfully",
+            data: formattedEvent
         };
 
     } catch (error) {
