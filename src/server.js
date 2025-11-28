@@ -28,6 +28,10 @@ const ticketsRoutesV1 = require('./modules/v1/tickets/tickets.routes');
 const addonsRoutesV1 = require('./modules/v1/addons/addons.routes');
 const questionsRoutesV1 = require('./modules/v1/questions/questions.routes');
 const packagesRoutesV1 = require('./modules/v1/package/package.routes');
+// .. 
+const wellnessRoutesV1 = require('./modules/v1/wellness/wellness.routes');
+const cartRoutesV1 = require('./modules/v1/cart/cart.routes');
+// ..
 
 const eventsRoutesV2 = require('./modules/v2/events/events.routes');
 const ticketsRoutesV2 = require('./modules/v2/tickets/tickets.routes');
@@ -65,6 +69,11 @@ app.use('/api/v1/tickets', ticketsRoutesV1);
 app.use('/api/v1/addons', addonsRoutesV1);
 app.use('/api/v1/questions', questionsRoutesV1);
 app.use('/api/v1/packages', packagesRoutesV1);
+
+// -------
+app.use('/api/v1/wellness',wellnessRoutesV1);
+app.use('/api/v1/cart',cartRoutesV1);
+// -------
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);
 // app.use('/api/v1/api-keys', apiKeysRoutesV1);
 

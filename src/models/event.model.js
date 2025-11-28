@@ -177,6 +177,61 @@ const Event = sequelize.define('Event',
             type: DataTypes.STRING,
             allowNull: true
         },
+
+        // new keys added-kamal
+        is_sale_start: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: true,
+            defaultValue: 'Y'
+        },
+        ServiceFee: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        MexicanVAT: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        AccommodationTax: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        OndalindaFee: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        strip_fee: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        ticket_platform_fee_percentage: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        ticket_stripe_fee_percentage: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        ticket_bank_fee_percentage: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        ticket_processing_fee_percentage: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        accommodation_stripe_fee_percentage: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        accommodation_bank_fee_percentage: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+        accommodation_processing_fee_percentage: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
     },
     {
         tableName: 'tblevent',

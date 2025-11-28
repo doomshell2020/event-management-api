@@ -137,6 +137,7 @@ module.exports.getUserInfo = async (userId) => {
 };
 
 module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) => {
+
     try {
         const user = await User.findByPk(userId);
         if (!user) {
@@ -164,6 +165,7 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
         // Handle password separately
         if (updates.password) {
             const isSamePassword = await bcrypt.compare(updates.password, user.password);
+            console.log("isSamePassword----------",isSamePassword)
             if (isSamePassword) {
                 return { success: false, message: 'New password cannot be the same as current password', code: 'SAME_PASSWORD' };
             }
@@ -269,3 +271,28 @@ module.exports.resetPassword = async (token, password) => {
         return { success: false, message: 'Failed to reset password' };
     }
 };
+
+
+
+// User detail fetch api
+module.exports.getUserById = async (req, res) => {
+    try {
+        const { id } = req.params;   // get id from URL params
+        const userData = await User.findOne({
+            where: { id: id },
+            attributes: ['id', 'first_name', 'last_name', 'email', 'mobile']
+        });
+        return {
+            success: true,
+            message: 'User record fetched successfully!',
+            data: userData
+        };
+    } catch (error) {
+        console.error('Error fetching cart:', error);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'INTERNAL_ERROR'
+        };
+    }
+}

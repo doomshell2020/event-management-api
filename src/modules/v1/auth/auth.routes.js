@@ -106,4 +106,15 @@ router.post(
   authController.resetPassword
 );
 
+router.get('/:id',
+    //  authenticate,
+     authController.getUserById);
+
+
+
+
+
+
+
+
 module.exports = router;

@@ -193,3 +193,30 @@ module.exports.resetPassword = async (req, res) => {
         return apiResponse.error(res, 'Server error during password reset');
     }
 };
+
+
+
+
+// user fetch profile
+module.exports.getUserById = async (req, res) => {
+    try {
+        const result = await authService.getUserById(req, res);
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+        const userData = result.data || {};
+        return apiResponse.success(
+            res,
+            result.message || 'User record fetched successfully',
+           userData   // singular because findOne
+        );
+    } catch (error) {
+        console.log('Error in userFindOne controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
