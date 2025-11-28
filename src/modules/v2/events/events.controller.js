@@ -3,6 +3,94 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const path = require('path');
 const fs = require('fs');
 
+module.exports.createEvent = async (req, res) => {
+    try {
+        // ✅ Check if image is uploaded
+        if (!req.file) {
+            return apiResponse.validation(res, [], 'Event image (feat_image) is required');
+        }
+
+        const { filename } = req.file;
+        const uploadFolder = path.join(process.cwd(), 'uploads/events');
+        const fullFilePath = path.join(uploadFolder, filename);
+
+        // ✅ Get POST data
+        const {
+            name,
+            desp,
+            date_from,
+            date_to,
+            location,
+            company_id,
+            country_id,
+            payment_currency,
+            slug,
+            ticket_limit,
+            sale_start,
+            sale_end,
+            video_url,
+            event_timezone
+        } = req.body;
+
+        // ✅ Required field validation
+        if (
+            !name ||
+            !desp ||
+            !date_from ||
+            !date_to ||
+            !location ||
+            !company_id ||
+            !country_id ||
+            !slug
+        ) {
+            return apiResponse.validation(res, [], 'Please complete all required fields before submitting the form');
+        }
+
+
+        // Conditional validation for paid events
+        if (!ticket_limit || !payment_currency || !sale_start || !sale_end) {
+            return apiResponse.validation(res, [], 'Paid events require ticket_limit, payment_currency, sale_start, sale_end');
+        }
+
+        // Call service to create event
+        const result = await eventService.createEvent(req, res);
+
+        // Handle service errors
+        if (!result.success) {
+            if (fs.existsSync(fullFilePath)) {
+                fs.unlinkSync(fullFilePath);
+                console.log('🧹 Uploaded image removed due to DB failure:', fullFilePath);
+            }
+
+            switch (result.code) {
+                case 'DUPLICATE_ERROR':
+                    return apiResponse.conflict(res, result.message); // 409
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message); // 422
+                case 'INVALID_IMAGE':
+                    return apiResponse.validation(res, [], result.message); // 422
+                default:
+                    return apiResponse.error(res, result.message); // 500
+            }
+        }
+
+        // Success response
+        return apiResponse.success(
+            res,
+            result.message || 'Event created successfully!',
+            { event: result.event }
+        );
+
+    } catch (error) {
+        // Delete uploaded file if any error occurs
+        if (fs.existsSync(fullFilePath)) {
+            fs.unlinkSync(fullFilePath);
+            console.log('🧹 Uploaded image removed due to server error:', fullFilePath);
+        }
+        console.error('Error in createEvent controller:', error);
+        return apiResponse.error(res, 'Internal server error', 500);
+    }
+};
 
 module.exports.getEventSlots = async (req, res) => {
     try {
@@ -132,95 +220,6 @@ module.exports.getEventDetails = async (req, res) => {
     } catch (error) {
         console.log('Error in getEventDetails controller:', error);
         return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
-    }
-};
-
-module.exports.createEvent = async (req, res) => {
-    try {
-        // ✅ Check if image is uploaded
-        if (!req.file) {
-            return apiResponse.validation(res, [], 'Event image (feat_image) is required');
-        }
-
-        const { filename } = req.file;
-        const uploadFolder = path.join(process.cwd(), 'uploads/events');
-        const fullFilePath = path.join(uploadFolder, filename);
-
-        // ✅ Get POST data
-        const {
-            name,
-            desp,
-            date_from,
-            date_to,
-            location,
-            company_id,
-            country_id,
-            payment_currency,
-            slug,
-            ticket_limit,
-            sale_start,
-            sale_end,
-            video_url,
-            event_timezone
-        } = req.body;
-
-        // ✅ Required field validation
-        if (
-            !name ||
-            !desp ||
-            !date_from ||
-            !date_to ||
-            !location ||
-            !company_id ||
-            !country_id ||
-            !slug
-        ) {
-            return apiResponse.validation(res, [], 'Please complete all required fields before submitting the form');
-        }
-
-
-        // Conditional validation for paid events
-        if (!ticket_limit || !payment_currency || !sale_start || !sale_end) {
-            return apiResponse.validation(res, [], 'Paid events require ticket_limit, payment_currency, sale_start, sale_end');
-        }
-
-        // Call service to create event
-        const result = await eventService.createEvent(req, res);
-
-        // Handle service errors
-        if (!result.success) {
-            if (fs.existsSync(fullFilePath)) {
-                fs.unlinkSync(fullFilePath);
-                console.log('🧹 Uploaded image removed due to DB failure:', fullFilePath);
-            }
-
-            switch (result.code) {
-                case 'DUPLICATE_ERROR':
-                    return apiResponse.conflict(res, result.message); // 409
-                case 'VALIDATION_FAILED':
-                    return apiResponse.validation(res, [], result.message); // 422
-                case 'INVALID_IMAGE':
-                    return apiResponse.validation(res, [], result.message); // 422
-                default:
-                    return apiResponse.error(res, result.message); // 500
-            }
-        }
-
-        // Success response
-        return apiResponse.success(
-            res,
-            result.message || 'Event created successfully!',
-            { event: result.event }
-        );
-
-    } catch (error) {
-        // Delete uploaded file if any error occurs
-        if (fs.existsSync(fullFilePath)) {
-            fs.unlinkSync(fullFilePath);
-            console.log('🧹 Uploaded image removed due to server error:', fullFilePath);
-        }
-        console.error('Error in createEvent controller:', error);
-        return apiResponse.error(res, 'Internal server error', 500);
     }
 };
 
@@ -373,5 +372,39 @@ module.exports.createSlot = async (req, res) => {
     } catch (error) {
         console.error('❌ Error in createSlot controller:', error);
         return apiResponse.error(res, 'Internal server error', 500);
+    }
+};
+
+module.exports.deleteEvent = async (req, res) => {
+    try {
+        const eventId = req.params.id;
+
+        if (!eventId) {
+            return apiResponse.validation(res, [], "Event ID is required");
+        }
+
+        // ✅ Call service layer
+        const result = await eventService.deleteEvent(eventId);
+
+        // ✅ Handle service-level results
+        if (!result.success) {
+            switch (result.code) {
+                case "NOT_FOUND":
+                    return apiResponse.notFound(res, "Event not found");
+                case "DB_ERROR":
+                    return apiResponse.error(res, "Database error occurred while deleting event");
+                case "VALIDATION_FAILED":
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message || "Unknown error occurred");
+            }
+        }
+
+        // ✅ Success Response
+        return apiResponse.success(res, "Event deleted successfully", result.data);
+
+    } catch (error) {
+        console.error("Error in deleteEvent:", error);
+        return apiResponse.error(res, "Internal Server Error", 500);
     }
 };

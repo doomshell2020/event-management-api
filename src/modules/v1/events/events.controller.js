@@ -4,30 +4,84 @@ const path = require('path');
 const fs = require('fs');
 
 module.exports.eventList = async (req, res) => {
-  try {
-    const result = await eventService.eventList(req, res);
+    try {
+        const result = await eventService.eventList(req, res);
 
-    if (!result.success) {
-      switch (result.code) {
-        case 'VALIDATION_FAILED':
-          return apiResponse.validation(res, [], result.message);
-        default:
-          return apiResponse.error(res, result.message);
-      }
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event list fetched successfully',
+            { events: result.data }  // plural naming convention
+        );
+
+    } catch (error) {
+        console.log('Error in eventList controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
     }
-
-    return apiResponse.success(
-      res,
-      result.message || 'Event list fetched successfully',
-      { events: result.data }  // plural naming convention
-    );
-
-  } catch (error) {
-    console.log('Error in eventList controller:', error);
-    return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
-  }
 };
 
+module.exports.publicEventDetail = async (req, res) => {
+    try {
+        const result = await eventService.publicEventDetail(req, res);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+
+                case 'NOT_FOUND':
+                    return apiResponse.error(res, result.message, 404);
+
+                case 'INTERNAL_ERROR':
+                default:
+                    return apiResponse.error(res, result.message, 500);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event details fetched successfully',
+            { event: result.data } // renamed to event (single)
+        );
+
+    } catch (error) {
+        console.log('Error in publicEventDetail controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
+
+module.exports.publicEventList = async (req, res) => {
+    try {
+        const result = await eventService.publicEventList(req, res);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event list fetched successfully',
+            { events: result.data }  // plural naming convention
+        );
+
+    } catch (error) {
+        console.log('Error in eventList controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
 
 module.exports.createEvent = async (req, res) => {
     try {
@@ -224,3 +278,37 @@ module.exports.companyList = async (req, res) => {
         return apiResponse.error(res, 'Internal server error', 500);
     }
 }
+
+module.exports.deleteEvent = async (req, res) => {
+    try {
+        const eventId = req.params.id;
+
+        if (!eventId) {
+            return apiResponse.validation(res, [], "Event ID is required");
+        }
+
+        // ✅ Call service layer
+        const result = await eventService.deleteEvent(eventId);
+
+        // ✅ Handle service-level results
+        if (!result.success) {
+            switch (result.code) {
+                case "NOT_FOUND":
+                    return apiResponse.notFound(res, "Event not found");
+                case "DB_ERROR":
+                    return apiResponse.error(res, "Database error occurred while deleting event");
+                case "VALIDATION_FAILED":
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message || "Unknown error occurred");
+            }
+        }
+
+        // ✅ Success Response
+        return apiResponse.success(res, "Event deleted successfully", result.data);
+
+    } catch (error) {
+        console.error("Error in deleteEvent:", error);
+        return apiResponse.error(res, "Internal Server Error", 500);
+    }
+};

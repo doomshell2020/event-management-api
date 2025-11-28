@@ -96,8 +96,7 @@ router.delete('/delete/:id',
 );
 
 // 🎟️ Set Ticket Pricing Route
-router.post(
-    '/ticket-pricing/set',
+router.post('/ticket-pricing/set',
     authenticate,
     [
         body('event_id')
@@ -124,7 +123,16 @@ router.post(
     ticketController.setTicketPricing
 );
 
-
+router.get('/ticket-pricing/:event_id',
+    authenticate,
+    [
+        param('event_id')
+            .isInt({ min: 1 })
+            .withMessage('Valid Event ID is required'),
+    ],
+    validate,
+    ticketController.getTicketPricing
+);
 
 module.exports = router;
 

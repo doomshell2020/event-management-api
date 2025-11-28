@@ -25,6 +25,7 @@ Thumbs.db
 
 # Temporary files
 uploads/temp/
+uploads
 *.tmp
 
 # IDE / Editor files

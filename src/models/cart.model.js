@@ -7,16 +7,19 @@ const Cart = sequelize.define(
         id: {
             type: DataTypes.INTEGER,
             autoIncrement: true,
-            primaryKey: true
+            primaryKey: true,
         },
+
         user_id: {
             type: DataTypes.INTEGER,
             allowNull: false
         },
+
         event_id: {
             type: DataTypes.INTEGER,
-            allowNull: true
+            allowNull: false
         },
+
         addons_id: {
             type: DataTypes.INTEGER,
             allowNull: true
@@ -29,33 +32,65 @@ const Cart = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: true
         },
+
         no_tickets: {
             type: DataTypes.INTEGER,
-            allowNull: true
+            allowNull: false,
+            defaultValue: 1,
         },
+
         package_id: {
             type: DataTypes.INTEGER,
             allowNull: true
         },
+
         ticket_type: {
-            type: DataTypes.STRING,
-            allowNull: true
+            type: DataTypes.STRING(50),
+            allowNull: true,
+            comment: 'ticket | addon | package | appointment | committesale | opensale | ticket_price',
         },
+
         description: {
             type: DataTypes.TEXT,
+            allowNull: true,
+        },
+
+        status: {
+            type: DataTypes.STRING(20),
+            allowNull: false,
+            defaultValue: 'Y',
+        },
+
+        created: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
+
+        commitee_user_id: {
+            type: DataTypes.INTEGER,
             allowNull: true
         },
-        status: {
-            type: DataTypes.ENUM('Y', 'N'),
-            defaultValue: 'Y'
-        }
+
+        serial_no: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+
+        checkout_data: {
+            type: DataTypes.JSON,
+            allowNull: true,
+        },
+
+        // ⭐ NEW FIELD ADDED FOR SLOT+PRICE MAPPING
+        ticket_price_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
     },
     {
         tableName: 'tblcart',
-        timestamps: true,       // ✅ Enable automatic management
-        createdAt: 'createdAt',    // map createdAt → created
-        updatedAt: 'updatedAt',   // map updatedAt → updatedAt
-    });
+        timestamps: true, // createdAt, updatedAt
+    }
+);
 
 module.exports = Cart;
-

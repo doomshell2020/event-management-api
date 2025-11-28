@@ -139,7 +139,7 @@ module.exports.getAllPackages = async (req, res) => {
                 return apiResponse.notFound(res, 'Package not found for this event');
             }
 
-            return apiResponse.success(res, singlePackage, 'Package details fetched successfully');
+            return apiResponse.success(res, 'Package details fetched successfully',singlePackage);
         }
 
         // ✅ Fetch all packages for the event (filtered by hidden if passed)
@@ -149,17 +149,17 @@ module.exports.getAllPackages = async (req, res) => {
             order: [['id', 'DESC']],
         });
 
-        if (!packages || packages.length === 0) {
-            return apiResponse.success(res, [], 'No packages found for this event');
+        if (!packages || packages.length == 0) {
+            return apiResponse.success(res, 'No packages found for this event',[]);
         }
 
         // ✅ Normalize hidden flag to ensure it's either Y/N
         const formattedPackages = packages.map((pkg) => ({
             ...pkg.toJSON(),
-            hidden: pkg.hidden === 'Y' ? 'Y' : 'N',
+            hidden: pkg.hidden == 'Y' ? 'Y' : 'N',
         }));
 
-        return apiResponse.success(res, formattedPackages, 'Package list fetched successfully');
+        return apiResponse.success(res, 'Package list fetched successfully',formattedPackages);
     } catch (error) {
         console.error('Error fetching packages:', error);
         return apiResponse.error(res, 'Something went wrong while fetching packages');

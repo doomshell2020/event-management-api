@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const eventController = require('./events.controller');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
@@ -9,7 +9,6 @@ const uploadFiles = require('../../../middlewares/upload.middleware');
 const { Event } = require('../../../models');
 
 // ✅ Create Event Route
-
 router.post('/create',
     authenticate,
     uploadFiles({ folder: 'uploads/events', type: 'single', fieldName: 'feat_image' }),
@@ -183,5 +182,44 @@ router.post('/event-list',
     validate,
     eventController.eventList
 )
+
+// ✅ Public Event List (No Authentication)
+router.post('/public-event-list',
+    [
+        body('search')
+            .optional()
+            .isLength({ min: 2 }).withMessage('Search term must be at least 2 characters long'),
+
+        body('status')
+            .optional()
+            .isIn(['Y', 'N'])
+            .withMessage('Status must be either Y or N'),
+    ],
+    validate,
+    eventController.publicEventList
+);
+
+router.delete('/delete/:id', authenticate,
+    [
+        param('id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number'),
+
+    ],
+    validate,
+    eventController.deleteEvent
+)
+
+// ✅ Public Event Full Details (Cart Page Access - No Auth Required)
+router.get('/public-event-detail/:id',
+    [
+        param('id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Invalid Event ID'),
+    ],
+    validate,
+    eventController.publicEventDetail
+);
+
 
 module.exports = router;

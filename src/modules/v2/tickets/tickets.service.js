@@ -3,6 +3,53 @@ const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
 
+// getTicketPricing
+module.exports.getTicketPricing = async (req) => {
+    try {
+        const eventId = req.params.event_id;
+        // ✅ Validate ID param
+        if (!eventId) {
+            return {
+                success: false,
+                message: 'Event ID is required',
+                code: 'VALIDATION_FAILED'
+            };
+        }
+
+        // ✅ Fetch ticket pricing records for the event
+        const pricingRecords = await TicketPricing.findAll({
+            where: { event_id: eventId },
+            include: [
+                {
+                    model: TicketType,
+                    as: 'ticket', // ✔ MATCHES association
+                    attributes: ['id', 'title', 'access_type', 'type']
+                },
+                {
+                    model: EventSlots,
+                    as: 'slot', // ✔ MATCHES association
+                    attributes: ['id', 'slot_name', 'slot_date', 'start_time', 'end_time']
+                }
+            ],
+            order: [['id', 'DESC']]
+        });
+
+
+
+        return {
+            success: true,
+            message: 'Ticket pricing fetched successfully',
+            data: pricingRecords
+        };
+    } catch (error) {
+        console.error('Error fetching ticket pricing:', error);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'DB_ERROR'
+        };
+    }
+};
 
 module.exports.createTicket = async (req) => {
     try {

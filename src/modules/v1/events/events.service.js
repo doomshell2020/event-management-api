@@ -1,48 +1,347 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event } = require('../../../models');
-const { convertToUTC } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+const { Company, Event, TicketType, AddonTypes } = require('../../../models');
+const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+
+
+module.exports.deleteEvent = async (eventId) => {
+    try {
+        // ✅ Find the event
+        const event = await Event.findByPk(eventId);
+
+        if (!event) {
+            return { success: false, code: "NOT_FOUND", message: "Event not found" };
+        }
+
+        // ✅ Delete image from filesystem (if exists)
+        if (event.feat_image) {
+            const imagePath = path.join(process.cwd(), 'uploads/events', event.feat_image);
+            if (fs.existsSync(imagePath)) {
+                try {
+                    fs.unlinkSync(imagePath);
+                    console.log("🗑️ Deleted image file:", imagePath);
+                } catch (err) {
+                    console.error("Error deleting event image:", err.message);
+                }
+            }
+        }
+
+        // ✅ Delete event record
+        await event.destroy();
+
+        return {
+            success: true,
+            message: "Event deleted successfully",
+            data: { id: eventId },
+        };
+    } catch (error) {
+        console.error("Service error in deleteEvent:", error);
+        return {
+            success: false,
+            code: "DB_ERROR",
+            message: "Database error occurred while deleting the event",
+        };
+    }
+};
 
 module.exports.eventList = async (req, res) => {
     try {
         const user = req.user;
-        const { search, status } = req.body || {};
+        const {
+            search,
+            status,
+            id,
+            company_id,
+            slug,
+            org_id,
+            date_from,
+            date_to,
+            sale_start,
+            sale_end
+        } = req.body || {};
+
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
         let whereCondition = {};
 
-        // ✅ Organizer can only see their own events for admin 1 role id
-        if (user.role_id != 1) {
+        // ✅ Role-based restriction (non-admins see only their own events)
+        if (user.role_id !== 1) {
             whereCondition.event_org_id = user.id;
         }
 
-        // ✅ Optional filters
-        if (search && search.trim() !== '') {
+        // ✅ ID Filter
+        if (id) whereCondition.id = id;
+
+        // ✅ Organizer ID
+        if (org_id) whereCondition.event_org_id = org_id;
+
+        // ✅ Company ID
+        if (company_id) whereCondition.company_id = company_id;
+
+        // ✅ Slug
+        if (slug && slug.trim() !== "") whereCondition.slug = slug.trim();
+
+        // ✅ Status
+        if (status && status.trim() !== "") whereCondition.status = status.trim();
+
+        // ✅ Search by Name
+        if (search && search.trim() !== "") {
             whereCondition.name = { [Op.like]: `%${search.trim()}%` };
         }
 
-        if (status && status.trim() !== '') {
-            whereCondition.status = status; // e.g., 'Y' or 'N'
+        // ✅ Event Date Range Filter
+        if (date_from && date_to) {
+            whereCondition.date_from = { [Op.between]: [new Date(date_from), new Date(date_to)] };
+        } else if (date_from) {
+            whereCondition.date_from = { [Op.gte]: new Date(date_from) };
+        } else if (date_to) {
+            whereCondition.date_from = { [Op.lte]: new Date(date_to) };
         }
 
-        // console.log('>>>>>>>>>>>',whereCondition);
+        // ✅ Sale Start / End Date Range Filters
+        if (sale_start && sale_end) {
+            whereCondition.sale_start = { [Op.between]: [new Date(sale_start), new Date(sale_end)] };
+        } else if (sale_start) {
+            whereCondition.sale_start = { [Op.gte]: new Date(sale_start) };
+        } else if (sale_end) {
+            whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
+        }
 
-        // ✅ Fetch events with company details
+        // ✅ Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
-            order: [['date_from', 'DESC']],
+            order: [["date_from", "DESC"]],
         });
+
+        // ✅ Format and Convert Dates
+        const formattedEvents = events.map((event) => {
+            const data = event.toJSON();
+            const tz = data.event_timezone || "UTC";
+
+            const formatDate = (date) =>
+                date
+                    ? {
+                        utc: date,
+                        local: convertUTCToLocal(date, tz),
+                        timezone: tz,
+                    }
+                    : null;
+
+            return {
+                ...data,
+                feat_image: data.feat_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                    : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+                date_from: formatDate(data.date_from),
+                date_to: formatDate(data.date_to),
+                sale_start: formatDate(data.sale_start),
+                sale_end: formatDate(data.sale_end),
+            };
+        });
+
+        // ✅ Send Response
+        return {
+            success: true,
+            message: "Event list fetched successfully",
+            data: formattedEvents,
+            filters_used: whereCondition, // optional debug info
+        };
+    } catch (error) {
+
+        return {
+            success: false,
+            message: "Internal server error: " + error.message,
+            code: "INTERNAL_ERROR",
+        };
+    }
+};
+
+module.exports.publicEventDetail = async (req, res) => {
+    try {
+        const { id } = req.params || {}; // ✅ correct param usage
+
+        if (!id) {
+            return {
+                success: false,
+                code: "VALIDATION_FAILED",
+                message: "Event ID is required"
+            };
+        }
+
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+
+        const event = await Event.findOne({
+            where: { id },
+            include: [
+                { model: TicketType, as: "tickets" },
+                { model: AddonTypes, as: "addons" }
+            ]
+        });
+
+        if (!event) {
+            return {
+                success: false,
+                code: "NOT_FOUND",
+                message: "Event not found"
+            };
+        }
+
+        const data = event.toJSON();
+        const tz = data.event_timezone || "UTC";
+
+        const formatDate = (date) =>
+            date
+                ? {
+                    utc: date,
+                    local: convertUTCToLocal(date, tz),
+                    timezone: tz
+                }
+                : null;
+
+        const formattedEvent = {
+            ...data,
+            feat_image: data.feat_image
+                ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
+            date_from: formatDate(data.date_from),
+            date_to: formatDate(data.date_to),
+            sale_start: formatDate(data.sale_start),
+            sale_end: formatDate(data.sale_end)
+        };
 
         return {
             success: true,
-            message: 'Event list fetched successfully',
-            data: events,
+            message: "Event details fetched successfully",
+            data: formattedEvent
         };
+
     } catch (error) {
-        console.error('Error fetching event list:', error.message);
         return {
             success: false,
-            message: 'Internal server error: ' + error.message,
-            code: 'INTERNAL_ERROR',
+            code: "INTERNAL_ERROR",
+            message: "Internal server error: " + error.message
+        };
+    }
+};
+
+module.exports.publicEventList = async (req, res) => {
+    try {
+        const user = req.user;
+        const {
+            search,
+            status,
+            id,
+            company_id,
+            slug,
+            org_id,
+            date_from,
+            date_to,
+            sale_start,
+            sale_end
+        } = req.body || {};
+
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+        let whereCondition = {};
+
+        // ✅ ID Filter
+        if (id) whereCondition.id = id;
+
+        // ✅ Organizer ID
+        if (org_id) whereCondition.event_org_id = org_id;
+
+        // ✅ Company ID
+        if (company_id) whereCondition.company_id = company_id;
+
+        // ✅ Slug
+        if (slug && slug.trim() !== "") whereCondition.slug = slug.trim();
+
+        // ✅ Status
+        if (status && status.trim() !== "") whereCondition.status = status.trim();
+
+        // ✅ Search by Name
+        if (search && search.trim() !== "") {
+            whereCondition.name = { [Op.like]: `%${search.trim()}%` };
+        }
+
+        // ✅ Event Date Range Filter
+        if (date_from && date_to) {
+            whereCondition.date_from = { [Op.between]: [new Date(date_from), new Date(date_to)] };
+        } else if (date_from) {
+            whereCondition.date_from = { [Op.gte]: new Date(date_from) };
+        } else if (date_to) {
+            whereCondition.date_from = { [Op.lte]: new Date(date_to) };
+        }
+
+        // ✅ Sale Start / End Date Range Filters
+        if (sale_start && sale_end) {
+            whereCondition.sale_start = { [Op.between]: [new Date(sale_start), new Date(sale_end)] };
+        } else if (sale_start) {
+            whereCondition.sale_start = { [Op.gte]: new Date(sale_start) };
+        } else if (sale_end) {
+            whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
+        }
+
+        // ✅ EXCLUDE expired events (date_to < today)
+        const today = new Date();
+        whereCondition.date_to = {
+            ...(whereCondition.date_to || {}),
+            [Op.gte]: today, // only events whose end date >= today
+        };
+
+        // console.log("Applied Filters:", whereCondition);
+
+        // ✅ Fetch Events
+        const events = await Event.findAll({
+            where: whereCondition,
+            include: [
+                { model: TicketType, as: "tickets" },
+                { model: AddonTypes, as: "addons" },
+            ],
+            order: [["date_from", "DESC"]],
+        });
+
+        // ✅ Format and Convert Dates
+        const formattedEvents = events.map((event) => {
+            const data = event.toJSON();
+            const tz = data.event_timezone || "UTC";
+
+            const formatDate = (date) =>
+                date
+                    ? {
+                        utc: date,
+                        local: convertUTCToLocal(date, tz),
+                        timezone: tz,
+                    }
+                    : null;
+
+            return {
+                ...data,
+                feat_image: data.feat_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                    : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+                date_from: formatDate(data.date_from),
+                date_to: formatDate(data.date_to),
+                sale_start: formatDate(data.sale_start),
+                sale_end: formatDate(data.sale_end),
+            };
+        });
+
+        // ✅ Send Response
+        return {
+            success: true,
+            message: "Active/Upcoming events fetched successfully",
+            data: formattedEvents,
+            filters_used: whereCondition,
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: "Internal server error: " + error.message,
+            code: "INTERNAL_ERROR",
         };
     }
 };
@@ -241,8 +540,23 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             is_free,
             allow_register,
             request_rsvp,
-            feat_image
+            feat_image,
+            status
         } = updateData;
+
+        if (
+            Object.keys(updateData).length == 1 &&      // only one key in object
+            updateData.hasOwnProperty("status")          // that key is "status"
+        ) {
+            existingEvent.status = updateData.status;
+            await existingEvent.save();
+
+            return {
+                success: true,
+                message: "Event status updated successfully",
+                event: existingEvent
+            };
+        }
 
         // ✅ Conditional duplicate check (only if name or slug is changed)
         if (name || slug) {
@@ -261,12 +575,15 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             }
         }
 
+
+
         // ✅ Determine effective values for validation
         const effectiveIsFree = is_free !== undefined ? is_free : existingEvent.is_free;
         const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;
+        // console.log('>>>>>>>',effectiveIsFree);
 
         // ✅ Free event validation
-        if (effectiveIsFree === 'Y' && !effectiveRequestRsvp) {
+        if (effectiveIsFree == 'Y' && !effectiveRequestRsvp) {
             return { success: false, message: 'request_rsvp is required for free events', code: 'VALIDATION_FAILED' };
         }
 
@@ -303,6 +620,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (allow_register !== undefined) existingEvent.allow_register = allow_register == 'Y' ? 'Y' : 'N';
         if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
         if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
+        if (status !== undefined && status !== null) existingEvent.status = status;
 
         // ✅ Handle optional image update
         if (feat_image) {

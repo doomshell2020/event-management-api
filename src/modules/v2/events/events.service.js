@@ -380,7 +380,22 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             video_url,
             payment_currency,
             slug,
+            status
         } = updateData;
+
+        if (
+            Object.keys(updateData).length == 1 &&      // only one key in object
+            updateData.hasOwnProperty("status")          // that key is "status"
+        ) {
+            existingEvent.status = updateData.status;
+            await existingEvent.save();
+
+            return {
+                success: true,
+                message: "Event status updated successfully",
+                event: existingEvent
+            };
+        }
 
         // ✅ Conditional duplicate check (only if name or slug is changed)
         if (name || slug) {
@@ -427,6 +442,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (slug) existingEvent.slug = slug.trim();
         if (sale_start) existingEvent.sale_start = new Date(sale_start);
         if (sale_end) existingEvent.sale_end = new Date(sale_end);
+        if (status !== undefined && status !== null) existingEvent.status = status;
 
         // ✅ Handle optional image update
         if (feat_image) {
@@ -558,68 +574,104 @@ module.exports.companyList = async (req, res) => {
 module.exports.eventList = async (req, res) => {
     try {
         const user = req.user;
-        const { search, status } = req.body || {};
+        const {
+            search,
+            status,
+            id,
+            company_id,
+            slug,
+            org_id,
+            date_from,
+            date_to
+        } = req.body || {};
+
         let whereCondition = {};
 
-        if (user.role_id != 1) {
+        // 🔒 Restrict organizer (if not admin)
+        if (user.role_id !== 1) {
             whereCondition.event_org_id = user.id;
         }
 
-        if (search && search.trim() !== '') {
+        // 🔍 Search by event name
+        if (search && search.trim() !== "") {
             whereCondition.name = { [Op.like]: `%${search.trim()}%` };
         }
 
-        if (status && status.trim() !== '') {
+        // 🏷️ Filter by event status
+        if (status && status.trim() !== "") {
             whereCondition.status = status;
         }
 
+        // 🆔 Filter by event ID
+        if (id) {
+            whereCondition.id = id;
+        }
+
+        // 🏢 Filter by company
+        if (company_id) {
+            whereCondition.company_id = company_id;
+        }
+
+        // 🧩 Filter by slug
+        if (slug && slug.trim() !== "") {
+            whereCondition.slug = slug.trim();
+        }
+
+        // 👨‍💼 Filter by organizer ID
+        if (org_id) {
+            whereCondition.event_org_id = org_id;
+        }
+
+        // 📅 Date range filters
+        if (date_from && date_to) {
+            whereCondition.date_from = { [Op.between]: [date_from, date_to] };
+        } else if (date_from) {
+            whereCondition.date_from = { [Op.gte]: date_from };
+        } else if (date_to) {
+            whereCondition.date_to = { [Op.lte]: date_to };
+        }
+
+        // 🧾 Fetch events
         const events = await Event.findAll({
             where: whereCondition,
-            order: [['date_from', 'DESC']],
+            order: [["date_from", "DESC"]],
         });
 
-        // ✅ Convert UTC → Local before sending
-        const formattedEvents = events.map(event => {
+        // 🕒 Convert UTC → Local
+        const formattedEvents = events.map((event) => {
             const data = event.toJSON();
-            const tz = data.event_timezone || 'UTC';
+            const tz = data.event_timezone || "UTC";
+
+            const convertDate = (date) =>
+                date
+                    ? {
+                        utc: date,
+                        local: convertUTCToLocal(date, tz),
+                        timezone: tz,
+                    }
+                    : null;
 
             return {
                 ...data,
-                date_from: {
-                    utc: data.date_from,
-                    local: convertUTCToLocal(data.date_from, tz),
-                    timezone: tz
-                },
-                date_to: {
-                    utc: data.date_to,
-                    local: convertUTCToLocal(data.date_to, tz),
-                    timezone: tz
-                },
-                sale_start: data.sale_start ? {
-                    utc: data.sale_start,
-                    local: convertUTCToLocal(data.sale_start, tz),
-                    timezone: tz
-                } : null,
-                sale_end: data.sale_end ? {
-                    utc: data.sale_end,
-                    local: convertUTCToLocal(data.sale_end, tz),
-                    timezone: tz
-                } : null
+                date_from: convertDate(data.date_from),
+                date_to: convertDate(data.date_to),
+                sale_start: convertDate(data.sale_start),
+                sale_end: convertDate(data.sale_end),
             };
         });
 
-
+        // ✅ Response
         return {
             success: true,
-            message: 'Event list fetched successfully',
+            message: "Event list fetched successfully",
             data: formattedEvents,
         };
     } catch (error) {
-        console.error('Error fetching event list:', error.message);
+        console.error("Error fetching event list:", error);
         return {
             success: false,
-            message: 'Internal server error: ' + error.message,
-            code: 'INTERNAL_ERROR',
+            message: "Internal server error: " + error.message,
+            code: "INTERNAL_ERROR",
         };
     }
 };
@@ -629,11 +681,11 @@ module.exports.getEventDetails = async (req, res) => {
         const { event_id } = req.params;
 
         if (!event_id) {
-            return res.json({
+            return {
                 success: false,
                 code: 'VALIDATION_FAILED',
                 message: 'Event ID is required'
-            });
+            };
         }
 
         // Step 1️⃣: Get event basic info (to check entry_type)
@@ -643,11 +695,11 @@ module.exports.getEventDetails = async (req, res) => {
         });
 
         if (!event) {
-            return res.json({
+            return {
                 success: false,
                 code: 'EVENT_NOT_FOUND',
                 message: 'Event not found'
-            });
+            };
         }
 
         const { entry_type } = event;
@@ -692,18 +744,86 @@ module.exports.getEventDetails = async (req, res) => {
             include: includeConfig
         });
 
-        return res.json({
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+
+
+        const data = eventDetails.toJSON();
+        const tz = data.event_timezone || "UTC";
+
+        const formatDate = (date) =>
+            date
+                ? {
+                    utc: date,
+                    local: convertUTCToLocal(date, tz),
+                    timezone: tz
+                }
+                : null;
+
+        const formattedEvent = {
+            ...data,
+            feat_image: data.feat_image
+                ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
+            date_from: formatDate(data.date_from),
+            date_to: formatDate(data.date_to),
+            sale_start: formatDate(data.sale_start),
+            sale_end: formatDate(data.sale_end)
+        };
+
+        return {
             success: true,
-            message: 'Event details fetched successfully',
-            data: eventDetails
-        });
+            message: "Event details fetched successfully",
+            data: formattedEvent
+        };
 
     } catch (error) {
         console.error('❌ Error fetching event details:', error.message);
-        return res.json({
+        return {
             success: false,
             code: 'DB_ERROR',
             message: 'Internal server error: ' + error.message
-        });
+        };
+    }
+};
+
+module.exports.deleteEvent = async (eventId) => {
+    try {
+        // ✅ Find the event
+        const event = await Event.findByPk(eventId);
+
+        if (!event) {
+            return { success: false, code: "NOT_FOUND", message: "Event not found" };
+        }
+
+        // ✅ Delete image from filesystem (if exists)
+        if (event.feat_image) {
+            const imagePath = path.join(process.cwd(), 'uploads/events', event.feat_image);
+            if (fs.existsSync(imagePath)) {
+                try {
+                    fs.unlinkSync(imagePath);
+                    console.log("🗑️ Deleted image file:", imagePath);
+                } catch (err) {
+                    console.error("Error deleting event image:", err.message);
+                }
+            }
+        }
+
+        // ✅ Delete event record
+        await event.destroy();
+
+        return {
+            success: true,
+            message: "Event deleted successfully",
+            data: { id: eventId },
+        };
+    } catch (error) {
+        console.error("Service error in deleteEvent:", error);
+        return {
+            success: false,
+            code: "DB_ERROR",
+            message: "Database error occurred while deleting the event",
+        };
     }
 };

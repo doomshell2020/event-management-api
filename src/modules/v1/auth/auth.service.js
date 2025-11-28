@@ -36,8 +36,10 @@ module.exports.verifyEmailToken = async (token) => {
         user.is_email_verified = 'Y';
         await user.save();
 
+        const loginUrl = CLIENT_URL + '/login';
+
         // Send email notification for successful verification
-        const html = emailVerifiedTemplate(user.first_name);
+        const html = emailVerifiedTemplate(user.first_name, loginUrl);
         await sendEmail(user.email, 'Your email has been verified!', html);
 
         return {
@@ -78,7 +80,7 @@ module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, 
 
     // Generate email verification token (JWT)
     const token = generateVerificationToken(email);
-    const verifyLink = `${config.clientUrl}/api/v1/auth/verify-email?token=${token}`;
+    const verifyLink = `${config.clientUrl}/verify-email?token=${token}`;
     // Send verification email
     const html = verifyEmailTemplate(fullName, verifyLink);
     await sendEmail(email, 'Verify your email address', html);
@@ -130,10 +132,36 @@ module.exports.loginUser = async ({ email, password }) => {
 };
 
 module.exports.getUserInfo = async (userId) => {
+    const imagePath = 'uploads/profile';
+    const baseUrl = process.env.BASE_URL || 'http://localhost:5000/'; // ✅ fallback base URL
+
     const user = await User.findByPk(userId, {
-        attributes: ['id', 'first_name', 'last_name', 'email', 'gender', 'dob'],
+        attributes: [
+            'id',
+            'profile_image',
+            'first_name',
+            'last_name',
+            'email',
+            'gender',
+            'dob',
+            'emailNewsLetter',
+            'emailRelatedEvents',
+            'mobile'
+        ],
     });
-    return user;
+
+    if (!user) return null;
+
+    // ✅ Add full image URL or default placeholder
+    const profileImage = user.profile_image
+        ? `${baseUrl}${imagePath}/${user.profile_image}`
+        : `${baseUrl}${imagePath}/no-image.jpg`;
+
+    // ✅ Return merged data
+    return {
+        ...user.toJSON(),
+        profile_image: profileImage,
+    };
 };
 
 module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) => {
@@ -144,62 +172,85 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
             return { success: false, message: 'User not found', code: 'USER_NOT_FOUND' };
         }
 
-        // Allowed DB column fields
+        let newPasswordPlainText = null; // 📌 store new password before hashing
+
+        // Allowed DB fields
         const allowedFields = [
             'first_name',
             'last_name',
             'gender',
             'dob',
             'password',
+            'old_password',
             'emailRelatedEvents',
             'emailNewsLetter',
-            'profile_image'
+            'profile_image',
+            'mobile'
         ];
 
-        // Check for invalid fields
+        // Validate fields
         const invalidFields = Object.keys(updates).filter(field => !allowedFields.includes(field));
         if (invalidFields.length > 0) {
             return { success: false, message: `Invalid field(s) provided: ${invalidFields.join(', ')}`, code: 'INVALID_FIELDS' };
         }
 
-        // Handle password separately
+        // 🔐 PASSWORD CHANGE LOGIC
         if (updates.password) {
+
+            if (!updates.old_password) {
+                return { success: false, message: 'Old password is required to change password', code: 'OLD_PASSWORD_REQUIRED' };
+            }
+
+            const isOldPasswordCorrect = await bcrypt.compare(updates.old_password, user.password);
+            if (!isOldPasswordCorrect) {
+                return { success: false, message: 'Old password does not match', code: 'OLD_PASSWORD_INCORRECT' };
+            }
+
             const isSamePassword = await bcrypt.compare(updates.password, user.password);
             console.log("isSamePassword----------",isSamePassword)
             if (isSamePassword) {
                 return { success: false, message: 'New password cannot be the same as current password', code: 'SAME_PASSWORD' };
             }
+
+            // 📌 Save raw password BEFORE hashing
+            newPasswordPlainText = updates.password;
+
+            // Hash new password
             updates.password = await bcrypt.hash(updates.password, 10);
         }
 
-        // 🧹 Handle old profile image deletion if a new image is uploaded
+        // 🧹 Delete old image
         if (updates.profile_image && user.profile_image && user.profile_image !== updates.profile_image && uploadFolder) {
             try {
                 const oldImagePath = path.join(uploadFolder, user.profile_image);
-                // Only delete if file exists in the provided upload folder
-                if (fs.existsSync(oldImagePath)) {
-                    fs.unlinkSync(oldImagePath);
-                    console.log('🧹 Old profile image deleted:', oldImagePath);
-                }
+                if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
             } catch (err) {
                 console.warn('⚠️ Failed to delete old image:', err.message);
             }
         }
 
-        // Only store the filename in DB
+        // Only store filename
         if (updates.profile_image) {
             updates.profile_image = path.basename(updates.profile_image);
         }
 
-        // Filter only allowed fields
+        // Filter fields
         const filteredUpdates = {};
         allowedFields.forEach(field => {
             if (updates[field] !== undefined) filteredUpdates[field] = updates[field];
         });
 
+        delete filteredUpdates.old_password;
+
         await user.update(filteredUpdates);
 
-        // Return user without password
+        // 📧 SEND EMAIL ONLY IF PASSWORD CHANGED
+        if (newPasswordPlainText) {
+            const html = passwordChangedTemplate(user.first_name, newPasswordPlainText);
+            await sendEmail(user.email, 'Your Password Has Been Changed', html);
+        }
+
+        // Remove password from response
         const { password, ...userData } = user.toJSON();
         return { success: true, data: userData };
 

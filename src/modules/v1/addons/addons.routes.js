@@ -22,10 +22,8 @@ router.post(
     addonController.createAddons
 );
 
-
 // ✏️ Update Addon Route
-router.put(
-    '/update/:id',
+router.put('/update/:id',
     authenticate,
     uploadFiles({ folder: 'uploads/addons', type: 'single', fieldName: 'addon_image' }),
     [
@@ -55,7 +53,7 @@ router.put(
     addonController.updateAddons
 );
 
-
+router.get("/list/:event_id", addonController.listAddonsByEvent);
 
 
 module.exports = router;

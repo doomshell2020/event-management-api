@@ -8,8 +8,7 @@ const uploadFiles = require('../../../middlewares/upload.middleware');
 
 
 // 🎟️ Create Ticket Route
-router.post(
-    '/create',
+router.post('/create',
     authenticate,
     uploadFiles({ folder: 'uploads/tickets', type: 'single', fieldName: 'ticketImage' }),
     [
@@ -49,8 +48,7 @@ router.post(
 );
 
 // 🎟️ Update Ticket Route
-router.put(
-    '/update/:id',
+router.put('/update/:id',
     authenticate,
     uploadFiles({ folder: 'uploads/tickets', type: 'single', fieldName: 'ticketImage' }),
     [
@@ -98,11 +96,11 @@ router.delete('/delete/:id',
     ticketController.deleteTicket // 👈 You’ll implement this in your controller
 );
 
+// ✅ 1. List all tickets for a given event
+router.get("/list/:event_id", ticketController.listTicketsByEvent);
 
-// router.get('/', ticketController.getAllTickets);
-// router.get('/:id', ticketController.getTicketById);
-
-// router.delete('/:id', ticketController.deleteTicket);
+// ✅ 2. Get single ticket detail by ID
+router.get("/detail/:ticket_id", ticketController.getTicketDetail);
 
 module.exports = router;
 

@@ -181,3 +181,37 @@ module.exports.updateAddons = async (req) => {
         };
     }
 };
+
+module.exports.listAddonsByEvent = async (event_id) => {
+    try {
+        // ✅ Check if event exists
+        const eventExists = await Event.findByPk(event_id);
+        if (!eventExists) {
+            return {
+                success: false,
+                message: 'Event not found',
+                code: 'EVENT_NOT_FOUND'
+            };
+        }
+
+        // ✅ Fetch all tickets for this event
+        const tickets = await AddonTypes.findAll({
+            where: { event_id },
+            order: [['createdAt', 'DESC']]
+        });
+
+        return {
+            success: true,
+            message: 'Addons fetched successfully',
+            data: tickets
+        };
+
+    } catch (error) {
+        console.error('Error fetching Addons by event:', error);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'DB_ERROR'
+        };
+    }
+};
