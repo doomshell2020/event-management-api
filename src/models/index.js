@@ -16,11 +16,13 @@ const PackageDetails = require('./package_details.model');
 // const EventDays = require('./event_days.model');
 const EventSlots = require('./event_slots.modal');
 const TicketPricing = require('./ticket_pricing.model');
+const Wellness = require('./wellness.model')
+const WellnessSlots = require('./wellness_slots.model')
+const Cart = require('./cart.model');
+const Orders = require('./orders.modal');
 
 
-// =============================
-// ✅ Define Relationships
-// =============================
+// Define Relationships
 
 // 🔹 One Question → Many QuestionItems
 Questions.hasMany(QuestionItems, {
@@ -51,11 +53,13 @@ AddonTypes.hasMany(PackageDetails, { foreignKey: 'addon_id', as: 'packageDetails
 Package.belongsTo(Event, { foreignKey: 'event_id', as: 'event' });
 Event.hasMany(Package, { foreignKey: 'event_id', as: 'packages' });
 
+Cart.belongsTo(TicketType, { foreignKey: 'ticket_id' });
+Cart.belongsTo(AddonTypes, { foreignKey: 'addons_id' });
+Cart.belongsTo(Package, { foreignKey: 'package_id' });
+Cart.belongsTo(TicketPricing, { foreignKey: 'ticket_price_id' });
 
 
-// =============================
-// ✅ Event ↔ TicketType
-// =============================
+// Event ↔ TicketType
 Event.hasMany(TicketType, { 
   foreignKey: 'eventid', 
   as: 'tickets',   // fetch tickets via event.tickets
@@ -80,9 +84,7 @@ TicketType.hasMany(TicketPricing, {
   onDelete: 'CASCADE' 
 });
 
-// =============================
-// ✅ Event ↔ EventSlots
-// =============================
+//Event ↔ EventSlots
 Event.hasMany(EventSlots, { 
   foreignKey: 'event_id', 
   as: 'slots',     // fetch slots via event.slots
@@ -112,6 +114,30 @@ TicketPricing.belongsTo(EventSlots, {
 });
 
 
+// new relationships..
+WellnessSlots.belongsTo(Wellness, {
+  foreignKey: 'wellness_id',
+  as: 'wellnessList',
+});
+
+Wellness.hasMany(WellnessSlots, {
+  foreignKey: 'wellness_id',
+  as: 'wellnessSlots',
+});
+Wellness.belongsTo(Event, {
+  foreignKey: 'event_id',
+  as: 'eventList',
+});
+
+Cart.belongsTo(WellnessSlots,{
+  foreignKey: 'appointment_id',
+  as: 'appointments',
+})
+Cart.belongsTo(Event,{
+  foreignKey: 'event_id',
+  as: 'events',
+})
+
 
 // =============================
 // ✅ Export all
@@ -119,5 +145,5 @@ TicketPricing.belongsTo(EventSlots, {
 module.exports = {
   sequelize,
   Questions,  QuestionItems,  AddonTypes,  Company,  Countries,  Event,  TicketType,
-  User,  Package,  PackageDetails, TicketPricing, EventSlots
+  User,  Package,  PackageDetails, TicketPricing, EventSlots,Cart,Orders,Wellness,WellnessSlots
 };
