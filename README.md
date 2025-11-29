@@ -182,16 +182,20 @@ PORT=5000
 DB_HOST=
 DB_USER=
 DB_PASSWORD=
-DB_NAME=saas_eboxticket_backend
-JWT_SECRET=e3ff5f077839c1331b1d893a728246685cb7dba9e3a77bffe7d52eaccf660988 
+DB_NAME=
+JWT_SECRET= 
 JWT_EXPIRES_IN=7d # JWT expiration time
 TOKEN_EXPIRES_IN=1h # Token expiration time for email verification and password reset
+QR_SECRET_V1=
 
 # Email configuration
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
+SMTP_HOST=
+SMTP_PORT=
 SMTP_USER=
 SMTP_PASS=
 
+# BASE_URL=https://api.eboxtickets.com/
+BASE_URL=http://localhost:5000/
+
 # Base URL for verification
-CLIENT_URL=http://localhost:5000
+CLIENT_URL=https://front.eboxtickets.com
