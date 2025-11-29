@@ -56,8 +56,8 @@ exports.createOrder = async (req, res) => {
             name: event.name,
             location: event.location,
             feat_image: event.feat_image
-                ? `${baseUrl}/${imagePath}/${event.feat_image}`
-                : `${baseUrl}/${imagePath}/default.jpg`,
+                ? `${baseUrl}${imagePath}/${event.feat_image}`
+                : `${baseUrl}${imagePath}/default.jpg`,
             date_from: formatDate(event.date_from),
             date_to: formatDate(event.date_to),
         };
