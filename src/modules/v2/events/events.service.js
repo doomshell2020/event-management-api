@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event, EventSlots, TicketType, TicketPricing } = require('../../../models');
+const { Company, Event, EventSlots, TicketType, TicketPricing, Wellness, WellnessSlots } = require('../../../models');
 const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const moment = require('moment');
 
@@ -827,3 +827,80 @@ module.exports.deleteEvent = async (eventId) => {
         };
     }
 };
+
+
+//...// new api.. get event details and appointments slots  function..
+module.exports.getEventAppointmentsDetails = async (req, res) => {
+    try {
+        const { event_id } = req.params;
+
+        if (!event_id) {
+            return res.status(400).json({
+                success: false,
+                code: "VALIDATION_FAILED",
+                message: "Event ID is required"
+            });
+        }
+
+        // Step 1️⃣: Fetch event with ticket types
+        const event = await Event.findOne({
+            where: { id: event_id },
+            include: [
+                { model: Wellness, as: "wellness", include: [{ model: WellnessSlots, as: 'wellnessSlots' }] } // If needed
+            ],
+            attributes: ['id', 'event_org_id', 'name', 'desp', 'location']
+        });
+
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                code: "EVENT_NOT_FOUND",
+                message: "Event not found"
+            });
+        }
+
+        // Step 2️⃣: Format event image path
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+
+        const data = event.toJSON();
+
+        const formattedEvent = {
+            ...data,
+            feat_image: data.feat_image
+                ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+                : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`
+        };
+
+        // Add base URL to wellness images
+        if (formattedEvent.wellness && Array.isArray(formattedEvent.wellness)) {
+            formattedEvent.wellness = formattedEvent.wellness.map(well => ({
+                ...well,
+                Image: well.Image
+                    ? `${baseUrl.replace(/\/$/, "")}/uploads/wellness/${well.Image}`
+                    : `${baseUrl.replace(/\/$/, "")}/uploads/wellness/default.jpg`
+            }));
+        }
+
+
+
+
+
+
+        // Step 3️⃣: Final Response
+        return res.status(200).json({
+            success: true,
+            message: "Event & appointment slot details fetched successfully",
+            data: formattedEvent
+        });
+
+    } catch (error) {
+        console.error("❌ Error fetching event details:", error.message);
+        return res.status(500).json({
+            success: false,
+            code: "DB_ERROR",
+            message: "Internal server error: " + error.message
+        });
+    }
+};
+
