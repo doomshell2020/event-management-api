@@ -69,11 +69,13 @@ exports.createOrder = async (req, res) => {
 
             // Correct image URL
             feat_image: event.feat_image
-                ? `${baseUrl.replace(/\/$/, "")}${imagePath}/${event.feat_image}`
-                : `${baseUrl.replace(/\/$/, "")}${imagePath}/default.jpg`,
+                ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${event.feat_image}`
+                : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
             // Correct readable dates
             date_from: formatDateReadable(event.date_from, timezone),
             date_to: formatDateReadable(event.date_to, timezone),
+
             // Keep timezone for email
             timezone
         };
