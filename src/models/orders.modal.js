@@ -9,6 +9,11 @@ const Orders = sequelize.define(
             autoIncrement: true,
             primaryKey: true,
         },
+        
+        order_uid: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
 
         user_id: {
             type: DataTypes.INTEGER,
@@ -34,7 +39,6 @@ const Orders = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true
         },
-
         card_number: {
             type: DataTypes.STRING,
             allowNull: true

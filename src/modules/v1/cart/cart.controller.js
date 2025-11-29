@@ -139,71 +139,73 @@ module.exports = {
             const user_id = req.user.id;
             const { event_id, item_type } = req.query;
 
-            let where = { user_id };
+            let where = {
+                user_id,
+                ticket_type: { [Op.ne]: "appointment" }
+            };
+
             if (event_id) where.event_id = event_id;
             if (item_type) where.ticket_type = item_type;
-            // console.log('where :', where);
 
             const cartList = await Cart.findAll({
                 where,
+                attributes: [
+                    "id",
+                    "user_id",
+                    "event_id",
+                    "addons_id",
+                    "ticket_price_id",
+                    "ticket_type",
+                    "ticket_id",
+                    "no_tickets",
+                    "createdAt",
+                ],
                 order: [["id", "DESC"]],
                 include: [
-                    {
-                        model: TicketType,
-                        attributes: ["id", "title", "price"]
-                    },
-                    {
-                        model: AddonTypes,
-                        attributes: ["id", "name"]
-                    },
-                    {
-                        model: Package,
-                        attributes: ["id", "name"]
-                    },
+                    { model: TicketType, attributes: ["id", "title", "price"] },
+                    { model: AddonTypes, attributes: ["id", "name"] },
+                    { model: Package, attributes: ["id", "name"] },
                     {
                         model: TicketPricing,
                         attributes: ["id", "price", "ticket_type_id", "event_slot_id"],
                         include: [
                             {
                                 model: TicketType,
-                                as: 'ticket', // ✔ MATCHES association
+                                as: 'ticket',
                                 attributes: ['id', 'title', 'access_type', 'type', 'price']
                             },
                             {
                                 model: EventSlots,
-                                as: 'slot', // ✔ MATCHES association
+                                as: 'slot',
                                 attributes: ['id', 'slot_name', 'slot_date', 'start_time', 'end_time']
                             }
                         ]
                     }
                 ]
             });
-            // ---------------------------------------------
-            // FORMAT FINAL RESPONSE (Ticket / Slot Logic)
-            // ---------------------------------------------
             const formatted = cartList.map((item) => {
+                const data = item.dataValues;
+
                 let displayName = "";
 
-                switch (item.ticket_type) {
-
+                switch (data.ticket_type) {
                     case "ticket":
-                        displayName = item.TicketType?.title || "";
+                        displayName = data.TicketType?.title || "";
                         break;
 
                     case "addon":
-                        displayName = item.AddonType?.name || "";
+                        displayName = data.AddonType?.name || "";
                         break;
 
                     case "package":
-                        displayName = item.Package?.name || "";
+                        displayName = data.Package?.name || "";
                         break;
 
                     case "ticket_price":
-                        // slot name > ticket name fallback
                         displayName =
-                            item.TicketPricing?.slot_name ||
-                            item.TicketPricing?.ticket_name ||
-                            "";
+                            data.TicketPricing?.slot?.slot_name ||
+                            data.TicketPricing?.ticket?.title ||
+                            "Ticket Price";
                         break;
 
                     default:
@@ -211,13 +213,12 @@ module.exports = {
                 }
 
                 return {
-                    id: item.id,
-                    event_id: item.event_id,
-                    item_type: item.ticket_type,
+                    id: data.id,
+                    event_id: data.event_id,
+                    item_type: data.ticket_type,
                     display_name: displayName,
-                    count: item.no_tickets,
-                    ticket_price: item.TicketPricing?.price || null,
-                    raw: item
+                    count: data.no_tickets,
+                    ticket_price: data.TicketPricing?.price || null,
                 };
             });
 
