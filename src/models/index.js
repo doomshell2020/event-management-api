@@ -184,9 +184,14 @@ Cart.belongsTo(WellnessSlots, {
   foreignKey: 'appointment_id',
   as: 'appointments',
 })
-Cart.belongsTo(Event, {
+
+Cart.belongsTo(Event,{
   foreignKey: 'event_id',
   as: 'events',
+})
+Event.hasMany(Wellness,{
+  foreignKey: 'event_id',
+  as: 'wellness',
 })
 
 

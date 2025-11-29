@@ -24,12 +24,10 @@ const Cart = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: true
         },
-
         ticket_id: {
             type: DataTypes.INTEGER,
             allowNull: true
         },
-
         appointment_id: {
             type: DataTypes.INTEGER,
             allowNull: true

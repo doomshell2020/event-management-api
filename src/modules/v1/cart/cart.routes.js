@@ -142,6 +142,20 @@ router.get("/list",
     cartController.getCart
 );
 
+// GET APPOINTMENT CART LIST
+router.get("/appointment-list",
+    authenticate,
+    [
+        query("event_id").optional().isInt().withMessage("Event ID must be valid"),
+        query("item_type")
+            .optional()
+            .isIn(["ticket", "addon", "package"])
+            .withMessage("Invalid item type"),
+    ],
+    validate,
+    cartController.getAppointmentCart
+);
+
 // CLEAR CART
 router.delete("/clear", authenticate, validate, cartController.clearCart);
 

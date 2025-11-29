@@ -1,9 +1,8 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots } = require('../../../models');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots } = require('../../../models');
 const { Op } = require('sequelize');
 
 module.exports = {
-
     // ADD ITEM TO CART
     addToCart: async (req, res) => {
         try {
@@ -17,9 +16,8 @@ module.exports = {
                 item_type,
                 count
             } = req.body;
-
+            console.log("--------req.body", req.body)
             const user_id = req.user.id;
-
             // --------------------------------------------------
             // 1️⃣ CHECK EVENT EXISTS
             // --------------------------------------------------
@@ -34,8 +32,8 @@ module.exports = {
                 ticket: { id: ticket_id, model: TicketType },
                 addon: { id: addons_id, model: AddonTypes },
                 package: { id: package_id, model: Package },
-                ticket_price: { id: ticket_price_id, model: TicketPricing }
-                // appointment: { id: appointment_id, model: Appointment },
+                ticket_price: { id: ticket_price_id, model: TicketPricing },
+                appointment: { id: appointment_id, model: WellnessSlots },
 
                 // Special types
                 // committesale: { id: ticket_id || addons_id, model: null },
@@ -185,7 +183,6 @@ module.exports = {
                     }
                 ]
             });
-
             const formatted = cartList.map((item) => {
                 const data = item.dataValues;
 
@@ -232,6 +229,97 @@ module.exports = {
             return apiResponse.error(res, "Error fetching cart", 500);
         }
     },
+
+
+    // GET USER CART LIST - APPOINTMENT - KAMAL
+    getAppointmentCart: async (req, res) => {
+        try {
+            const user_id = req.user.id;
+            const { event_id, item_type } = req.query;
+
+            let where = { user_id };
+            if (event_id) where.event_id = event_id;
+            if (item_type) where.ticket_type = item_type;
+            // console.log('where :', where);
+
+            const cartList = await Cart.findAll({
+                where,
+                order: [["id", "DESC"]],
+                include: [
+                    {
+                        model: WellnessSlots,
+                        as: 'appointments',
+                        // attributes: ["id", "title", "price"]
+                        include: [{ model: Wellness, as: 'wellnessList' }]
+                    },
+                    // {
+                    //     model: AddonTypes,
+                    //     attributes: ["id", "name"]
+                    // },
+                    // {
+                    //     model: Package,
+                    //     attributes: ["id", "name"]
+                    // },
+                    // {
+                    //     model: TicketPricing,
+                    //     attributes: ["id", "price", "ticket_type_id", "event_slot_id"],
+                    //     include: [
+                    //         {
+                    //             model: TicketType,
+                    //             as: 'ticket', // ✔ MATCHES association
+                    //             attributes: ['id', 'title', 'access_type', 'type', 'price']
+                    //         },
+                    //         {
+                    //             model: EventSlots,
+                    //             as: 'slot', // ✔ MATCHES association
+                    //             attributes: ['id', 'slot_name', 'slot_date', 'start_time', 'end_time']
+                    //         }
+                    //     ]
+                    // }
+                ]
+            });
+
+            // console.log("-----------appointment----------cartList", cartList)
+            // ---------------------------------------------
+            // FORMAT FINAL RESPONSE (Ticket / Slot Logic)
+            // ---------------------------------------------
+            const formatted = cartList.map((item) => {
+                let displayName = "";
+                // console.log("item.ticket_type",item.appointments?.price)
+                switch (item.ticket_type) {
+                    case "appointment":
+                        displayName = item.appointments?.wellnessList?.name || "";
+                        break;
+                    default:
+                        displayName = "Unknown Item";
+                }
+
+                return {
+                    id: item.id,
+                    event_id: item.event_id,
+                    item_type: item.ticket_type,
+                    display_name: displayName,
+                    count: item.no_tickets,
+                    ticket_price: item.appointments?.price || null,
+                    raw: item
+                };
+            });
+
+            return apiResponse.success(res, "Cart fetched", formatted);
+
+        } catch (error) {
+            console.log(error);
+            return apiResponse.error(res, "Error fetching cart", 500);
+        }
+    },
+
+
+
+
+
+
+
+
 
 
     // INCREASE ITEM COUNT

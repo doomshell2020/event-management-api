@@ -249,4 +249,20 @@ router.delete('/delete/:id', authenticate,
     eventController.deleteEvent
 )
 
+
+// ✅ 2️⃣ Get All Appointments Slots for an Event - kamal
+router.get('/:event_id/appointments',
+    [
+        param('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be numeric'),
+    ],
+    validate,
+    eventController.getEventAppointmentsDetails
+);
+
+
+
+
+
 module.exports = router;
