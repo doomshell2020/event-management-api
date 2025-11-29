@@ -57,42 +57,94 @@ Cart.belongsTo(AddonTypes, { foreignKey: 'addons_id' });
 Cart.belongsTo(Package, { foreignKey: 'package_id' });
 Cart.belongsTo(TicketPricing, { foreignKey: 'ticket_price_id' });
 
+Orders.hasMany(OrderItems, {
+  foreignKey: "order_id",
+  as: "orderItems",
+  onDelete: "CASCADE"
+});
+
+// OrderItems ↔ Event
+OrderItems.belongsTo(Event, {
+  foreignKey: "event_id",
+  as: "event"
+});
+
+Event.hasMany(OrderItems, {
+  foreignKey: "event_id",
+  as: "orderItems"
+});
+
+
+OrderItems.belongsTo(Orders, {
+  foreignKey: "order_id",
+  as: "order"
+});
+
+OrderItems.belongsTo(TicketType, {
+  foreignKey: "ticket_id",
+  as: "ticketType"
+});
+
+OrderItems.belongsTo(AddonTypes, {
+  foreignKey: "addon_id",
+  as: "addonType"
+});
+
+OrderItems.belongsTo(Package, {
+  foreignKey: "package_id",
+  as: "package"
+});
+
+OrderItems.belongsTo(TicketPricing, {
+  foreignKey: "ticket_pricing_id",
+  as: "ticketPricing"
+});
+
+OrderItems.belongsTo(EventSlots, {
+  foreignKey: "slot_id",
+  as: "slot"
+});
+
+OrderItems.belongsTo(WellnessSlots, {
+  foreignKey: "appointment_id",
+  as: "appointment"
+});
 
 // Event ↔ TicketType
-Event.hasMany(TicketType, { 
-  foreignKey: 'eventid', 
+Event.hasMany(TicketType, {
+  foreignKey: 'eventid',
   as: 'tickets',   // fetch tickets via event.tickets
-  onDelete: 'CASCADE' 
+  onDelete: 'CASCADE'
 });
 
-TicketType.belongsTo(Event, { 
-  foreignKey: 'eventid', 
-  as: 'event' 
+TicketType.belongsTo(Event, {
+  foreignKey: 'eventid',
+  as: 'event'
 });
 
-Event.hasMany(AddonTypes, { 
-  foreignKey: 'event_id', 
+Event.hasMany(AddonTypes, {
+  foreignKey: 'event_id',
   as: 'addons',    // fetch addons via event.addons
-  onDelete: 'CASCADE' 
+  onDelete: 'CASCADE'
 });
 
 
-TicketType.hasMany(TicketPricing, { 
-  foreignKey: 'ticket_type_id', 
+TicketType.hasMany(TicketPricing, {
+  foreignKey: 'ticket_type_id',
   as: 'pricings',  // fetch pricing via ticket.pricings
-  onDelete: 'CASCADE' 
+  onDelete: 'CASCADE'
 });
 
 //Event ↔ EventSlots
-Event.hasMany(EventSlots, { 
-  foreignKey: 'event_id', 
+Event.hasMany(EventSlots, {
+  foreignKey: 'event_id',
   as: 'slots',     // fetch slots via event.slots
-  onDelete: 'CASCADE' 
+  onDelete: 'CASCADE'
 });
 
-EventSlots.belongsTo(Event, { 
-  foreignKey: 'event_id', 
-  as: 'event' 
+EventSlots.belongsTo(Event, {
+  foreignKey: 'event_id',
+  as: 'event'
 });
 
 EventSlots.hasMany(TicketPricing, {
@@ -102,9 +154,9 @@ EventSlots.hasMany(TicketPricing, {
 });
 
 
-TicketPricing.belongsTo(TicketType, { 
-  foreignKey: 'ticket_type_id', 
-  as: 'ticket' 
+TicketPricing.belongsTo(TicketType, {
+  foreignKey: 'ticket_type_id',
+  as: 'ticket'
 });
 
 TicketPricing.belongsTo(EventSlots, {
@@ -128,11 +180,11 @@ Wellness.belongsTo(Event, {
   as: 'eventList',
 });
 
-Cart.belongsTo(WellnessSlots,{
+Cart.belongsTo(WellnessSlots, {
   foreignKey: 'appointment_id',
   as: 'appointments',
 })
-Cart.belongsTo(Event,{
+Cart.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'events',
 })
@@ -143,6 +195,6 @@ Cart.belongsTo(Event,{
 // =============================
 module.exports = {
   sequelize,
-  Questions,  QuestionItems,  AddonTypes,  Company,  Countries,  Event,  TicketType,OrderItems,
-  User,  Package,  PackageDetails, TicketPricing, EventSlots,Cart,Orders,Wellness,WellnessSlots
+  Questions, QuestionItems, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
+  User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots
 };

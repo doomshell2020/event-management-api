@@ -41,7 +41,7 @@ exports.createOrder = async (req, res) => {
 
         const timezone = event.event_timezone || "UTC";
 
-        // 🕒 Convert to user-friendly readable format
+        // Convert to user-friendly readable format
         const formatDateReadable = (dateStr, timezone) => {
             if (!dateStr) return "";
 
@@ -214,46 +214,187 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-
-// GET ORDER DETAILS
-exports.getOrderDetails = async (req, res) => {
-    try {
-        const orderId = req.params.id;
-        const user_id = req.user.id;
-
-        const order = await Orders.findOne({
-            where: {
-                id: orderId,
-                user_id
-            }
-        });
-
-        if (!order) {
-            return apiResponse.error(res, "Order not found", 404);
-        }
-
-        return apiResponse.success(res, "Order details", order);
-
-    } catch (error) {
-        console.log(error);
-        return apiResponse.error(res, "Error fetching order details", 500);
-    }
-};
-
-// LIST ALL USER ORDERS
+// LIST ALL USER ORDERS WITH ITEMS + QR IMAGE URL
 exports.listOrders = async (req, res) => {
     try {
         const user_id = req.user.id;
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const qrPath = "uploads/qr_codes";
 
         const orders = await Orders.findAll({
             where: { user_id },
-            order: [['id', 'DESC']]
+            order: [["id", "DESC"]],
+            attributes: [
+                "id",
+                "order_uid",
+                "user_id",
+                "event_id",
+                "package_id",
+                "total_amount",
+                "status",
+                "createdAt"
+            ],
+            include: [
+                {
+                    model: OrderItems,
+                    as: "orderItems",
+                    attributes: [
+                        "id",
+                        "type",
+                        "ticket_id",
+                        "addon_id",
+                        "package_id",
+                        "ticket_pricing_id",
+                        "appointment_id",
+                        "count",
+                        "price",
+                        "qr_image",
+                        "secure_hash"
+                    ],
+                    include: [
+                        {
+                            model: Event,
+                            as: "event",
+                            attributes: ["name"]
+                        },
+                        { model: TicketType, as: "ticketType" },
+                        { model: AddonTypes, as: "addonType" },
+                        { model: Package, as: "package" },
+                        { model: TicketPricing, as: "ticketPricing" },
+                        { model: EventSlots, as: "slot" }
+                        // { model: WellnessSlots, as: "appointment" },
+                    ]
+                }
+            ]
         });
 
-        return apiResponse.success(res, "Orders list", orders);
+        // console.log('orders :', orders);
+        // FORMAT RESPONSE
+        const formattedOrders = orders.map(order => {
+            const orderData = order.toJSON();
+
+            orderData.orderItems = orderData.orderItems.map(item => ({
+                ...item,
+
+                // RETURN FULL QR URL
+                qr_image_url: item.qr_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
+                    : null
+            }));
+
+            return orderData;
+        });
+
+        return apiResponse.success(res, "Orders with items", formattedOrders);
 
     } catch (error) {
         console.log(error);
-        return apiResponse.error(res, "Error fetching order list", 500);
+        return apiResponse.error(res, "Error fetching orders", 500);
+    }
+};
+
+// 📌 Get Single Order Details
+exports.getOrderDetails = async (req, res) => {
+    try {
+        const { order_id } = req.params;
+
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const qrPath = "uploads/qr_codes";
+
+        const order = await Orders.findOne({
+            where: { id: order_id },
+            attributes: [
+                "id",
+                "order_uid",
+                "user_id",
+                "event_id",
+                "package_id",
+                "total_amount",
+                "status",
+                "createdAt"
+            ],
+            include: [
+                {
+                    model: OrderItems,
+                    as: "orderItems",
+                    attributes: [
+                        "id",
+                        "type",
+                        "ticket_id",
+                        "addon_id",
+                        "package_id",
+                        "ticket_pricing_id",
+                        "appointment_id",
+                        "count",
+                        "price",
+                        "qr_image",
+                        "qr_data",
+                        "secure_hash"
+                    ],
+                    include: [
+                        {
+                            model: Event,
+                            as: "event",
+                            attributes: ["name"] // only event name
+                        },
+                        {
+                            model: TicketType,
+                            as: "ticketType",
+                            attributes: ["id", "type"]
+                        },
+                        {
+                            model: AddonTypes,
+                            as: "addonType",
+                            attributes: ["id", "name"]
+                        },
+                        {
+                            model: Package,
+                            as: "package",
+                            attributes: ["id", "name"]
+                        },
+                        {
+                            model: TicketPricing,
+                            as: "ticketPricing",
+                            attributes: ["id", "tier_name", "price"]
+                        },
+                        {
+                            model: EventSlots,
+                            as: "slot",
+                            attributes: ["id", "slot_date", "start_time", "end_time"]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found"
+            });
+        }
+
+        // 🔥 FORMAT RESPONSE (Add full QR URL)
+        const orderJSON = order.toJSON();
+
+        orderJSON.orderItems = orderJSON.orderItems.map(item => ({
+            ...item,
+            qr_image_url: item.qr_image
+                ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
+                : null
+        }));
+
+        return res.json({
+            success: true,
+            message: "Order details fetched",
+            data: orderJSON
+        });
+
+    } catch (error) {
+        console.log("Order Details Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong"
+        });
     }
 };

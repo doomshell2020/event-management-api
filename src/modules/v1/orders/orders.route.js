@@ -22,28 +22,28 @@ router.post('/create',
 );
 
 // // GET ORDER DETAILS
-// router.get('/details/:order_id',
-//     authenticate,
-//     [
-//         param('order_id')
-//             .notEmpty()
-//             .withMessage('order_id is required')
-//             .isInt()
-//             .withMessage('order_id must be a number'),
-//     ],
-//     validate,
-//     ordersController.orderDetails
-// );
+router.get('/details/:order_id',
+    authenticate,
+    [
+        param('order_id')
+            .notEmpty()
+            .withMessage('order_id is required')
+            .isInt()
+            .withMessage('order_id must be a number'),
+    ],
+    validate,
+    ordersController.getOrderDetails
+);
 
 // // LIST ALL ORDERS FOR LOGGED-IN USER
-// router.get('/',
-//     authenticate,
-//     [
-//         query('page').optional().isInt().withMessage('page must be number'),
-//         query('limit').optional().isInt().withMessage('limit must be number'),
-//     ],
-//     validate,
-//     ordersController.orderList
-// );
+router.get('/',
+    authenticate,
+    [
+        query('page').optional().isInt().withMessage('page must be number'),
+        query('limit').optional().isInt().withMessage('limit must be number'),
+    ],
+    validate,
+    ordersController.listOrders
+);
 
 module.exports = router;
