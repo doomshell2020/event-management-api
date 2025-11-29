@@ -41,26 +41,43 @@ exports.createOrder = async (req, res) => {
 
         const timezone = event.event_timezone || "UTC";
 
-        const formatDate = (date) =>
-            date
-                ? {
-                    utc: date,
-                    local: convertUTCToLocal(date, timezone),
-                    timezone
-                }
-                : null;
+        // 🕒 Convert to user-friendly readable format
+        const formatDateReadable = (dateStr, timezone) => {
+            if (!dateStr) return "";
+
+            const date = new Date(dateStr);
+
+            return date.toLocaleString("en-US", {
+                timeZone: timezone,
+                weekday: "long",
+                month: "long",
+                day: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+            });
+        };
+
+
 
         // 📌 Prepare formatted event for email
         const formattedEvent = {
             id: event.id,
             name: event.name,
             location: event.location,
+
+            // Correct image URL
             feat_image: event.feat_image
-                ? `${baseUrl}${imagePath}/${event.feat_image}`
-                : `${baseUrl}${imagePath}/default.jpg`,
-            date_from: formatDate(event.date_from),
-            date_to: formatDate(event.date_to),
+                ? `${baseUrl.replace(/\/$/, "")}${imagePath}/${event.feat_image}`
+                : `${baseUrl.replace(/\/$/, "")}${imagePath}/default.jpg`,
+            // Correct readable dates
+            date_from: formatDateReadable(event.date_from, timezone),
+            date_to: formatDateReadable(event.date_to, timezone),
+            // Keep timezone for email
+            timezone
         };
+
 
         // console.log('formattedEvent :', formattedEvent); return
 
