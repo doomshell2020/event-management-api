@@ -1,23 +1,76 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems } = require('../../../models');
+const { Cart, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
+const { generateUniqueOrderId } = require('../../../common/utils/helpers');
+const { convertUTCToLocal } = require('../../../common/utils/timezone');
 
 exports.createOrder = async (req, res) => {
     try {
         const user_id = req.user.id;
-        const user = req.user;  // for email template
+        const user = req.user;
         const { event_id, payment_method, coupon_code } = req.body;
-        // console.log('>>>>>>>>>>>>>>>',user);
-        // return false
-        
 
-        let where = { user_id };
-        if (event_id) where.event_id = event_id;
+        if (!event_id)
+            return apiResponse.error(res, "Event ID is required", 400);
 
+        // 📌 Base URL for images
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+
+        // 📌 Fetch Event Details
+        const event = await Event.findOne({
+            raw: true,
+            nest: true,
+            where: { id: event_id },
+            attributes: [
+                "id",
+                "name",
+                "date_from",
+                "date_to",
+                "feat_image",
+                "location",
+                "event_timezone"
+            ]
+        });
+
+        if (!event)
+            return apiResponse.error(res, "Event not found", 404);
+
+        const timezone = event.event_timezone || "UTC";
+
+        const formatDate = (date) =>
+            date
+                ? {
+                    utc: date,
+                    local: convertUTCToLocal(date, timezone),
+                    timezone
+                }
+                : null;
+
+        // 📌 Prepare formatted event for email
+        const formattedEvent = {
+            id: event.id,
+            name: event.name,
+            location: event.location,
+            feat_image: event.feat_image
+                ? `${baseUrl}/${imagePath}/${event.feat_image}`
+                : `${baseUrl}/${imagePath}/default.jpg`,
+            date_from: formatDate(event.date_from),
+            date_to: formatDate(event.date_to),
+        };
+
+        // console.log('formattedEvent :', formattedEvent); return
+
+
+        // --------------------------------------------------------------------
         // FETCH CART
+        // --------------------------------------------------------------------
+
+        let where = { user_id, event_id };
+
         const cartList = await Cart.findAll({
             where,
             raw: true,
@@ -42,18 +95,28 @@ exports.createOrder = async (req, res) => {
             return apiResponse.error(res, "Your cart is empty!", 400);
         }
 
-        // CALCULATE TOTAL AMOUNT
+        // --------------------------------------------------------------------
+        // CALCULATE TOTAL
+        // --------------------------------------------------------------------
+
         let totalAmount = 0;
+
         cartList.forEach(item => {
-            if (item.ticket_type == 'ticket') {
+            if (item.ticket_type == 'ticket')
                 totalAmount += Number(item.TicketType.price || 0);
-            } else if (item.ticket_type == 'ticket_price') {
+
+            if (item.ticket_type == 'ticket_price')
                 totalAmount += Number(item.TicketPricing.price || 0);
-            }
         });
 
+        // --------------------------------------------------------------------
         // CREATE ORDER
+        // --------------------------------------------------------------------
+
+        const order_uid = generateUniqueOrderId();
+
         const order = await Orders.create({
+            order_uid,
             user_id,
             event_id,
             total_amount: totalAmount,
@@ -66,15 +129,20 @@ exports.createOrder = async (req, res) => {
         let qrResults = [];
         let attachments = [];
 
-        // LOOP CART ITEMS → CREATE ORDER ITEMS + QR CODE
+        // --------------------------------------------------------------------
+        // CREATE ORDER ITEMS + QR
+        // --------------------------------------------------------------------
+
         for (const item of cartList) {
             let price = 0;
-            if (item.ticket_type == "ticket") price = Number(item.TicketType?.price || 0);
-            else if (item.ticket_type == "ticket_price") price = Number(item.TicketPricing?.price || 0);
-            else if (item.ticket_type == "addon") price = Number(item.AddonType?.price || 0);
-            else if (item.ticket_type == "package") price = Number(item.Package?.price || 0);
 
-            // 1️⃣ CREATE ORDER ITEM
+            if (item.ticket_type == "ticket")
+                price = item.TicketType?.price || 0;
+
+            if (item.ticket_type == "ticket_price")
+                price = item.TicketPricing?.price || 0;
+
+            // CREATE ORDER ITEM
             const orderItem = await OrderItems.create({
                 order_id: order.id,
                 user_id,
@@ -86,14 +154,13 @@ exports.createOrder = async (req, res) => {
                 ticket_pricing_id: item.ticket_price_id || null,
                 appointment_id: item.appointment_id || null,
                 count: item.no_tickets || 1,
-                price: price,
+                price,
                 slot_id: item.TicketPricing?.event_slot_id || null
             });
 
-            // 2️⃣ GENERATE QR CODE
+            // GENERATE QR
             const qr = await generateQRCode(orderItem);
 
-            // 3️⃣ UPDATE ORDER ITEM WITH QR PATH + HASH
             if (qr) {
                 await orderItem.update({
                     qr_image: qr.qrImageName,
@@ -107,7 +174,6 @@ exports.createOrder = async (req, res) => {
                     qr_data: qr.qrData
                 });
 
-                // OPTIONAL: add attachment
                 attachments.push({
                     filename: qr.qrImageName,
                     path: path.join(__dirname, "../../../uploads/qr_codes/", qr.qrImageName)
@@ -118,20 +184,25 @@ exports.createOrder = async (req, res) => {
         // CLEAR CART
         await Cart.destroy({ where });
 
-        // SEND EMAIL WITH QR CODES
+        // --------------------------------------------------------------------
+        // SEND EMAIL
+        // --------------------------------------------------------------------
+
         try {
             await sendEmail(
                 user.email,
-                "Your Ticket Order Confirmation",
-                orderConfirmationTemplateWithQR(user, order, cartList, qrResults),
-                attachments   // optional PDF/PNG attachments
+                `Your Ticket Order – ${event.name}`,
+                orderConfirmationTemplateWithQR(user, order, cartList, qrResults, formattedEvent),
+                attachments
             );
         } catch (emailError) {
             console.log("Email sending failed:", emailError);
         }
 
         return apiResponse.success(res, "Order created successfully", {
+            order_uid,
             order_id: order.id,
+            event: formattedEvent,
             total_amount: totalAmount,
             items: cartList.length,
             qr_codes: qrResults
@@ -142,6 +213,7 @@ exports.createOrder = async (req, res) => {
         return apiResponse.error(res, "Error creating order", 500);
     }
 };
+
 
 // GET ORDER DETAILS
 exports.getOrderDetails = async (req, res) => {
