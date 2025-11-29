@@ -11,24 +11,39 @@ const orderConfirmationTemplateWithQR = (user, order, items, qrResults, event) =
 
         <!-- EVENT INFO -->
         <div style="padding:30px; color:#333; font-size:16px; line-height:1.6;">
-          <h2 style="margin-top:0; font-size:22px;">${event.name}</h2>
-          <img src="${event.feat_image}" alt="${event.name}" style="width:100%; max-height:250px; object-fit:cover; border-radius:8px; margin-bottom:15px;" />
+          <h2 style="margin-top:0; font-size:22px; font-weight:600;">${event.name}</h2>
+
+          <img src="${event.feat_image}" 
+               alt="${event.name}" 
+               style="width:100%; max-height:260px; object-fit:cover; border-radius:10px; margin-bottom:15px;" />
+
           <p style="margin:5px 0;"><strong>Location:</strong> ${event.location}</p>
-          <p style="margin:5px 0;"><strong>Date:</strong> ${event.date_from.local} - ${event.date_to.local} (${event.date_from.timezone})</p>
+
+          <p style="margin:5px 0;">
+            <strong>Date:</strong><br/>
+            ${event.date_from} <br/>
+            to <br/>
+            ${event.date_to} 
+            <span style="color:#555;">(${event.timezone})</span>
+          </p>
+
           <hr style="border:none; border-top:1px solid #eee; margin:20px 0;" />
 
           <!-- ORDER INFO -->
           <p><strong>Order ID:</strong> ${order.order_uid}</p>
           <p><strong>Total Amount:</strong> ₹${order.total_amount}</p>
 
-          <h3 style="margin-top:25px;">Your Tickets</h3>
+          <h3 style="margin-top:25px; font-size:20px;">Your Tickets</h3>
 
           ${qrResults
             .map(
               (qr) => `
-              <div style="border:1px solid #eee; padding:15px; margin:15px 0; border-radius:8px; text-align:center;">
-                <p style="margin:0 0 8px;"><strong>Ticket ID:</strong> ${qr.order_item_id}</p>
-                <img src="${process.env.BASE_URL}uploads/qr_codes/${qr.qr_image}"
+              <div style="border:1px solid #ddd; padding:18px; margin:15px 0; border-radius:10px; background:#fafafa;">
+                <p style="margin:0 0 10px; font-size:15px;">
+                  <strong>Ticket ID:</strong> ${qr.order_item_id}
+                </p>
+
+                <img src="${process.env.BASE_URL}/uploads/qr_codes/${qr.qr_image}"
                      alt="QR Code"
                      style="width:180px; height:auto; display:block; margin:10px auto 0;" />
               </div>
