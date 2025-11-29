@@ -16,11 +16,11 @@ exports.createOrder = async (req, res) => {
         if (!event_id)
             return apiResponse.error(res, "Event ID is required", 400);
 
-        // 📌 Base URL for images
+        // Base URL for images
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
         const imagePath = "uploads/events";
 
-        // 📌 Fetch Event Details
+        // Fetch Event Details
         const event = await Event.findOne({
             raw: true,
             nest: true,
@@ -59,9 +59,7 @@ exports.createOrder = async (req, res) => {
             });
         };
 
-
-
-        // 📌 Prepare formatted event for email
+        // Prepare formatted event for email
         const formattedEvent = {
             id: event.id,
             name: event.name,
@@ -79,17 +77,10 @@ exports.createOrder = async (req, res) => {
             // Keep timezone for email
             timezone
         };
-
-
         // console.log('formattedEvent :', formattedEvent); return
 
-
-        // --------------------------------------------------------------------
         // FETCH CART
-        // --------------------------------------------------------------------
-
         let where = { user_id, event_id };
-
         const cartList = await Cart.findAll({
             where,
             raw: true,
@@ -114,9 +105,7 @@ exports.createOrder = async (req, res) => {
             return apiResponse.error(res, "Your cart is empty!", 400);
         }
 
-        // --------------------------------------------------------------------
         // CALCULATE TOTAL
-        // --------------------------------------------------------------------
 
         let totalAmount = 0;
 
@@ -128,9 +117,7 @@ exports.createOrder = async (req, res) => {
                 totalAmount += Number(item.TicketPricing.price || 0);
         });
 
-        // --------------------------------------------------------------------
         // CREATE ORDER
-        // --------------------------------------------------------------------
 
         const order_uid = generateUniqueOrderId();
 
@@ -148,10 +135,7 @@ exports.createOrder = async (req, res) => {
         let qrResults = [];
         let attachments = [];
 
-        // --------------------------------------------------------------------
         // CREATE ORDER ITEMS + QR
-        // --------------------------------------------------------------------
-
         for (const item of cartList) {
             let price = 0;
 
@@ -203,10 +187,7 @@ exports.createOrder = async (req, res) => {
         // CLEAR CART
         await Cart.destroy({ where });
 
-        // --------------------------------------------------------------------
         // SEND EMAIL
-        // --------------------------------------------------------------------
-
         try {
             await sendEmail(
                 user.email,
