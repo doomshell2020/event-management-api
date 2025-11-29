@@ -22,7 +22,7 @@ const orderConfirmationTemplateWithQR = (user, order, items, qrResults) => {
                 
                 <p style="margin:0 0 8px;"><strong>Ticket ID:</strong> ${qr.order_item_id}</p>
 
-                <img src="${process.env.BASE_URL}/uploads/qr_codes/${qr.qr_image}"
+                <img src="${process.env.BASE_URL}uploads/qr_codes/${qr.qr_image}"
                      alt="QR Code"
                      style="width:180px; height:auto; display:block; margin-top:10px;" />
               </div>
