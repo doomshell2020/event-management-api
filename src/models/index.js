@@ -20,9 +20,8 @@ const Wellness = require('./wellness.model')
 const WellnessSlots = require('./wellness_slots.model')
 const Cart = require('./cart.model');
 const Orders = require('./orders.modal');
+const OrderItems = require('./order_items.model');
 
-
-// Define Relationships
 
 // 🔹 One Question → Many QuestionItems
 Questions.hasMany(QuestionItems, {
@@ -144,6 +143,6 @@ Cart.belongsTo(Event,{
 // =============================
 module.exports = {
   sequelize,
-  Questions,  QuestionItems,  AddonTypes,  Company,  Countries,  Event,  TicketType,
+  Questions,  QuestionItems,  AddonTypes,  Company,  Countries,  Event,  TicketType,OrderItems,
   User,  Package,  PackageDetails, TicketPricing, EventSlots,Cart,Orders,Wellness,WellnessSlots
 };

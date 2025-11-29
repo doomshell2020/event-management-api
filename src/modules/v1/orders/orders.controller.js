@@ -1,51 +1,38 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots } = require('../../../models');
+const { Cart, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems } = require('../../../models');
+const { generateQRCode } = require("../../../common/utils/qrGenerator");
+const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
+const sendEmail = require('../../../common/utils/sendEmail');
+const path = require("path");
 
 exports.createOrder = async (req, res) => {
     try {
         const user_id = req.user.id;
-        const {
-            event_id,
-            payment_method,
-            coupon_code
-        } = req.body;
+        const user = req.user;  // for email template
+        const { event_id, payment_method, coupon_code } = req.body;
+        // console.log('>>>>>>>>>>>>>>>',user);
+        // return false
+        
 
         let where = { user_id };
-        // if (event_id) where.event_id = event_id;
-        // console.log('>>>>>>>>>>>>>',where);
+        if (event_id) where.event_id = event_id;
 
-
-        // FETCH USER CART
+        // FETCH CART
         const cartList = await Cart.findAll({
             where,
+            raw: true,
+            nest: true,
             order: [["id", "DESC"]],
             include: [
-                {
-                    model: TicketType,
-                    attributes: ["id", "title", "price"]
-                },
-                {
-                    model: AddonTypes,
-                    attributes: ["id", "name"]
-                },
-                {
-                    model: Package,
-                    attributes: ["id", "name"]
-                },
+                { model: TicketType, attributes: ["id", "title", "price"] },
+                { model: AddonTypes, attributes: ["id", "name"] },
+                { model: Package, attributes: ["id", "name"] },
                 {
                     model: TicketPricing,
                     attributes: ["id", "price", "ticket_type_id", "event_slot_id"],
                     include: [
-                        {
-                            model: TicketType,
-                            as: 'ticket', // ✔ MATCHES association
-                            attributes: ['id', 'title', 'access_type', 'type', 'price']
-                        },
-                        {
-                            model: EventSlots,
-                            as: 'slot', // ✔ MATCHES association
-                            attributes: ['id', 'slot_name', 'slot_date', 'start_time', 'end_time']
-                        }
+                        { model: TicketType, as: 'ticket', attributes: ['id', 'title', 'access_type', 'type', 'price'] },
+                        { model: EventSlots, as: 'slot', attributes: ['id', 'slot_name', 'slot_date', 'start_time', 'end_time'] }
                     ]
                 }
             ]
@@ -54,8 +41,6 @@ exports.createOrder = async (req, res) => {
         if (!cartList.length) {
             return apiResponse.error(res, "Your cart is empty!", 400);
         }
-
-
 
         // CALCULATE TOTAL AMOUNT
         let totalAmount = 0;
@@ -66,20 +51,6 @@ exports.createOrder = async (req, res) => {
                 totalAmount += Number(item.TicketPricing.price || 0);
             }
         });
-
-        // APPLY COUPON IF EXISTS
-        let couponDiscount = 0;
-
-        // if (coupon_code) {
-        //     const coupon = await Coupons.findOne({
-        //         where: { code: coupon_code, status: 1 }
-        //     });
-
-        //     if (coupon) {
-        //         couponDiscount = coupon.discount;
-        //         totalAmount = totalAmount - couponDiscount;
-        //     }
-        // }
 
         // CREATE ORDER
         const order = await Orders.create({
@@ -92,35 +63,78 @@ exports.createOrder = async (req, res) => {
             status: 'Y'
         });
 
-        // ----------------------------
-        // LOOP CART ITEMS → CREATE ORDER ITEMS
-        // ----------------------------
+        let qrResults = [];
+        let attachments = [];
+
+        // LOOP CART ITEMS → CREATE ORDER ITEMS + QR CODE
         for (const item of cartList) {
-            await OrderItems.create({
+            let price = 0;
+            if (item.ticket_type == "ticket") price = Number(item.TicketType?.price || 0);
+            else if (item.ticket_type == "ticket_price") price = Number(item.TicketPricing?.price || 0);
+            else if (item.ticket_type == "addon") price = Number(item.AddonType?.price || 0);
+            else if (item.ticket_type == "package") price = Number(item.Package?.price || 0);
+
+            // 1️⃣ CREATE ORDER ITEM
+            const orderItem = await OrderItems.create({
                 order_id: order.id,
                 user_id,
                 event_id: item.event_id,
-                type: item.item_type,               // ticket / addon / package
+                type: item.ticket_type,
                 ticket_id: item.ticket_id || null,
                 addon_id: item.addons_id || null,
                 package_id: item.package_id || null,
                 ticket_pricing_id: item.ticket_price_id || null,
-                count: item.count || 1,
-                price: item.total_price,
-                slot_id: item.ticket_pricing ? item.ticket_pricing.event_slot_id : null,
+                appointment_id: item.appointment_id || null,
+                count: item.no_tickets || 1,
+                price: price,
+                slot_id: item.TicketPricing?.event_slot_id || null
             });
+
+            // 2️⃣ GENERATE QR CODE
+            const qr = await generateQRCode(orderItem);
+
+            // 3️⃣ UPDATE ORDER ITEM WITH QR PATH + HASH
+            if (qr) {
+                await orderItem.update({
+                    qr_image: qr.qrImageName,
+                    qr_data: JSON.stringify(qr.qrData),
+                    secure_hash: qr.secureHash
+                });
+
+                qrResults.push({
+                    order_item_id: orderItem.id,
+                    qr_image: qr.qrImageName,
+                    qr_data: qr.qrData
+                });
+
+                // OPTIONAL: add attachment
+                attachments.push({
+                    filename: qr.qrImageName,
+                    path: path.join(__dirname, "../../../uploads/qr_codes/", qr.qrImageName)
+                });
+            }
         }
 
-        // ----------------------------
-        // CLEAR CART AFTER ORDER CREATED
-        // ----------------------------
+        // CLEAR CART
         await Cart.destroy({ where });
+
+        // SEND EMAIL WITH QR CODES
+        try {
+            await sendEmail(
+                user.email,
+                "Your Ticket Order Confirmation",
+                orderConfirmationTemplateWithQR(user, order, cartList, qrResults),
+                attachments   // optional PDF/PNG attachments
+            );
+        } catch (emailError) {
+            console.log("Email sending failed:", emailError);
+        }
 
         return apiResponse.success(res, "Order created successfully", {
             order_id: order.id,
             total_amount: totalAmount,
-            coupon_applied: coupon_code || null,
-            items: cartList.length
+            items: cartList.length,
+            qr_codes: qrResults
         });
 
     } catch (error) {
@@ -153,7 +167,6 @@ exports.getOrderDetails = async (req, res) => {
         return apiResponse.error(res, "Error fetching order details", 500);
     }
 };
-
 
 // LIST ALL USER ORDERS
 exports.listOrders = async (req, res) => {
