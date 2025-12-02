@@ -149,22 +149,11 @@ module.exports = {
 
             const cartList = await Cart.findAll({
                 where,
-                attributes: [
-                    "id",
-                    "user_id",
-                    "event_id",
-                    "addons_id",
-                    "ticket_price_id",
-                    "ticket_type",
-                    "ticket_id",
-                    "no_tickets",
-                    "createdAt",
-                ],
                 order: [["id", "DESC"]],
                 include: [
                     { model: TicketType, attributes: ["id", "title", "price"] },
-                    { model: AddonTypes, attributes: ["id", "name"] },
-                    { model: Package, attributes: ["id", "name"] },
+                    { model: AddonTypes, attributes: ["id", "name", "price"] },
+                    { model: Package, attributes: ["id", "name", "grandtotal"] },
                     {
                         model: TicketPricing,
                         attributes: ["id", "price", "ticket_type_id", "event_slot_id"],
@@ -183,42 +172,54 @@ module.exports = {
                     }
                 ]
             });
+
             const formatted = cartList.map((item) => {
-                const data = item.dataValues;
-
                 let displayName = "";
+                let ticketPrice = 0;
+                let uniqueId = null;
 
-                switch (data.ticket_type) {
+                switch (item.ticket_type) {
                     case "ticket":
-                        displayName = data.TicketType?.title || "";
+                        displayName = item.TicketType?.title || "";
+                        ticketPrice = item.TicketType?.price || 0;
+                        uniqueId = item.TicketType?.id || null;
                         break;
 
                     case "addon":
-                        displayName = data.AddonType?.name || "";
+                        displayName = item.AddonType?.name || "";
+                        ticketPrice = item.AddonType?.price || 0;
+                        uniqueId = item.AddonType?.id || null;
                         break;
 
                     case "package":
-                        displayName = data.Package?.name || "";
+                        displayName = item.Package?.name || "";
+                        ticketPrice = item.Package?.grandtotal || 0;
+                        uniqueId = item.Package?.id || null;
                         break;
 
                     case "ticket_price":
                         displayName =
-                            data.TicketPricing?.slot?.slot_name ||
-                            data.TicketPricing?.ticket?.title ||
+                            item.TicketPricing?.slot?.slot_name ||
+                            item.TicketPricing?.ticket?.title ||
                             "Ticket Price";
+
+                        ticketPrice = item.TicketPricing?.price || 0;
+                        uniqueId = item.TicketPricing?.id || null;
                         break;
 
                     default:
                         displayName = "Unknown Item";
+                        ticketPrice = 0;
                 }
 
                 return {
-                    id: data.id,
-                    event_id: data.event_id,
-                    item_type: data.ticket_type,
+                    id: item.id,
+                    uniqueId,
+                    event_id: item.event_id,
+                    item_type: item.ticket_type,
                     display_name: displayName,
-                    count: data.no_tickets,
-                    ticket_price: data.TicketPricing?.price || null,
+                    count: item.no_tickets,
+                    ticket_price: ticketPrice,
                 };
             });
 
@@ -229,7 +230,6 @@ module.exports = {
             return apiResponse.error(res, "Error fetching cart", 500);
         }
     },
-
 
     // GET USER CART LIST - APPOINTMENT - KAMAL
     getAppointmentCart: async (req, res) => {
@@ -287,15 +287,6 @@ module.exports = {
             return apiResponse.error(res, "Error fetching cart", 500);
         }
     },
-
-
-
-
-
-
-
-
-
 
     // INCREASE ITEM COUNT
     increaseItem: async (req, res) => {

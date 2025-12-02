@@ -828,7 +828,6 @@ module.exports.deleteEvent = async (eventId) => {
     }
 };
 
-
 //...// new api.. get event details and appointments slots  function..
 module.exports.getEventAppointmentsDetails = async (req, res) => {
     try {
