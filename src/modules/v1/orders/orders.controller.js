@@ -284,7 +284,7 @@ exports.listOrders = async (req, res) => {
             // 🔥 REPLACE feat_image WITH FULL URL (NO NEW KEY)
             if (orderData.event?.feat_image) {
                 orderData.event.feat_image =
-                    `${baseUrl}/${eventImagePath}/${orderData.event.feat_image}`;
+                    `${baseUrl}${eventImagePath}/${orderData.event.feat_image}`;
             }
 
             return orderData;
