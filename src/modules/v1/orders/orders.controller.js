@@ -357,10 +357,11 @@ exports.getOrderDetails = async (req, res) => {
                             model: EventSlots,
                             as: "slot",
                             attributes: ["id", "slot_date", "slot_name", "start_time", "end_time"]
-                        }
+                        },
+                        { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" } },
                     ]
                 },
-                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'] }
+                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location','event_org_id'] }
             ]
         });
 
