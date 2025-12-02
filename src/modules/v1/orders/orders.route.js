@@ -64,14 +64,4 @@ router.post('/create-appointment',
 );
 
 
-
-
-
-
-
-
-
-
-
-
 module.exports = router;

@@ -252,11 +252,6 @@ exports.listOrders = async (req, res) => {
                         "secure_hash"
                     ],
                     include: [
-                        // {
-                        //     model: Event,
-                        //     as: "event",
-                        //     attributes: ["name"]
-                        // },
                         { model: TicketType, as: "ticketType" },
                         { model: AddonTypes, as: "addonType" },
                         { model: Package, as: "package" },
@@ -264,7 +259,7 @@ exports.listOrders = async (req, res) => {
                         { model: EventSlots, as: "slot" },
                         { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" } },
                     ]
-                }, { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image','location'] },
+                }, { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'] },
             ]
         });
 
@@ -305,6 +300,7 @@ exports.getOrderDetails = async (req, res) => {
 
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
         const qrPath = "uploads/qr_codes";
+        const eventImagePath = "uploads/events";
 
         const order = await Orders.findOne({
             where: { id: order_id },
@@ -338,11 +334,6 @@ exports.getOrderDetails = async (req, res) => {
                     ],
                     include: [
                         {
-                            model: Event,
-                            as: "event",
-                            attributes: ["name"] // only event name
-                        },
-                        {
                             model: TicketType,
                             as: "ticketType",
                             attributes: ["id", "type"]
@@ -360,15 +351,16 @@ exports.getOrderDetails = async (req, res) => {
                         {
                             model: TicketPricing,
                             as: "ticketPricing",
-                            attributes: ["id", "tier_name", "price"]
+                            attributes: ["id", "price"]
                         },
                         {
                             model: EventSlots,
                             as: "slot",
-                            attributes: ["id", "slot_date", "start_time", "end_time"]
+                            attributes: ["id", "slot_date", "slot_name", "start_time", "end_time"]
                         }
                     ]
-                }
+                },
+                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'] }
             ]
         });
 
@@ -379,15 +371,31 @@ exports.getOrderDetails = async (req, res) => {
             });
         }
 
-        // 🔥 FORMAT RESPONSE (Add full QR URL)
         const orderJSON = order.toJSON();
 
-        orderJSON.orderItems = orderJSON.orderItems.map(item => ({
-            ...item,
-            qr_image_url: item.qr_image
-                ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
-                : null
-        }));
+        // ---- FORMAT ORDER ITEMS ----
+        orderJSON.orderItems = orderJSON.orderItems.map(item => {
+            const newItem = {
+                ...item,
+                qr_image_url: item.qr_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
+                    : null
+            };
+            delete newItem.qr_data;
+            return newItem;
+        });
+
+
+        // ---- FORMAT EVENT OBJECT ----
+        if (orderJSON.event) {
+            const event = { ...orderJSON.event };
+            event.feat_image_url = event.feat_image
+                ? `${baseUrl.replace(/\/$/, "")}/uploads/events/${event.feat_image}`
+                : null;
+            delete event.feat_image; // remove old key
+            orderJSON.event = event;
+        }
+
 
         return res.json({
             success: true,
