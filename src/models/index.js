@@ -193,7 +193,10 @@ Event.hasMany(Wellness,{
   foreignKey: 'event_id',
   as: 'wellness',
 })
-
+Orders.belongsTo(Event, {
+  foreignKey: "event_id",
+  as: "event"
+});
 
 // =============================
 // ✅ Export all

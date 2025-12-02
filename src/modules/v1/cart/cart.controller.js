@@ -235,13 +235,12 @@ module.exports = {
     getAppointmentCart: async (req, res) => {
         try {
             const user_id = req.user.id;
-            const { event_id, item_type } = req.query;
+            const { event_id} = req.query;
+            const item_type = "appointment"
 
             let where = { user_id };
             if (event_id) where.event_id = event_id;
             if (item_type) where.ticket_type = item_type;
-            // console.log('where :', where);
-
             const cartList = await Cart.findAll({
                 where,
                 order: [["id", "DESC"]],
@@ -251,31 +250,7 @@ module.exports = {
                         as: 'appointments',
                         // attributes: ["id", "title", "price"]
                         include: [{ model: Wellness, as: 'wellnessList' }]
-                    },
-                    // {
-                    //     model: AddonTypes,
-                    //     attributes: ["id", "name"]
-                    // },
-                    // {
-                    //     model: Package,
-                    //     attributes: ["id", "name"]
-                    // },
-                    // {
-                    //     model: TicketPricing,
-                    //     attributes: ["id", "price", "ticket_type_id", "event_slot_id"],
-                    //     include: [
-                    //         {
-                    //             model: TicketType,
-                    //             as: 'ticket', // ✔ MATCHES association
-                    //             attributes: ['id', 'title', 'access_type', 'type', 'price']
-                    //         },
-                    //         {
-                    //             model: EventSlots,
-                    //             as: 'slot', // ✔ MATCHES association
-                    //             attributes: ['id', 'slot_name', 'slot_date', 'start_time', 'end_time']
-                    //         }
-                    //     ]
-                    // }
+                    }
                 ]
             });
 

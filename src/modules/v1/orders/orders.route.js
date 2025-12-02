@@ -46,4 +46,32 @@ router.get('/',
     ordersController.listOrders
 );
 
+
+// create appointment order.. new kamal
+router.post('/create-appointment',
+    authenticate,
+    [
+        body('event_id').notEmpty().withMessage('event_id is required'),
+        body('total_amount').notEmpty().withMessage('total_amount is required'),
+        body('payment_method').notEmpty().withMessage('payment_method is required').isIn(['Online', 'Cash']).withMessage('Invalid payment method'),
+        body('coupon_code')
+            .optional()
+            .isString()
+            .withMessage('coupon_code must be string'),
+    ],
+    validate,
+    ordersController.createAppointmentOrder
+);
+
+
+
+
+
+
+
+
+
+
+
+
 module.exports = router;
