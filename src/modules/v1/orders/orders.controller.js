@@ -318,7 +318,10 @@ exports.organizerOrderList = async (req, res) => {
         const organizerId = req.user.id;
         const { page = 1, limit = 20, eventId } = req.query;
 
-        // Step 1: Get all events created by this organizer
+        const pageNumber = parseInt(page);
+        const pageLimit = parseInt(limit);
+
+        // Get all events created by this organizer
         const events = await Event.findAll({
             where: { event_org_id: organizerId },
             attributes: ["id"]
@@ -327,10 +330,16 @@ exports.organizerOrderList = async (req, res) => {
         const organizerEventIds = events.map(e => e.id);
 
         if (!organizerEventIds.length) {
-            return apiResponse.success(res, "No events found for this organizer.", []);
+            return apiResponse.success(res, "No events found for this organizer.", {
+                totalRecords: 0,
+                totalPages: 0,
+                currentPage: 1,
+                limit: pageLimit,
+                records: []
+            });
         }
 
-        // Step 2: filter orders
+        // Filter orders
         let where = {
             event_id: { [Op.in]: organizerEventIds }
         };
@@ -338,11 +347,21 @@ exports.organizerOrderList = async (req, res) => {
         if (eventId) {
             const numericEventId = parseInt(eventId);
             if (!organizerEventIds.includes(numericEventId)) {
-                return apiResponse.success(res, "Invalid event for this organizer.", []);
+                return apiResponse.success(res, "Invalid event for this organizer.", {
+                    totalRecords: 0,
+                    totalPages: 0,
+                    currentPage: 1,
+                    limit: pageLimit,
+                    records: []
+                });
             }
             where.event_id = numericEventId;
         }
 
+        // 🔥 Count total rows (for pagination)
+        const totalRecords = await Orders.count({ where });
+
+        // Fetch paginated orders
         const orders = await Orders.findAll({
             where,
             include: [
@@ -351,18 +370,17 @@ exports.organizerOrderList = async (req, res) => {
                 { model: OrderItems, as: "orderItems" }
             ],
             order: [["createdAt", "DESC"]],
-            limit: parseInt(limit),
-            offset: (page - 1) * parseInt(limit)
+            limit: pageLimit,
+            offset: (pageNumber - 1) * pageLimit
         });
 
-        // Step 3: Format result
+        // Format data
         const formattedOrders = orders.map(order => {
             const data = order.toJSON();
 
-            // Add full QR URL + remove qr_data
+            // QR image handling
             data.orderItems = data.orderItems.map(item => {
                 let obj = { ...item };
-
                 obj.qr_image_url = item.qr_image
                     ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
                     : null;
@@ -371,7 +389,7 @@ exports.organizerOrderList = async (req, res) => {
                 return obj;
             });
 
-            // Replace event image URL
+            // Event image full URL
             if (data.event?.feat_image) {
                 data.event.feat_image =
                     `${baseUrl.replace(/\/$/, "")}/${eventImagePath}/${data.event.feat_image}`;
@@ -380,15 +398,26 @@ exports.organizerOrderList = async (req, res) => {
             return data;
         });
 
+        const totalPages = Math.ceil(totalRecords / pageLimit);
+
         return apiResponse.success(
             res,
             "Organizer orders fetched successfully",
-            formattedOrders
+            {
+                totalRecords,
+                totalPages,
+                currentPage: pageNumber,
+                limit: pageLimit,
+                records: formattedOrders
+            }
         );
 
     } catch (error) {
-        console.error("Organizer Order List Error:", error);
-        return res.status(500).json({ success: false, message: "Server Error" });
+        console.log("Order List Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong"
+        });
     }
 };
 
