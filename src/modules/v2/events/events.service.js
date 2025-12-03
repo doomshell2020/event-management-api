@@ -847,7 +847,7 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
             include: [
                 { model: Wellness, as: "wellness", include: [{ model: WellnessSlots, as: 'wellnessSlots' }] } // If needed
             ],
-            attributes: ['id', 'event_org_id', 'name', 'desp', 'location']
+            attributes: ['id', 'event_org_id', 'name', 'desp', 'location','feat_image']
         });
 
         if (!event) {
