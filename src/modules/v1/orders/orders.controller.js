@@ -218,11 +218,22 @@ exports.createOrder = async (req, res) => {
 exports.listOrders = async (req, res) => {
     try {
         const user_id = req.user.id;
+        const { event_id } = req.query;
+
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
         const qrPath = "uploads/qr_codes";
         const eventImagePath = "uploads/events";
+
+
+        // 🔥 Build WHERE condition dynamically
+        let whereCondition = { user_id };
+
+        if (event_id) {
+            whereCondition.event_id = event_id; // apply filter only if event_id exists
+        }
+
         const orders = await Orders.findAll({
-            where: { user_id },
+            where: whereCondition,
             order: [["id", "DESC"]],
             attributes: [
                 "id",
@@ -262,6 +273,7 @@ exports.listOrders = async (req, res) => {
                 }, { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'] },
             ]
         });
+
 
         // console.log('orders :', orders);
         // FORMAT RESPONSE
@@ -361,7 +373,7 @@ exports.getOrderDetails = async (req, res) => {
                         { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" } },
                     ]
                 },
-                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location','event_org_id'] }
+                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'] }
             ]
         });
 
