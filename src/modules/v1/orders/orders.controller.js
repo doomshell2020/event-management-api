@@ -6,6 +6,8 @@ const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
 const { generateUniqueOrderId } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
+const { Op } = require("sequelize");
+
 
 exports.createOrder = async (req, res) => {
     try {
@@ -307,6 +309,118 @@ exports.listOrders = async (req, res) => {
     }
 };
 
+exports.organizerOrderList = async (req, res) => {
+    try {
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const qrPath = "uploads/qr_codes";
+        const eventImagePath = "uploads/events";
+
+        const organizerId = req.user.id;
+        const { page = 1, limit = 20, eventId } = req.query;
+
+        const pageNumber = parseInt(page);
+        const pageLimit = parseInt(limit);
+
+        // Get all events created by this organizer
+        const events = await Event.findAll({
+            where: { event_org_id: organizerId },
+            attributes: ["id"]
+        });
+
+        const organizerEventIds = events.map(e => e.id);
+
+        if (!organizerEventIds.length) {
+            return apiResponse.success(res, "No events found for this organizer.", {
+                totalRecords: 0,
+                totalPages: 0,
+                currentPage: 1,
+                limit: pageLimit,
+                records: []
+            });
+        }
+
+        // Filter orders
+        let where = {
+            event_id: { [Op.in]: organizerEventIds }
+        };
+
+        if (eventId) {
+            const numericEventId = parseInt(eventId);
+            if (!organizerEventIds.includes(numericEventId)) {
+                return apiResponse.success(res, "Invalid event for this organizer.", {
+                    totalRecords: 0,
+                    totalPages: 0,
+                    currentPage: 1,
+                    limit: pageLimit,
+                    records: []
+                });
+            }
+            where.event_id = numericEventId;
+        }
+
+        // 🔥 Count total rows (for pagination)
+        const totalRecords = await Orders.count({ where });
+
+        // Fetch paginated orders
+        const orders = await Orders.findAll({
+            where,
+            include: [
+                { model: User, as: "user", attributes: ["id", "first_name", "last_name", "email"] },
+                { model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to"] },
+                { model: OrderItems, as: "orderItems" }
+            ],
+            order: [["createdAt", "DESC"]],
+            limit: pageLimit,
+            offset: (pageNumber - 1) * pageLimit
+        });
+
+        // Format data
+        const formattedOrders = orders.map(order => {
+            const data = order.toJSON();
+
+            // QR image handling
+            data.orderItems = data.orderItems.map(item => {
+                let obj = { ...item };
+                obj.qr_image_url = item.qr_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
+                    : null;
+
+                delete obj.qr_data;
+                return obj;
+            });
+
+            // Event image full URL
+            if (data.event?.feat_image) {
+                data.event.feat_image =
+                    `${baseUrl.replace(/\/$/, "")}/${eventImagePath}/${data.event.feat_image}`;
+            }
+
+            return data;
+        });
+
+        const totalPages = Math.ceil(totalRecords / pageLimit);
+
+        return apiResponse.success(
+            res,
+            "Organizer orders fetched successfully",
+            {
+                totalRecords,
+                totalPages,
+                currentPage: pageNumber,
+                limit: pageLimit,
+                records: formattedOrders
+            }
+        );
+
+    } catch (error) {
+        console.log("Order List Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong"
+        });
+    }
+};
+
 // 📌 Get Single Order Details
 exports.getOrderDetails = async (req, res) => {
     try {
@@ -428,9 +542,6 @@ exports.getOrderDetails = async (req, res) => {
         });
     }
 };
-
-
-
 
 // create appointment order.....
 exports.createAppointmentOrder = async (req, res) => {
