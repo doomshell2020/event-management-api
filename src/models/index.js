@@ -63,6 +63,16 @@ Orders.hasMany(OrderItems, {
   onDelete: "CASCADE"
 });
 
+Orders.belongsTo(Event, {
+  foreignKey: "event_id",
+  as: "event"
+});
+
+Orders.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "user"
+});
+
 // OrderItems ↔ Event
 OrderItems.belongsTo(Event, {
   foreignKey: "event_id",
@@ -193,10 +203,6 @@ Event.hasMany(Wellness,{
   foreignKey: 'event_id',
   as: 'wellness',
 })
-Orders.belongsTo(Event, {
-  foreignKey: "event_id",
-  as: "event"
-});
 
 // =============================
 // ✅ Export all
