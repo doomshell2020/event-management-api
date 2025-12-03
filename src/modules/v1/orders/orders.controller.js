@@ -270,9 +270,9 @@ exports.listOrders = async (req, res) => {
                         { model: EventSlots, as: "slot" },
                         { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" } },
                     ]
-                }, 
+                },
                 { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'] },
-                { model: User, as: "user", attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile',"gender"] },
+                { model: User, as: "user", attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile', "gender"] },
             ]
         });
 
@@ -344,7 +344,9 @@ exports.getOrderDetails = async (req, res) => {
                         "price",
                         "qr_image",
                         "qr_data",
-                        "secure_hash"
+                        "secure_hash",
+                        "cancel_status",
+                        "cancel_date"
                     ],
                     include: [
                         {
@@ -634,5 +636,62 @@ exports.createAppointmentOrder = async (req, res) => {
     } catch (error) {
         console.log(error);
         return apiResponse.error(res, "Error creating order", 500);
+    }
+};
+
+
+
+//..cancel appointment..kamal
+exports.cancelAppointment = async (req,res) => {
+    try {
+        const { id: orderId } = req.params;
+
+        if (!orderId) {
+            return res.json({
+                success: false,
+                message: "Order ID is required",
+                code: "ORDER_ID_MISSING"
+            });
+        }
+
+        // Find order by ID
+        const order = await OrderItems.findByPk(orderId);
+        
+        if (!order) {
+           return res.json({
+                success: false,
+                message: "Order not found",
+                code: "ORDER_NOT_FOUND"
+            });
+        }
+
+        // Already cancelled check
+        if (order.cancel_status == "cancel") {
+            return res.json({
+                success: false,
+                message: "This appointment is already cancelled",
+                code: "ALREADY_CANCELLED"
+            });
+        }
+
+        // Update cancel status & date
+        await order.update({
+            cancel_status: "cancel",
+            cancel_date: new Date()
+        });
+
+        return res.json({
+            success: true,
+            message: "Your appointment has been cancelled successfully",
+            // data: order
+        });
+
+    } catch (error) {
+        return res.json({
+            success: false,
+            message: "Something went wrong",
+            error: error.message,
+            code: "DB_ERROR"
+        });
     }
 };

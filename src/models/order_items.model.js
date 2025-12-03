@@ -62,7 +62,7 @@ const OrderItems = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: true
         },
-        
+
         appointment_id: {
             type: DataTypes.INTEGER,
             allowNull: true
@@ -92,6 +92,17 @@ const OrderItems = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true
         },
+
+        cancel_status: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+
+        cancel_date: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+
 
         status: {
             type: DataTypes.ENUM('Y', 'N'),

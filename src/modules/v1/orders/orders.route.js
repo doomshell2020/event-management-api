@@ -63,5 +63,17 @@ router.post('/create-appointment',
     ordersController.createAppointmentOrder
 );
 
+// ... appointment cancel
+router.put(
+    '/cancel-appointment/:id',
+    // authenticate,
+    // [
+    //     body('order_id')
+    //         .notEmpty().withMessage('Wellness ID is required')
+    //         .isInt().withMessage('Wellness ID must be a valid number'),
+    // ],
+    // validate,
+    ordersController.cancelAppointment
+);
 
 module.exports = router;
