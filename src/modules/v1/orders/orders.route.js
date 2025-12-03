@@ -46,6 +46,17 @@ router.get('/',
     ordersController.listOrders
 );
 
+// // LIST ALL ORDERS FOR EVENT ORGANIZER
+router.get('/organizer',
+    authenticate,
+    [
+        query('page').optional().isInt().withMessage('page must be number'),
+        query('limit').optional().isInt().withMessage('limit must be number'),
+    ],
+    validate,
+    ordersController.organizerOrderList
+);
+
 
 // create appointment order.. new kamal
 router.post('/create-appointment',

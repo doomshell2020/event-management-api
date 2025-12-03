@@ -6,6 +6,8 @@ const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
 const { generateUniqueOrderId } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
+const { Op } = require("sequelize");
+
 
 exports.createOrder = async (req, res) => {
     try {
@@ -270,9 +272,9 @@ exports.listOrders = async (req, res) => {
                         { model: EventSlots, as: "slot" },
                         { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" } },
                     ]
-                }, 
+                },
                 { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'] },
-                { model: User, as: "user", attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile',"gender"] },
+                { model: User, as: "user", attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile', "gender"] },
             ]
         });
 
@@ -304,6 +306,89 @@ exports.listOrders = async (req, res) => {
     } catch (error) {
         console.log(error);
         return apiResponse.error(res, "Error fetching orders", 500);
+    }
+};
+
+exports.organizerOrderList = async (req, res) => {
+    try {
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const qrPath = "uploads/qr_codes";
+        const eventImagePath = "uploads/events";
+
+        const organizerId = req.user.id;
+        const { page = 1, limit = 20, eventId } = req.query;
+
+        // Step 1: Get all events created by this organizer
+        const events = await Event.findAll({
+            where: { event_org_id: organizerId },
+            attributes: ["id"]
+        });
+
+        const organizerEventIds = events.map(e => e.id);
+
+        if (!organizerEventIds.length) {
+            return apiResponse.success(res, "No events found for this organizer.", []);
+        }
+
+        // Step 2: filter orders
+        let where = {
+            event_id: { [Op.in]: organizerEventIds }
+        };
+
+        if (eventId) {
+            const numericEventId = parseInt(eventId);
+            if (!organizerEventIds.includes(numericEventId)) {
+                return apiResponse.success(res, "Invalid event for this organizer.", []);
+            }
+            where.event_id = numericEventId;
+        }
+
+        const orders = await Orders.findAll({
+            where,
+            include: [
+                { model: User, as: "user", attributes: ["id", "first_name", "last_name", "email"] },
+                { model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to"] },
+                { model: OrderItems, as: "orderItems" }
+            ],
+            order: [["createdAt", "DESC"]],
+            limit: parseInt(limit),
+            offset: (page - 1) * parseInt(limit)
+        });
+
+        // Step 3: Format result
+        const formattedOrders = orders.map(order => {
+            const data = order.toJSON();
+
+            // Add full QR URL + remove qr_data
+            data.orderItems = data.orderItems.map(item => {
+                let obj = { ...item };
+
+                obj.qr_image_url = item.qr_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
+                    : null;
+
+                delete obj.qr_data;
+                return obj;
+            });
+
+            // Replace event image URL
+            if (data.event?.feat_image) {
+                data.event.feat_image =
+                    `${baseUrl.replace(/\/$/, "")}/${eventImagePath}/${data.event.feat_image}`;
+            }
+
+            return data;
+        });
+
+        return apiResponse.success(
+            res,
+            "Organizer orders fetched successfully",
+            formattedOrders
+        );
+
+    } catch (error) {
+        console.error("Organizer Order List Error:", error);
+        return res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
@@ -426,9 +511,6 @@ exports.getOrderDetails = async (req, res) => {
         });
     }
 };
-
-
-
 
 // create appointment order.....
 exports.createAppointmentOrder = async (req, res) => {
