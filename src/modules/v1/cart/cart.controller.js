@@ -1,6 +1,8 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots } = require('../../../models');
+const { convertUTCToLocal } = require('../../../common/utils/timezone');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company } = require('../../../models');
 const { Op } = require('sequelize');
+
 
 module.exports = {
     // ADD ITEM TO CART
@@ -173,6 +175,77 @@ module.exports = {
                 ]
             });
 
+            // -------------------------------------------------------
+            // ✅ 1) Decide which event ID we must fetch
+            // -------------------------------------------------------
+            let ev = null;
+
+            if (event_id) {
+                ev = event_id;                     // Use event id from query
+            } else if (cartList.length > 0) {
+                ev = cartList[0].event_id;         // Otherwise use event id from cart
+            }
+
+            // -------------------------------------------------------
+            // ✅ 2) Fetch event details ONLY when event id exists
+            // -------------------------------------------------------
+            let formattedEvent = null;
+
+            if (ev) {
+                const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+                const imagePath = "uploads/events";
+
+                const events = await Event.findOne({
+                    where: { id: ev },
+                    include: [
+                        { model: TicketType, as: "tickets" },
+                        { model: AddonTypes, as: "addons" },
+                        { model: Company, as: "companyInfo", attributes: ["name"] }
+                    ],
+                    attributes: [
+                        "id",
+                        "event_org_id",
+                        "name",
+                        "desp",
+                        "location",
+                        "feat_image",
+                        "date_from",
+                        "date_to",
+                        "sale_start",
+                        "sale_end",
+                        "event_timezone"
+                    ]
+                });
+
+                if (events) {
+                    const data = events.toJSON();
+                    const tz = data.event_timezone || "UTC";
+
+                    const formatDate = (date) =>
+                        date
+                            ? {
+                                utc: date,
+                                local: convertUTCToLocal(date, tz),
+                                timezone: tz
+                            }
+                            : null;
+
+                    formattedEvent = {
+                        ...data,
+                        feat_image: data.feat_image
+                            ? `${baseUrl}${imagePath}/${data.feat_image}`
+                            : `${baseUrl}${imagePath}/default.jpg`,
+                        date_from: formatDate(data.date_from),
+                        date_to: formatDate(data.date_to),
+                        sale_start: formatDate(data.sale_start),
+                        sale_end: formatDate(data.sale_end)
+                    };
+                }
+            }
+
+            // -------------------------------------------------------
+            // ✅ 3) Format Cart Items
+            // -------------------------------------------------------
             const formatted = cartList.map((item) => {
                 let displayName = "";
                 let ticketPrice = 0;
@@ -202,7 +275,6 @@ module.exports = {
                             item.TicketPricing?.slot?.slot_name ||
                             item.TicketPricing?.ticket?.title ||
                             "Ticket Price";
-
                         ticketPrice = item.TicketPricing?.price || 0;
                         uniqueId = item.TicketPricing?.id || null;
                         break;
@@ -219,11 +291,17 @@ module.exports = {
                     item_type: item.ticket_type,
                     display_name: displayName,
                     count: item.no_tickets,
-                    ticket_price: ticketPrice,
+                    ticket_price: ticketPrice
                 };
             });
 
-            return apiResponse.success(res, "Cart fetched", formatted);
+            // -------------------------------------------------------
+            // ✅ 4) FINAL response
+            // -------------------------------------------------------
+            return apiResponse.success(res, "Cart fetched", {
+                event: formattedEvent,   // may be null if no event id found
+                cart: formatted
+            });
 
         } catch (error) {
             console.log(error);
@@ -235,7 +313,7 @@ module.exports = {
     getAppointmentCart: async (req, res) => {
         try {
             const user_id = req.user.id;
-            const { event_id} = req.query;
+            const { event_id } = req.query;
             const item_type = "appointment"
 
             let where = { user_id };

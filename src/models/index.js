@@ -84,6 +84,11 @@ Event.hasMany(OrderItems, {
   as: "orderItems"
 });
 
+Event.belongsTo(Company, {
+  foreignKey: "company_id",
+  as: "companyInfo"
+});
+
 
 OrderItems.belongsTo(Orders, {
   foreignKey: "order_id",

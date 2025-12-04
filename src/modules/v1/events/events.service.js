@@ -111,6 +111,9 @@ module.exports.eventList = async (req, res) => {
         // ✅ Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
+            include: [
+                { model: Company, as: "companyInfo", attributes: ["name"] }
+            ],
             order: [["date_from", "DESC"]],
         });
 
@@ -176,7 +179,8 @@ module.exports.publicEventDetail = async (req, res) => {
             where: { id },
             include: [
                 { model: TicketType, as: "tickets" },
-                { model: AddonTypes, as: "addons" }
+                { model: AddonTypes, as: "addons" },
+                { model: Company, as: "companyInfo", attributes: ["name"] }
             ]
         });
 
@@ -300,6 +304,7 @@ module.exports.publicEventList = async (req, res) => {
             include: [
                 { model: TicketType, as: "tickets" },
                 { model: AddonTypes, as: "addons" },
+                { model: Company, as: "companyInfo", attributes: ["name"] }
             ],
             order: [["date_from", "DESC"]],
         });
