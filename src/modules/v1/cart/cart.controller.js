@@ -18,18 +18,46 @@ module.exports = {
                 item_type,
                 count
             } = req.body;
-            console.log("--------req.body", req.body)
+            // console.log("--------req.body", req.body)
+            // return false
             const user_id = req.user.id;
-            // --------------------------------------------------
             // 1️⃣ CHECK EVENT EXISTS
-            // --------------------------------------------------
             const eventExists = await Event.findByPk(event_id);
             if (!eventExists)
                 return apiResponse.error(res, "Event not found", 404);
 
-            // --------------------------------------------------
+
+            // 2️⃣ CHECK IF CART HAS ITEMS FROM ANOTHER EVENT
+            const eventsInCart = await Cart.findAll({
+                where: { user_id },
+                attributes: ['event_id'],
+                group: ['event_id']
+            });
+
+            // Array of event IDs already in cart
+            const uniqueEvents = eventsInCart.map(e => e.event_id);
+            // console.log('uniqueEvents :', uniqueEvents);
+
+            // 🟥 If cart contains items from multiple events → conflict
+            if (uniqueEvents.length > 1) {
+                return apiResponse.error(
+                    res,
+                    "Your cart contains items from multiple events. Please clear the cart before adding new items.",
+                    409
+                );
+            }
+
+            // 🟨 If cart contains exactly 1 event → it must match new event_id
+            if (uniqueEvents.length == 1 && !uniqueEvents.includes(event_id)) {
+                return apiResponse.error(
+                    res,
+                    "Your cart contains items from another event. Confirm to clear the old cart.",
+                    409,
+                    { cartEventId: uniqueEvents[0] }
+                );
+            }
+
             // 2️⃣ MAP MODEL BASED ON item_type
-            // --------------------------------------------------
             const modelMap = {
                 ticket: { id: ticket_id, model: TicketType },
                 addon: { id: addons_id, model: AddonTypes },
@@ -46,9 +74,7 @@ module.exports = {
             if (!selected)
                 return apiResponse.error(res, "Invalid item type", 400);
 
-            // --------------------------------------------------
             // ⭐ 3️⃣ ENSURE AT LEAST ONE ID EXISTS
-            // --------------------------------------------------
             const incomingId =
                 ticket_id ||
                 addons_id ||
@@ -60,10 +86,7 @@ module.exports = {
             if (!incomingId)
                 return apiResponse.error(res, "No valid item ID provided", 400);
 
-            // --------------------------------------------------
             // ⭐ 4️⃣ VALIDATE PROVIDED ID EXISTS IN DB
-            // (Only for valid item types)
-            // --------------------------------------------------
             if (selected.model) {
                 const itemExists = await selected.model.findByPk(selected.id);
 
@@ -76,9 +99,7 @@ module.exports = {
                 }
             }
 
-            // --------------------------------------------------
             // 3️⃣ Validate item exists (except special)
-            // --------------------------------------------------
             if (!["committesale", "opensale"].includes(item_type)) {
                 if (!selected.id)
                     return apiResponse.error(res, `${item_type}_id is required`, 400);
@@ -87,9 +108,7 @@ module.exports = {
                 if (!itemExists)
                     return apiResponse.error(res, `${item_type} not found`, 404);
             }
-            // --------------------------------------------------
             // 4️⃣ CHECK IF SAME ITEM ALREADY IN CART
-            // --------------------------------------------------
             const existing = await Cart.findOne({
                 where: {
                     user_id,
@@ -109,9 +128,7 @@ module.exports = {
                 return apiResponse.success(res, "Item quantity updated", existing);
             }
 
-            // --------------------------------------------------
             // 5️⃣ CREATE NEW CART ENTRY
-            // --------------------------------------------------
             const createData = {
                 user_id,
                 event_id,
@@ -370,12 +387,37 @@ module.exports = {
     increaseItem: async (req, res) => {
         try {
             const { cart_id } = req.params;
+            const user_id = req.user.id;
 
             const item = await Cart.findByPk(cart_id);
-
             if (!item)
                 return apiResponse.error(res, "Cart item not found", 404);
 
+            // ==========================Cart Clear===========================
+            const eventsInCart = await Cart.findAll({
+                where: { user_id },
+                attributes: ['event_id'],
+                group: ['event_id']
+            });
+            const uniqueEvents = eventsInCart.map(e => e.event_id);
+            if (uniqueEvents.length > 1) {
+                return apiResponse.error(
+                    res,
+                    "Your cart contains items from multiple events. Please clear the cart before adding new items.",
+                    409
+                );
+            }
+            if (uniqueEvents.length == 1 && uniqueEvents[0] != item.event_id) {
+                return apiResponse.error(
+                    res,
+                    "Your cart contains items from another event. Confirm to clear the old cart.",
+                    409,
+                    { cartEventId: uniqueEvents[0] }
+                );
+            }
+            // =====================================================
+
+            // NO CONFLICT → increase quantity
             item.no_tickets += 1;
             await item.save();
 
@@ -386,26 +428,58 @@ module.exports = {
         }
     },
 
+
     // DECREASE ITEM COUNT
     decreaseItem: async (req, res) => {
         try {
             const { cart_id } = req.params;
+            const user_id = req.user.id;
 
             const item = await Cart.findByPk(cart_id);
 
             if (!item)
                 return apiResponse.error(res, "Cart item not found", 404);
 
+            // =====================================================
+            // CHECK EVENT CONFLICT
+            const eventsInCart = await Cart.findAll({
+                where: { user_id },
+                attributes: ['event_id'],
+                group: ['event_id']
+            });
+
+            const uniqueEvents = eventsInCart.map(e => e.event_id);
+
+            // 1️⃣ MULTIPLE EVENTS FOUND
+            if (uniqueEvents.length > 1) {
+                return apiResponse.error(
+                    res,
+                    "Your cart contains items from multiple events. Please clear the cart before modifying items.",
+                    409
+                );
+            }
+
+            // 2️⃣ ONE EVENT — CHECK MATCH
+            if (uniqueEvents.length == 1 && uniqueEvents[0] != item.event_id) {
+                return apiResponse.error(
+                    res,
+                    "Your cart contains items from another event. Confirm to clear the old cart.",
+                    409,
+                    { cartEventId: uniqueEvents[0] }
+                );
+            }
+            // =====================================================
+
+            // DECREASE LOGIC
             item.no_tickets -= 1;
 
-            // Auto remove if hits zero
+            // Auto-remove if reach zero
             if (item.no_tickets <= 0) {
                 await item.destroy();
                 return apiResponse.success(res, "Item removed from cart", null);
             }
 
             await item.save();
-
             return apiResponse.success(res, "Item quantity decreased", item);
 
         } catch (error) {

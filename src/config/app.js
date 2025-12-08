@@ -9,6 +9,8 @@ const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   tokenExpiresIn: process.env.TOKEN_EXPIRES_IN || '1h',
 
+  perPageDataLimit: process.env.PER_PAGE_DATA_LIMIT,
+
   // Database
   db: {
     host: process.env.DB_HOST || 'localhost',

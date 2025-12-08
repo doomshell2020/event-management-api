@@ -57,6 +57,17 @@ router.get('/organizer',
     ordersController.organizerOrderList
 );
 
+router.get('/organizer/ticket-exports',
+    authenticate,
+    [
+        query('eventId').notEmpty().withMessage('eventId is required'),
+        query('page').optional().isInt().withMessage('page must be number'),
+        query('limit').optional().isInt().withMessage('limit must be number'),
+    ],
+    validate,
+    ordersController.organizerTicketExports
+);
+
 
 // create appointment order.. new kamal
 router.post('/create-appointment',
