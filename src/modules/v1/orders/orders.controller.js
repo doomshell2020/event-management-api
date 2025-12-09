@@ -1,7 +1,8 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User } = require('../../../models');
+const { Cart, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User,Company } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
+const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
 const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
 const { generateUniqueOrderId } = require('../../../common/utils/helpers');
@@ -286,7 +287,6 @@ exports.listOrders = async (req, res) => {
 
             orderData.orderItems = orderData.orderItems.map(item => ({
                 ...item,
-
                 // RETURN FULL QR URL
                 qr_image_url: item.qr_image
                     ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
@@ -491,7 +491,7 @@ exports.getOrderDetails = async (req, res) => {
                         { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" } },
                     ]
                 },
-                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'] }
+                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'] ,include:{model:Company , as:"companyInfo" , attributes:['name']}}
             ]
         });
 
@@ -630,33 +630,18 @@ exports.createAppointmentOrder = async (req, res) => {
                     // attributes: ["id", "title", "price"]
                     include: [{ model: Wellness, as: 'wellnessList' }]
                 }
-                // { model: TicketType, attributes: ["id", "title", "price"] },
-                // { model: AddonTypes, attributes: ["id", "name"] },
-                // { model: Package, attributes: ["id", "name"] },
-                // {
-                //     model: TicketPricing,
-                //     attributes: ["id", "price", "ticket_type_id", "event_slot_id"],
-                //     include: [
-                //         { model: TicketType, as: 'ticket', attributes: ['id', 'title', 'access_type', 'type', 'price'] },
-                //         { model: EventSlots, as: 'slot', attributes: ['id', 'slot_name', 'slot_date', 'start_time', 'end_time'] }
-                //     ]
-                // }
             ]
         });
 
         if (!cartList.length) {
             return apiResponse.error(res, "Your cart is empty!", 400);
         }
-
         // CALCULATE TOTAL
-
         let totalAmount = 0;
-
         cartList.forEach(item => {
             if (item.ticket_type == 'appointment')
                 totalAmount += Number(item.appointments.price || 0);
         });
-
         // CREATE ORDER
         const order_uid = generateUniqueOrderId();
         const order = await Orders.create({
@@ -672,17 +657,11 @@ exports.createAppointmentOrder = async (req, res) => {
 
         let qrResults = [];
         let attachments = [];
-
         // CREATE ORDER ITEMS + QR
         for (const item of cartList) {
             let price = 0;
-
             if (item.ticket_type == 'appointment')
                 price = item.appointments.price || 0;
-
-            // if (item.ticket_type == "ticket_price")
-            //     price = item.TicketPricing?.price || 0;
-
             // CREATE ORDER ITEM
             const orderItem = await OrderItems.create({
                 order_id: order.id,
@@ -727,15 +706,15 @@ exports.createAppointmentOrder = async (req, res) => {
         try {
             await sendEmail(
                 user.email,
-                `Your Ticket Order – ${event.name}`,
-                orderConfirmationTemplateWithQR(user, order, cartList, qrResults, formattedEvent),
+                `Your Appointment Order – ${event.name}`,
+                appointmentConfirmationTemplateWithQR(user, order, cartList, qrResults, formattedEvent),
                 attachments
             );
         } catch (emailError) {
             console.log("Email sending failed:", emailError);
         }
 
-        return apiResponse.success(res, "Order created successfully", {
+        return apiResponse.success(res, "Appointment Order created successfully", {
             order_uid,
             order_id: order.id,
             event: formattedEvent,
