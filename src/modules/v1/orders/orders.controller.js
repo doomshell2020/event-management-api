@@ -8,7 +8,7 @@ const path = require("path");
 const { generateUniqueOrderId } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { Op } = require("sequelize");
-
+const config = require('../../../config/app');
 
 exports.createOrder = async (req, res) => {
     try {
@@ -316,7 +316,7 @@ exports.organizerOrderList = async (req, res) => {
         const eventImagePath = "uploads/events";
 
         const organizerId = req.user.id;
-        const { page = 1, limit = 20, eventId } = req.query;
+        const { page = 1, limit = config.perPageDataLimit, eventId } = req.query;
 
         const pageNumber = parseInt(page);
         const pageLimit = parseInt(limit);
@@ -414,6 +414,123 @@ exports.organizerOrderList = async (req, res) => {
 
     } catch (error) {
         console.log("Order List Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong"
+        });
+    }
+};
+
+exports.organizerTicketExports = async (req, res) => {
+    try {
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+
+        const qrPath = "uploads/qr_codes";
+        const eventImagePath = "uploads/events";
+
+        const organizerId = req.user.id;
+        const { page = 1, limit = config.perPageDataLimit, eventId } = req.query;
+
+        const pageNumber = parseInt(page);
+        const pageLimit = parseInt(limit);
+
+        if (!eventId) {
+            return apiResponse.success(res, "Event ID is required", {
+                qr_base_path: `${baseUrl}/${qrPath}/`,
+                event_image_base_path: `${baseUrl}/${eventImagePath}/`,
+                totalRecords: 0,
+                totalPages: 0,
+                currentPage: 1,
+                limit: pageLimit,
+                records: []
+            });
+        }
+
+        const event = await Event.findOne({
+            where: { event_org_id: organizerId, id: eventId },
+            attributes: ["id"]
+        });
+
+        if (!event) {
+            return apiResponse.success(res, "No event found for this organizer.", {
+                qr_base_path: `${baseUrl}/${qrPath}/`,
+                event_image_base_path: `${baseUrl}/${eventImagePath}/`,
+                totalRecords: 0,
+                totalPages: 0,
+                currentPage: 1,
+                limit: pageLimit,
+                records: []
+            });
+        }
+
+        const where = { event_id: parseInt(eventId) };
+
+        const totalRecords = await OrderItems.count({ where });
+
+        const items = await OrderItems.findAll({
+            where,
+            attributes: { exclude: ["qr_data"] },
+            include: [
+                {
+                    model: Orders,
+                    as: "order",
+                    attributes: ["order_uid", "total_amount"],
+                    include: [
+                        { model: User, as: "user", attributes: ["id", "first_name", "last_name", "email"] }
+                    ]
+                },
+                {
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["title", "price"],
+                },
+                {
+                    model: AddonTypes,
+                    as: "addonType",
+                    attributes: ["name", "price"],
+                },
+                {
+                    model: EventSlots,
+                    as: "slot",
+                    attributes: ["slot_name", "start_time", "end_time"],
+                },
+                {
+                    model: WellnessSlots,
+                    as: "appointment",
+                    attributes: ["slot_location"],
+                    include: [
+                        { model: Wellness, as: "wellnessList", attributes: ["name"] }
+                    ]
+                },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ["name", "feat_image", "date_from", "date_to"]
+                }
+            ],
+            order: [["createdAt", "DESC"]],
+            limit: pageLimit,
+            offset: (pageNumber - 1) * pageLimit
+        });
+
+        const totalPages = Math.ceil(totalRecords / pageLimit);
+
+        return apiResponse.success(
+            res,
+            "Organizer event items fetched successfully",
+            {
+                qr_base_path: `${baseUrl}${qrPath}/`,
+                event_image_base_path: `${baseUrl}${eventImagePath}/`,
+                totalRecords,
+                totalPages,
+                currentPage: pageNumber,
+                limit: pageLimit,
+                records: items
+            }
+        );
+
+    } catch (error) {
+        console.log("Order Items Error:", error);
         return res.status(500).json({
             success: false,
             message: "Something went wrong"
@@ -729,10 +846,8 @@ exports.createAppointmentOrder = async (req, res) => {
     }
 };
 
-
-
 //..cancel appointment..kamal
-exports.cancelAppointment = async (req,res) => {
+exports.cancelAppointment = async (req, res) => {
     try {
         const { id: orderId } = req.params;
 
@@ -746,9 +861,9 @@ exports.cancelAppointment = async (req,res) => {
 
         // Find order by ID
         const order = await OrderItems.findByPk(orderId);
-        
+
         if (!order) {
-           return res.json({
+            return res.json({
                 success: false,
                 message: "Order not found",
                 code: "ORDER_NOT_FOUND"
