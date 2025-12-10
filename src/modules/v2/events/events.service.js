@@ -834,11 +834,11 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
         const { event_id } = req.params;
 
         if (!event_id) {
-            return res.status(400).json({
+            return {
                 success: false,
                 code: "VALIDATION_FAILED",
                 message: "Event ID is required"
-            });
+            };
         }
 
         // Step 1️⃣: Fetch event with ticket types
@@ -847,15 +847,15 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
             include: [
                 { model: Wellness, as: "wellness", include: [{ model: WellnessSlots, as: 'wellnessSlots' }] } // If needed
             ],
-            attributes: ['id', 'event_org_id', 'name', 'desp', 'location','feat_image']
+            attributes: ['id', 'event_org_id', 'name', 'desp', 'location', 'feat_image']
         });
 
         if (!event) {
-            return res.status(404).json({
+            return {
                 success: false,
                 code: "EVENT_NOT_FOUND",
                 message: "Event not found"
-            });
+            };
         }
 
         // Step 2️⃣: Format event image path
@@ -880,26 +880,20 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
                     : `${baseUrl.replace(/\/$/, "")}/uploads/wellness/default.jpg`
             }));
         }
-
-
-
-
-
-
         // Step 3️⃣: Final Response
-        return res.status(200).json({
+        return {
             success: true,
             message: "Event & appointment slot details fetched successfully",
             data: formattedEvent
-        });
+        };
 
     } catch (error) {
         console.error("❌ Error fetching event details:", error.message);
-        return res.status(500).json({
+        return {
             success: false,
             code: "DB_ERROR",
             message: "Internal server error: " + error.message
-        });
+        };
     }
 };
 

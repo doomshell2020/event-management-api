@@ -420,6 +420,10 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
             switch (result.code) {
                 case 'VALIDATION_FAILED':
                     return apiResponse.validation(res, [], result.message);
+                case 'EVENT_NOT_FOUND':
+                    return apiResponse.validation(res, [], result.message);
+                case 'DB_ERROR':
+                    return apiResponse.validation(res, [], result.message);
                 default:
                     return apiResponse.error(res, result.message);
             }
