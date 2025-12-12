@@ -21,6 +21,7 @@ const config = {
 
   // Stripe (if you use payments)
   stripeKey: process.env.STRIPE_SECRET_KEY || '',
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
 
   // CORS
   corsOptions: {
