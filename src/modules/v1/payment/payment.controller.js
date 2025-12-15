@@ -34,7 +34,7 @@ exports.createPaymentIntent = async (req, res) => {
       }))
     );
     
-    console.log('snapshotRows :', snapshotRows);
+    // console.log('snapshotRows :', snapshotRows);
     // Collect snapshot IDs for Stripe metadata
     const snapshotIds = snapshotRows.map(r => r.id).join(',');
     // return snapshotIds;
