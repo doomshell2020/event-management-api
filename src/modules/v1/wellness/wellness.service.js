@@ -1,5 +1,5 @@
 
-const { Wellness, Event, WellnessSlots } = require('../../../models/index');
+const { Wellness, Event, WellnessSlots,Currency } = require('../../../models/index');
 
 const { Op } = require('sequelize');
 const path = require('path');
@@ -543,7 +543,8 @@ module.exports.createWellnessWithSlots = async (req) => {
             name,
             currency,
             location,
-            description
+            description,
+            tax_applied
         } = req.body;
         const slots = req.body.slots ? JSON.parse(req.body.slots) : [];
         const ticketImage = req.file?.filename;
@@ -587,7 +588,8 @@ module.exports.createWellnessWithSlots = async (req) => {
             Image: ticketImage || null,
             description: description || "",
             location,
-            currency
+            currency,
+            tax_applied
         });
 
         // ✅ Add slots if exists
@@ -631,7 +633,8 @@ module.exports.updateWellnessWithSlots = async (req) => {
             name,
             currency,
             location,
-            description
+            description,
+            tax_applied
         } = req.body;
 
         let { event_id, slots } = req.body;
@@ -710,6 +713,7 @@ module.exports.updateWellnessWithSlots = async (req) => {
             currency,
             location,
             description,
+            tax_applied,
             Image: updatedImage
         });
 

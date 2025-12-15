@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User,Company } = require('../../../models');
+const { Cart, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User,Company ,Currency} = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
@@ -227,7 +227,6 @@ exports.listOrders = async (req, res) => {
         const qrPath = "uploads/qr_codes";
         const eventImagePath = "uploads/events";
 
-
         // 🔥 Build WHERE condition dynamically
         let whereCondition = { user_id };
 
@@ -271,7 +270,12 @@ exports.listOrders = async (req, res) => {
                         { model: Package, as: "package" },
                         { model: TicketPricing, as: "ticketPricing" },
                         { model: EventSlots, as: "slot" },
-                        { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" } },
+                        { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList",
+                            include: {
+                            model: Currency,
+                            as: 'currencyName',
+                            attributes: ['Currency_symbol', 'Currency']
+                        } } },
                     ]
                 },
                 { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'] },
@@ -605,7 +609,12 @@ exports.getOrderDetails = async (req, res) => {
                             as: "slot",
                             attributes: ["id", "slot_date", "slot_name", "start_time", "end_time"]
                         },
-                        { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" } },
+                        { model: WellnessSlots, as: "appointment", include: { model: Wellness, as: "wellnessList" ,
+                            include: {
+                            model: Currency,
+                            as: 'currencyName',
+                            attributes: ['Currency_symbol', 'Currency']
+                        }  } },
                     ]
                 },
                 { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'] ,include:{model:Company , as:"companyInfo" , attributes:['name']}}

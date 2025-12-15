@@ -33,7 +33,7 @@ const Wellness = sequelize.define(
             type: DataTypes.TEXT,
             allowNull: true
         },
-         currency: {
+        currency: {
             type: DataTypes.STRING,
             allowNull: true
         },
@@ -41,9 +41,13 @@ const Wellness = sequelize.define(
             type: DataTypes.ENUM('Y', 'N'),
             defaultValue: 'Y'
         },
-         hidden: {
+        hidden: {
             type: DataTypes.ENUM('Y', 'N'),
             defaultValue: 'N'
+        },
+        tax_applied: {
+            type: DataTypes.ENUM('Y', 'N'),
+            defaultValue: 'Y'
         },
         createdAt: {
             type: DataTypes.DATE,

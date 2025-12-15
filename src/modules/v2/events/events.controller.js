@@ -411,7 +411,7 @@ module.exports.deleteEvent = async (req, res) => {
 
 
 
-// new api.. get event details and appointments slots  function..
+//new api.. get event details and appointments slots  function..
 module.exports.getEventAppointmentsDetails = async (req, res) => {
     try {
         const result = await eventService.getEventAppointmentsDetails(req, res);
@@ -419,6 +419,10 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
         if (!result.success) {
             switch (result.code) {
                 case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                case 'EVENT_NOT_FOUND':
+                    return apiResponse.validation(res, [], result.message);
+                case 'DB_ERROR':
                     return apiResponse.validation(res, [], result.message);
                 default:
                     return apiResponse.error(res, result.message);
@@ -428,7 +432,37 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
         return apiResponse.success(
             res,
             result.message || 'Event & Appointment details fetched successfully',
-            { event: result.data } // singular for single event
+            result.data // singular for single event
+        );
+
+    } catch (error) {
+        console.log('Error in getEvent Appointment Details controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
+
+//controller...  new api.. get event details and appointments slots  function..
+module.exports.getSelectedWellnessSlots = async (req, res) => {
+    try {
+        const result = await eventService.getSelectedWellnessSlots(req, res);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                case 'EVENT_NOT_FOUND':
+                    return apiResponse.validation(res, [], result.message);
+                case 'DB_ERROR':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event & Appointment details fetched successfully',
+            result.data // singular for single event
         );
 
     } catch (error) {

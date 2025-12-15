@@ -1,6 +1,6 @@
 const apiResponse = require('../../../common/utils/apiResponse');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company } = require('../../../models');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company,Currency } = require('../../../models');
 const { Op } = require('sequelize');
 
 
@@ -344,7 +344,12 @@ module.exports = {
                         model: WellnessSlots,
                         as: 'appointments',
                         // attributes: ["id", "title", "price"]
-                        include: [{ model: Wellness, as: 'wellnessList' }]
+                        include: [{ model: Wellness, as: 'wellnessList',
+                            include: {
+                            model: Currency,
+                            as: 'currencyName',
+                            attributes: ['Currency_symbol', 'Currency']
+                        } }]
                     }
                 ]
             });
@@ -355,10 +360,14 @@ module.exports = {
             // ---------------------------------------------
             const formatted = cartList.map((item) => {
                 let displayName = "";
+                let currencySymbol = '';
+                let currencyName = '';
                 // console.log("item.ticket_type",item.appointments?.price)
                 switch (item.ticket_type) {
                     case "appointment":
                         displayName = item.appointments?.wellnessList?.name || "";
+                        currencySymbol = item.appointments?.wellnessList?.currencyName?.Currency_symbol || "";
+                        currencyName = item.appointments?.wellnessList?.currencyName?.Currency || "";
                         break;
                     default:
                         displayName = "Unknown Item";
@@ -370,6 +379,8 @@ module.exports = {
                     item_type: item.ticket_type,
                     display_name: displayName,
                     count: item.no_tickets,
+                    currency_symbol: currencySymbol,
+                    currencyName: currencyName,
                     ticket_price: item.appointments?.price || null,
                     raw: item
                 };
