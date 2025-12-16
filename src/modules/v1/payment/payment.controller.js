@@ -80,7 +80,8 @@ exports.stripeWebhook = async (req, res) => {
       signature,
       config.stripeWebhookSecret
     );
-
+    
+    console.log('rupam singh event >>>>>>>>>>>>>>>>>>>>>:', event);
     // ✅ NOW event exists
     console.log("✅ STRIPE EVENT TYPE:", event.type);
 

@@ -42,6 +42,12 @@ const ticketsRoutesV2 = require('./modules/v2/tickets/tickets.routes');
 // Initialize Express
 const app = express();
 
+// ---------------- STRIPE WEBHOOK (RAW BODY FIRST) ----------------
+app.use(
+  "/api/v1/payment/webhook",
+  bodyParser.raw({ type: "application/json" })
+);
+
 // Middleware
 app.use(cors(config.corsOptions));
 app.use(bodyParser.json());

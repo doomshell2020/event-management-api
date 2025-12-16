@@ -20,8 +20,8 @@ router.post(
 // ------------------- STRIPE WEBHOOK -------------------
 router.post(
     "/webhook",
-    express.raw({ type: "application/json" }), 
     paymentController.stripeWebhook
 );
+
 
 module.exports = router;
