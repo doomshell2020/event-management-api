@@ -1,4 +1,4 @@
-const orderConfirmationTemplateWithQR = (user, order, items, qrResults, event) => {
+const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
     return `
     <div style="font-family: 'Arial', sans-serif; background:#f4f4f7; padding:40px 0;">
       <div style="max-width:600px; margin:0 auto; background:#fff; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1); overflow:hidden;">
@@ -6,7 +6,7 @@ const orderConfirmationTemplateWithQR = (user, order, items, qrResults, event) =
         <!-- HEADER -->
         <div style="background:#1a73e8; color:#fff; text-align:center; padding:30px;">
           <h1 style="margin:0; font-size:28px;">Order Confirmed 🎉</h1>
-          <p style="margin:5px 0 0; font-size:16px;">Thank you for your purchase, ${user.firstName}!</p>
+          <p style="margin:5px 0 0; font-size:16px;">Thank you for your purchase, ${user.first_name}!</p>
         </div>
 
         <!-- EVENT INFO -->
