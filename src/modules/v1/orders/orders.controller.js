@@ -848,6 +848,10 @@ exports.getOrderDetails = async (req, res) => {
                 "event_id",
                 "package_id",
                 "grand_total",
+                "sub_total",
+                "tax_total",
+                "discount_amount",
+                "coupon_code",
                 "status",
                 "createdAt"
             ],
