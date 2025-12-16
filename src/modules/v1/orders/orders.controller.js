@@ -27,6 +27,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
     });
 
     if (existingOrder) {
+        console.log("⚠️ Order already exists for this payment intent. Skipping creation.");
         return { order: existingOrder, duplicated: true };
     }
 
@@ -100,6 +101,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
     // CLEANUP
     // ----------------------------
     await Cart.destroy({ where: { user_id, event_id } });
+    console.log("⚠️ Order already exists for this payment intent. Skipping creation.",qrResults.length);
 
     return {
         order,

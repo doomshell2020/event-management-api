@@ -104,7 +104,6 @@ exports.stripeWebhook = async (req, res) => {
   }
 
   try {
-    // ---------------------------------------------------------
     // PAYMENT SUCCESS
     // ---------------------------------------------------------
     if (event.type == "payment_intent.succeeded") {
@@ -135,7 +134,7 @@ exports.stripeWebhook = async (req, res) => {
         payment_status: "paid",
       });
 
-      await fulfilOrderFromSnapshot({
+      const order = await fulfilOrderFromSnapshot({
         meta_data : pi.metadata,
         user_id: pi.metadata.user_id,
         event_id: pi.metadata.event_id,
@@ -143,11 +142,12 @@ exports.stripeWebhook = async (req, res) => {
         snapshotItems,
         payment_method: "stripe",
       });
-
+      console.log('>>>>>>>>>>>>>>order',order);
+      
+      
       console.log("✅ Payment → Order → QR completed");
     }
 
-    // ---------------------------------------------------------
     // PAYMENT FAILED
     // ---------------------------------------------------------
     if (event.type == "payment_intent.payment_failed") {
