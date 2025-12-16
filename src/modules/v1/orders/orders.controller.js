@@ -10,6 +10,24 @@ const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { Op } = require("sequelize");
 const config = require('../../../config/app');
 
+// Convert to user-friendly readable format
+const formatDateReadable = (dateStr, timezone) => {
+    if (!dateStr) return "";
+
+    const date = new Date(dateStr);
+
+    return date.toLocaleString("en-US", {
+        timeZone: timezone,
+        weekday: "long",
+        month: "long",
+        day: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+    });
+};
+
 module.exports.fulfilOrderFromSnapshot = async ({
     meta_data,
     user_id,
@@ -31,6 +49,13 @@ module.exports.fulfilOrderFromSnapshot = async ({
         return { order: existingOrder, duplicated: true };
     }
 
+    const userInfo = await User.findOne({
+        where: { id: user_id },
+        raw: true,
+        attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile']
+    });
+
+
     // FETCH EVENT
     // ----------------------------
     const event = await Event.findOne({
@@ -40,7 +65,25 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
     if (!event) throw new Error("Event not found");
 
+    const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+    const imagePath = "uploads/events";
+    const timezone = event.event_timezone || "UTC";
+    const formattedEvent = {
+        id: event.id,
+        name: event.name,
+        location: event.location,
+        feat_image: event.feat_image
+            ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${event.feat_image}`
+            : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
 
+        // Correct readable dates
+        date_from: formatDateReadable(event.date_from, timezone),
+        date_to: formatDateReadable(event.date_to, timezone),
+
+        // Keep timezone for email
+        timezone
+    };
+    // console.log('formattedEvent :', formattedEvent);
 
     // CREATE ORDER
     // ----------------------------
@@ -60,13 +103,14 @@ module.exports.fulfilOrderFromSnapshot = async ({
         created: new Date(),
     });
 
-    // ----------------------------
     // CREATE ORDER ITEMS + QR
     // ----------------------------
     const qrResults = [];
+    const attachments = [];
 
     for (const item of snapshotItems) {
         for (let i = 0; i < item.quantity; i++) {
+            // console.log('Creating order item for snapshot item:', item);
             const orderItem = await OrderItems.create({
                 order_id: order.id,
                 user_id,
@@ -93,15 +137,35 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 qrResults.push({
                     order_item_id: orderItem.id,
                     qr_image: qr.qrImageName,
+                    qr_data: qr.qrData
                 });
+
+                attachments.push({
+                    filename: qr.qrImageName,
+                    path: path.join(__dirname, "../../../uploads/qr_codes/", qr.qrImageName)
+                });
+
             }
         }
     }
+
 
     // CLEANUP
     // ----------------------------
     await Cart.destroy({ where: { user_id, event_id } });
     console.log("⚠️ Order already exists for this payment intent. Skipping creation.", qrResults.length);
+
+    // SEND EMAIL
+    try {
+        await sendEmail(
+            userInfo.email,
+            `Your Ticket Order – ${event.name}`,
+            orderConfirmationTemplateWithQR(userInfo, order, qrResults, formattedEvent),
+            attachments
+        );
+    } catch (emailError) {
+        console.log("Email sending failed:", emailError);
+    }
 
     return {
         order,
@@ -143,25 +207,6 @@ exports.createOrder = async (req, res) => {
             return apiResponse.error(res, "Event not found", 404);
 
         const timezone = event.event_timezone || "UTC";
-
-        // Convert to user-friendly readable format
-        const formatDateReadable = (dateStr, timezone) => {
-            if (!dateStr) return "";
-
-            const date = new Date(dateStr);
-
-            return date.toLocaleString("en-US", {
-                timeZone: timezone,
-                weekday: "long",
-                month: "long",
-                day: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true
-            });
-        };
-
         // Prepare formatted event for email
         const formattedEvent = {
             id: event.id,
@@ -295,7 +340,7 @@ exports.createOrder = async (req, res) => {
             await sendEmail(
                 user.email,
                 `Your Ticket Order – ${event.name}`,
-                orderConfirmationTemplateWithQR(user, order, cartList, qrResults, formattedEvent),
+                orderConfirmationTemplateWithQR(user, order, qrResults, formattedEvent),
                 attachments
             );
         } catch (emailError) {

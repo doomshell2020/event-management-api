@@ -142,6 +142,8 @@ exports.stripeWebhook = async (req, res) => {
         snapshotItems,
         payment_method: "stripe",
       });
+      // console.log('>>>>>>>>>>>>>>order',order);      
+      
       console.log("✅ Payment → Order → QR completed");
     }
 
