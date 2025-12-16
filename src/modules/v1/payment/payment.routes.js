@@ -10,7 +10,7 @@ router.post(
     [
         body("user_id").notEmpty().withMessage("User ID required"),
         body("event_id").notEmpty().withMessage("Event ID required"),
-        body("amount").notEmpty().withMessage("Amount required"),
+        body("total_amount").notEmpty().withMessage("Amount required"),
         body("currency").notEmpty().withMessage("Currency required"),
     ],
     validate,

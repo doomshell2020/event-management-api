@@ -22,8 +22,8 @@ const Cart = require('./cart.model');
 const Orders = require('./orders.modal');
 const OrderItems = require('./order_items.model');
 const Currency = require('./currency.model');
-
-
+const Payment = require('./payment.model');
+const PaymentSnapshotItems = require('./payment_snapshot_items');
 
 // 🔹 One Question → Many QuestionItems
 Questions.hasMany(QuestionItems, {
@@ -200,7 +200,6 @@ Wellness.belongsTo(Currency, {
   foreignKey: 'currency',
   as: 'currencyName',
 });
-
 Cart.belongsTo(WellnessSlots, {
   foreignKey: 'appointment_id',
   as: 'appointments',
@@ -221,5 +220,5 @@ Event.hasMany(Wellness, {
 module.exports = {
   sequelize,
   Questions, QuestionItems, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
-  User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots
+  User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,Currency,Payment,PaymentSnapshotItems
 };
