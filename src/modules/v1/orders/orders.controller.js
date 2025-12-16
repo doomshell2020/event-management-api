@@ -106,6 +106,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
     // CREATE ORDER ITEMS + QR
     // ----------------------------
     const qrResults = [];
+    const attachments = [];
 
     for (const item of snapshotItems) {
         for (let i = 0; i < item.quantity; i++) {
@@ -138,6 +139,12 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     qr_image: qr.qrImageName,
                     qr_data: qr.qrData
                 });
+
+                attachments.push({
+                    filename: qr.qrImageName,
+                    path: path.join(__dirname, "../../../uploads/qr_codes/", qr.qrImageName)
+                });
+
             }
         }
     }
