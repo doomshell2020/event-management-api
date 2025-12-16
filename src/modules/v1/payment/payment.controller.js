@@ -142,9 +142,6 @@ exports.stripeWebhook = async (req, res) => {
         snapshotItems,
         payment_method: "stripe",
       });
-      console.log('>>>>>>>>>>>>>>order',order);
-      
-      
       console.log("✅ Payment → Order → QR completed");
     }
 
@@ -152,7 +149,6 @@ exports.stripeWebhook = async (req, res) => {
     // ---------------------------------------------------------
     if (event.type == "payment_intent.payment_failed") {
       const pi = event.data.object;
-
       const snapshotIds = pi.metadata.snapshot_ids
         .split(",")
         .map(Number);
