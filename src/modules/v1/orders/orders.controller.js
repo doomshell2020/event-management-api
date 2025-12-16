@@ -51,7 +51,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
         sub_total: sub_total || 0,
         tax_total: tax_total || 0,
         discount_amount: discount_amount || 0,
-        coupon_code: null,
+        discount_code: null,
         paymenttype: payment_method,
         RRN: payment.payment_intent,
         paymentgateway: "Stripe",
@@ -112,7 +112,7 @@ exports.createOrder = async (req, res) => {
     try {
         const user_id = req.user.id;
         const user = req.user;
-        const { event_id, payment_method, coupon_code } = req.body;
+        const { event_id, payment_method, discount_code } = req.body;
 
         if (!event_id)
             return apiResponse.error(res, "Event ID is required", 400);
@@ -228,7 +228,7 @@ exports.createOrder = async (req, res) => {
             event_id,
             grand_total: totalAmount,
             paymenttype: payment_method,
-            coupon_code: coupon_code || null,
+            discount_code: discount_code || null,
             created: new Date(),
             status: 'Y'
         });
@@ -320,7 +320,7 @@ exports.createAppointmentOrder = async (req, res) => {
     try {
         const user_id = req.user.id;
         const user = req.user;
-        const { event_id, payment_method, coupon_code } = req.body;
+        const { event_id, payment_method, discount_code } = req.body;
 
         if (!event_id)
             return apiResponse.error(res, "Event ID is required", 400);
@@ -422,7 +422,7 @@ exports.createAppointmentOrder = async (req, res) => {
             event_id,
             grand_total: totalAmount,
             paymenttype: payment_method,
-            coupon_code: coupon_code || null,
+            discount_code: discount_code || null,
             created: new Date(),
             status: 'Y'
         });
@@ -851,7 +851,7 @@ exports.getOrderDetails = async (req, res) => {
                 "sub_total",
                 "tax_total",
                 "discount_amount",
-                "coupon_code",
+                "discount_code",
                 "status",
                 "createdAt"
             ],

@@ -12,10 +12,10 @@ router.post('/create',
         body('event_id').notEmpty().withMessage('event_id is required'),
         body('total_amount').notEmpty().withMessage('total_amount is required'),
         body('payment_method').notEmpty().withMessage('payment_method is required').isIn(['Online', 'Cash']).withMessage('Invalid payment method'),
-        body('coupon_code')
+        body('discount_code')
             .optional()
             .isString()
-            .withMessage('coupon_code must be string'),
+            .withMessage('discount_code must be string'),
     ],
     validate,
     ordersController.createOrder
@@ -76,10 +76,10 @@ router.post('/create-appointment',
         body('event_id').notEmpty().withMessage('event_id is required'),
         body('total_amount').notEmpty().withMessage('total_amount is required'),
         body('payment_method').notEmpty().withMessage('payment_method is required').isIn(['Online', 'Cash']).withMessage('Invalid payment method'),
-        body('coupon_code')
+        body('discount_code')
             .optional()
             .isString()
-            .withMessage('coupon_code must be string'),
+            .withMessage('discount_code must be string'),
     ],
     validate,
     ordersController.createAppointmentOrder
