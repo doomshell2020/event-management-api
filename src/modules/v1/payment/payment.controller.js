@@ -69,18 +69,24 @@ exports.createPaymentIntent = async (req, res) => {
 // -------------------------------------------------------------
 exports.stripeWebhook = async (req, res) => {
   console.log("🔥 WEBHOOK HIT");
+
   let event;
-  console.log("✅ STRIPE EVENT TYPE:", event.type);
+
   try {
     const signature = req.headers["stripe-signature"];
+
     event = stripe.webhooks.constructEvent(
       req.body,
       signature,
       config.stripeWebhookSecret
     );
+
+    // ✅ NOW event exists
+    console.log("✅ STRIPE EVENT TYPE:", event.type);
+
   } catch (err) {
     console.error("❌ Webhook verification failed:", err.message);
-    return res.status(400).send(`Webhook Error`);
+    return res.status(400).send("Webhook Error");
   }
 
   // ----------------------------
@@ -91,9 +97,8 @@ exports.stripeWebhook = async (req, res) => {
 
     const snapshotIds = pi.metadata.snapshot_ids
       .split(",")
-      .map(id => Number(id));
+      .map(Number);
 
-    // Update snapshots
     await PaymentSnapshotItems.update(
       { payment_status: "paid", payment_intent_id: pi.id },
       { where: { id: snapshotIds } }
@@ -128,7 +133,7 @@ exports.stripeWebhook = async (req, res) => {
 
     const snapshotIds = pi.metadata.snapshot_ids
       .split(",")
-      .map(id => Number(id));
+      .map(Number);
 
     await PaymentSnapshotItems.update(
       { payment_status: "failed", payment_intent_id: pi.id },
@@ -138,5 +143,6 @@ exports.stripeWebhook = async (req, res) => {
     console.log("❌ Payment failed");
   }
 
-  return res.json({ received: true });
+  res.json({ received: true });
 };
+
