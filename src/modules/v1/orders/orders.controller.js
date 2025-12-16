@@ -67,7 +67,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
     for (const item of snapshotItems) {
         for (let i = 0; i < item.quantity; i++) {
-            console.log('Creating order item for snapshot item:', item);
+            // console.log('Creating order item for snapshot item:', item);
             const orderItem = await OrderItems.create({
                 order_id: order.id,
                 user_id,
