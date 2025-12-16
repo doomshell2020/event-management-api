@@ -72,11 +72,11 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 user_id,
                 event_id,
                 type: item.item_type,
-                ticket_id: item.ticket_id || null,
-                addon_id: item.addon_id || null,
-                package_id: item.package_id || null,
-                ticket_pricing_id: item.ticket_pricing_id || null,
-                appointment_id: item.appointment_id || null,
+                ticket_id: item.item_type == "ticket" ? item.ticket_id : null,
+                addon_id: item.item_type == "addon" ? item.addon_id : null,
+                package_id: item.item_type == "package" ? item.package_id : null,
+                ticket_pricing_id: item.item_type == "ticket_price" ? item.ticket_pricing_id : null,
+                appointment_id: item.item_type == "appointment" ? item.appointment_id : null,
                 price: item.price,
                 slot_id: item.slot_id || null,
             });
@@ -101,7 +101,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
     // CLEANUP
     // ----------------------------
     await Cart.destroy({ where: { user_id, event_id } });
-    console.log("⚠️ Order already exists for this payment intent. Skipping creation.",qrResults.length);
+    console.log("⚠️ Order already exists for this payment intent. Skipping creation.", qrResults.length);
 
     return {
         order,
