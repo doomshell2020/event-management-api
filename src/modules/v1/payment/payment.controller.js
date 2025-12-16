@@ -127,15 +127,10 @@ exports.stripeWebhook = async (req, res) => {
         raw: true,
       });
 
-      const totalAmount = snapshotItems.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      );
-
       const payment = await Payment.create({
         user_id: pi.metadata.user_id,
         event_id: pi.metadata.event_id,
-        amount: pi.metadata?.amount || totalAmount,
+        amount: pi.metadata?.grand_total || 0,
         payment_intent: pi.id,
         payment_status: "paid",
       });

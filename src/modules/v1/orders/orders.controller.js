@@ -104,7 +104,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
     return {
         order,
         qrResults,
-        totalAmount,
+        grand_total,
     };
 };
 
