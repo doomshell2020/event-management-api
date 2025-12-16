@@ -31,7 +31,7 @@ const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
 
           <!-- ORDER INFO -->
           <p><strong>Order ID:</strong> ${order.order_uid}</p>
-          <p><strong>Total Amount:</strong> ₹${order.total_amount}</p>
+          <p><strong>Total Amount:</strong> ₹${order.grand_total}</p>
 
           <h3 style="margin-top:25px; font-size:20px;">Your Tickets</h3>
 

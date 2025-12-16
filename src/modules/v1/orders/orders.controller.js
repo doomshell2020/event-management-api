@@ -83,7 +83,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
         // Keep timezone for email
         timezone
     };
-    console.log('formattedEvent :', formattedEvent);
+    // console.log('formattedEvent :', formattedEvent);
 
     // CREATE ORDER
     // ----------------------------
