@@ -1,6 +1,6 @@
 const apiResponse = require('../../../common/utils/apiResponse');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company,Currency } = require('../../../models');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency } = require('../../../models');
 const { Op } = require('sequelize');
 
 
@@ -216,8 +216,10 @@ module.exports = {
                     where: { id: ev },
                     include: [
                         { model: TicketType, as: "tickets" },
+                        // { model: TicketPricing, as: "ticket_pricing", include: [{ model: TicketType, as: "ticket" }] },
                         { model: AddonTypes, as: "addons" },
-                        { model: Company, as: "companyInfo", attributes: ["name"] }
+                        { model: Company, as: "companyInfo", attributes: ["name"] },
+                        { model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }
                     ],
                     attributes: [
                         "id",
@@ -344,12 +346,14 @@ module.exports = {
                         model: WellnessSlots,
                         as: 'appointments',
                         // attributes: ["id", "title", "price"]
-                        include: [{ model: Wellness, as: 'wellnessList',
+                        include: [{
+                            model: Wellness, as: 'wellnessList',
                             include: {
-                            model: Currency,
-                            as: 'currencyName',
-                            attributes: ['Currency_symbol', 'Currency']
-                        } }]
+                                model: Currency,
+                                as: 'currencyName',
+                                attributes: ['Currency_symbol', 'Currency']
+                            }
+                        }]
                     }
                 ]
             });

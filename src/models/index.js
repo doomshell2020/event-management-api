@@ -159,6 +159,16 @@ Event.hasMany(EventSlots, {
   onDelete: 'CASCADE'
 });
 
+Event.belongsTo(Currency, {
+  foreignKey: 'payment_currency',
+  as: 'currencyName',
+});
+
+Event.hasMany(Wellness, {
+  foreignKey: 'event_id',
+  as: 'wellness',
+})
+
 EventSlots.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'event'
@@ -169,7 +179,6 @@ EventSlots.hasMany(TicketPricing, {
   as: 'pricings',
   onDelete: 'CASCADE'
 });
-
 
 TicketPricing.belongsTo(TicketType, {
   foreignKey: 'ticket_type_id',
@@ -196,10 +205,12 @@ Wellness.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'eventList',
 });
+
 Wellness.belongsTo(Currency, {
   foreignKey: 'currency',
   as: 'currencyName',
 });
+
 Cart.belongsTo(WellnessSlots, {
   foreignKey: 'appointment_id',
   as: 'appointments',
@@ -209,10 +220,7 @@ Cart.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'events',
 })
-Event.hasMany(Wellness, {
-  foreignKey: 'event_id',
-  as: 'wellness',
-})
+
 
 // =============================
 // ✅ Export all
