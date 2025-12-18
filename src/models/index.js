@@ -24,6 +24,18 @@ const OrderItems = require('./order_items.model');
 const Currency = require('./currency.model');
 const Payment = require('./payment.model');
 const PaymentSnapshotItems = require('./payment_snapshot_items');
+const CommitteeMembers = require('./committee_members.model');
+const CommitteeAssignTickets = require('./committee_assigntickets');
+
+
+CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+Event.hasMany(CommitteeAssignTickets, { foreignKey: 'event_id', as: 'assignedTickets' });
+CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
+CommitteeAssignTickets.belongsTo(CommitteeMembers, { foreignKey: 'user_id', targetKey: 'user_id', as: 'committeeMember' });
+User.hasMany(CommitteeMembers, { foreignKey: 'user_id', as: 'committeeMembers' });
+
+
 
 // 🔹 One Question → Many QuestionItems
 Questions.hasMany(QuestionItems, {
@@ -226,7 +238,7 @@ Cart.belongsTo(Event, {
 // ✅ Export all
 // =============================
 module.exports = {
-  sequelize,
-  Questions, QuestionItems, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
-  User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,Currency,Payment,PaymentSnapshotItems
+  sequelize, Questions, QuestionItems, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
+  User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,
+  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets
 };

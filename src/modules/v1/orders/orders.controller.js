@@ -960,7 +960,12 @@ exports.getOrderDetails = async (req, res) => {
                         },
                     ]
                 },
-                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'], include: { model: Company, as: "companyInfo", attributes: ['name'] } }
+                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'], 
+                    include: [
+                        { model: Company, as: "companyInfo", attributes: ['name'] },
+                        { model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }
+                    ] 
+                }
             ]
         });
 
