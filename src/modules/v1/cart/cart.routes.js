@@ -58,16 +58,24 @@ router.post("/add",
             .if(body("item_type").equals("appointment"))
             .notEmpty().withMessage("appointment_id is required for appointment type")
             .isInt().withMessage("appointment_id must be an integer"),
+        // COMMITTEE MEMBER ID (required for committesale)
 
         // COMMITTE SALE → ticket OR addon
         body().custom((value) => {
-            if (value.item_type == "committesale") {
+            if (value.item_type === "committesale") {
                 if (!value.ticket_id && !value.addons_id) {
                     throw new Error("ticket_id or addons_id required for committesale");
                 }
             }
             return true;
         }),
+
+        // 🔥 COMMITTEE MEMBER ID REQUIRED
+        body("committee_member_id")
+            .if(body("item_type").equals("committesale"))
+            .notEmpty().withMessage("committee_member_id is required for committesale")
+            .isInt().withMessage("committee_member_id must be an integer"),
+
 
         // OPEN SALE → ticket OR addon
         body().custom((value) => {
