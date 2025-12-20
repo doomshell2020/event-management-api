@@ -2,12 +2,13 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const requestTicket = require('../../../common/utils/emailTemplates/requestTicket');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User } = require('../../../models');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets } = require('../../../models');
 const { Op } = require('sequelize');
 const config = require('../../../config/app');
 
 
 module.exports = {
+    // ADD ITEM TO CART
     // ADD ITEM TO CART
     addToCart: async (req, res) => {
         try {
@@ -19,7 +20,8 @@ module.exports = {
                 appointment_id,
                 ticket_price_id,
                 item_type,
-                count
+                count = 1,
+                committee_member_id
             } = req.body;
 
             const user_id = req.user.id;
@@ -27,7 +29,6 @@ module.exports = {
             const eventExists = await Event.findByPk(event_id);
             if (!eventExists)
                 return apiResponse.error(res, "Event not found", 404);
-
             const eventsInCart = await Cart.findAll({
                 where: { user_id },
                 attributes: ['event_id'],
@@ -36,70 +37,93 @@ module.exports = {
 
             const uniqueEvents = eventsInCart.map(e => e.event_id);
 
-            if (uniqueEvents.length > 1) {
+            if (uniqueEvents.length > 1)
                 return apiResponse.error(
                     res,
-                    "Your cart contains items from multiple events. Please clear the cart before adding new items.",
+                    "Your cart contains items from multiple events. Please clear the cart.",
                     409
                 );
-            }
 
-            if (uniqueEvents.length == 1 && !uniqueEvents.includes(event_id)) {
+            if (uniqueEvents.length == 1 && !uniqueEvents.includes(event_id))
                 return apiResponse.error(
                     res,
-                    "Your cart contains items from another event. Confirm to clear the old cart.",
+                    "Your cart contains items from another event. Clear it first.",
                     409,
                     { cartEventId: uniqueEvents[0] }
                 );
-            }
 
             const modelMap = {
                 ticket: { id: ticket_id, model: TicketType },
+                committesale: { id: ticket_id, model: TicketType },
                 addon: { id: addons_id, model: AddonTypes },
                 package: { id: package_id, model: Package },
                 ticket_price: { id: ticket_price_id, model: TicketPricing },
-                appointment: { id: appointment_id, model: WellnessSlots },
-                // Special types
-                committesale: { id: ticket_id, model: TicketType },
-                // opensale: { id: ticket_id || addons_id, model: null },
+                appointment: { id: appointment_id, model: WellnessSlots }
             };
 
             const selected = modelMap[item_type];
-
             if (!selected)
                 return apiResponse.error(res, "Invalid item type", 400);
 
-            // ⭐ 3️⃣ ENSURE AT LEAST ONE ID EXISTS
-            const incomingId =
-                ticket_id ||
-                addons_id ||
-                package_id ||
-                appointment_id ||
-                ticket_price_id ||
-                null;
-
-            if (!incomingId)
-                return apiResponse.error(res, "No valid item ID provided", 400);
+            if (!selected.id)
+                return apiResponse.error(res, "Invalid item ID", 400);
 
             if (selected.model) {
-                const itemExists = await selected.model.findByPk(selected.id);
-
-                if (!itemExists) {
-                    return apiResponse.error(
-                        res,
-                        `${item_type} with provided ID not found`,
-                        404
-                    );
-                }
+                const exists = await selected.model.findByPk(selected.id);
+                if (!exists)
+                    return apiResponse.error(res, "Item not found", 404);
             }
 
-            if (!["committesale", "opensale"].includes(item_type)) {
-                if (!selected.id)
-                    return apiResponse.error(res, `${item_type}_id is required`, 400);
-                const itemExists = await selected.model.findByPk(selected.id);
+            if (item_type == 'committesale') {
 
-                if (!itemExists)
-                    return apiResponse.error(res, `${item_type} not found`, 404);
+                if (count > 1)
+                    return apiResponse.error(
+                        res,
+                        "Only 1 committee ticket can be requested",
+                        400
+                    );
+
+                const pending = await Cart.findOne({
+                    where: {
+                        user_id,
+                        event_id,
+                        ticket_id,
+                        ticket_type: 'committesale',
+                        status: 'N'
+                    }
+                });
+
+                if (pending)
+                    return apiResponse.error(
+                        res,
+                        "You already have a pending committee ticket request",
+                        400
+                    );
+
+                const committeeAssign = await CommitteeAssignTickets.findOne({
+                    where: {
+                        event_id,
+                        ticket_id,
+                        user_id: committee_member_id
+                    }
+                });
+
+                if (!committeeAssign)
+                    return apiResponse.error(
+                        res,
+                        "No committee ticket allocation available",
+                        400
+                    );
+
+                const available =
+                    committeeAssign.count - (committeeAssign.usedticket || 0);
+
+                if (available < 1)
+                    return apiResponse.error(
+                        res,
+                        `No committee ticket available for the selected committee member`,
+                        400
+                    );
             }
 
             const existing = await Cart.findOne({
@@ -108,60 +132,57 @@ module.exports = {
                     event_id,
                     ticket_type: item_type,
                     ticket_id:
-                        item_type == "ticket" || item_type == "committesale"
+                        ['ticket', 'committesale'].includes(item_type)
                             ? ticket_id
                             : null,
-                    addons_id: item_type == "addon" ? addons_id : null,
-                    package_id: item_type == "package" ? package_id : null,
-                    appointment_id: item_type == "appointment" ? appointment_id : null,
-                    ticket_price_id: item_type == "ticket_price" ? ticket_price_id : null
+                    addons_id: item_type == 'addon' ? addons_id : null,
+                    package_id: item_type == 'package' ? package_id : null,
+                    appointment_id:
+                        item_type == 'appointment' ? appointment_id : null,
+                    ticket_price_id:
+                        item_type == 'ticket_price' ? ticket_price_id : null
                 }
             });
 
             if (existing) {
+                if (item_type == 'committesale')
+                    return apiResponse.error(
+                        res,
+                        "Committee ticket request already exists",
+                        400
+                    );
+
                 existing.no_tickets += count;
                 await existing.save();
-                return apiResponse.success(res, "Item quantity updated", existing);
+                return apiResponse.success(res, "Cart updated", existing);
             }
 
             const createData = {
                 user_id,
                 event_id,
-                no_tickets: count,
+                no_tickets: item_type == 'committesale' ? 1 : count,
                 ticket_type: item_type,
+                ticket_id: ticket_id || null,
+                addons_id: addons_id || null,
+                package_id: package_id || null,
+                appointment_id: appointment_id || null,
                 ticket_price_id: ticket_price_id || null,
-                committee_member_id: req.body.committee_member_id || null,
+                committee_member_id:
+                    item_type == 'committesale' ? committee_member_id : null,
                 status: item_type == 'committesale' ? 'N' : 'Y'
             };
 
-            if (ticket_id) createData.ticket_id = ticket_id;
-            if (addons_id) createData.addons_id = addons_id;
-            if (package_id) createData.package_id = package_id;
-            if (appointment_id) createData.appointment_id = appointment_id;
-
-            let committeeMember = null;
-            if (createData.committee_member_id) {
-                committeeMember = await User.findOne({
-                    where: { id: createData.committee_member_id },
-                    attributes: ['first_name', 'last_name', 'email']
-                })
-
-            }
-
             const newItem = await Cart.create(createData);
 
-            if (item_type == 'committesale' && !committeeMember) {
-                return apiResponse.error(
-                    res,
-                    "Invalid committee member",
-                    400
+            if (item_type == 'committesale') {
+                const committeeMember = await User.findByPk(
+                    committee_member_id,
+                    { attributes: ['first_name', 'last_name', 'email'] }
                 );
-            }
 
-            if (item_type == 'committesale' && committeeMember?.email) {
-                try {
-                    await sendEmail(
-                        committeeMember.email, // ✅ correct receiver
+                if (committeeMember?.email) {
+                    sendEmail(
+                        committeeMember.email,
                         `Ticket Request for ${eventExists.name}`,
                         requestTicket({
                             RequesterName: `${req.user.firstName} ${req.user.lastName}`,
@@ -169,18 +190,15 @@ module.exports = {
                             EventName: eventExists.name,
                             URL: `${config.clientUrl}/committee/sales`,
                             SITE_URL: config.clientUrl
-                        }),
-                        null
+                        })
                     );
-                } catch (emailError) {
-                    console.log("Email sending failed:", emailError);
                 }
             }
 
             return apiResponse.success(res, "Item added to cart", newItem);
 
         } catch (error) {
-            console.log(error);
+            console.error(error);
             return apiResponse.error(res, "Something went wrong", 500);
         }
     },
@@ -193,8 +211,11 @@ module.exports = {
 
             let where = {
                 user_id,
-                ticket_type: { [Op.ne]: "appointment" }
+                ticket_type: { [Op.ne]: "appointment" },
+                status : "Y"
             };
+
+            // console.log('>>>>>>>>>>>>',where);           
 
             if (event_id) where.event_id = event_id;
             if (item_type) where.ticket_type = item_type;
@@ -202,6 +223,7 @@ module.exports = {
             const cartList = await Cart.findAll({
                 where,
                 order: [["id", "DESC"]],
+                where: where,
                 include: [
                     { model: TicketType, attributes: ["id", "title", "price"] },
                     { model: AddonTypes, attributes: ["id", "name", "price"] },
@@ -305,6 +327,12 @@ module.exports = {
 
                 switch (item.ticket_type) {
                     case "ticket":
+                        displayName = item.TicketType?.title || "";
+                        ticketPrice = item.TicketType?.price || 0;
+                        uniqueId = item.TicketType?.id || null;
+                        break;
+
+                    case "committesale":
                         displayName = item.TicketType?.title || "";
                         ticketPrice = item.TicketType?.price || 0;
                         uniqueId = item.TicketType?.id || null;
