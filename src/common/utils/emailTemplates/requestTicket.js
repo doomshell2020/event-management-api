@@ -8,7 +8,7 @@ module.exports = requestTicketTemplate = (data) => {
     } = data;
 
     return `
-<table cellspacing="0"
+    <table cellspacing="0"
     style="width:620px; margin:auto; margin-top:30px; background:#f2f1f1; font-family:Arial, Helvetica, sans-serif; border: 1px solid #ccc; border-top: 3px solid #3d6db5;">
     
     <tr>
@@ -68,7 +68,7 @@ module.exports = requestTicketTemplate = (data) => {
     <tr>
         <td align="center"
             style="padding:10px; background: #3d6db5; color: #fff; font-size: 14px;">
-            Copyright 2023
+            Copyright 2026
             <a href="${SITE_URL}" style="color: #ffffff; text-decoration: none;">
                 <b>eboxtickets.com</b>
             </a>

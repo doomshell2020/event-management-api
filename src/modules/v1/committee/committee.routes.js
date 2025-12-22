@@ -60,6 +60,18 @@ router.get('/members/list/:event_id',
     committeeController.listMembers
 );
 
+// ✅ Committee Requests List (by status)
+router.get(
+    '/requests/:status',
+    authenticate,
+    [
+        param('status')
+            .isIn(['Y', 'N', 'I'])
+            .withMessage('Invalid status Y|N|I is required Y=Approved, N=Rejected, I=Ignored'),
+    ],
+    validate,
+    committeeController.requestList
+);
 
 router.get('/ticket/assign-list/:event_id',
     authenticate,

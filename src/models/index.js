@@ -50,6 +50,7 @@ QuestionItems.belongsTo(Questions, {
   as: 'question'
 });
 
+
 // ✅ Package ↔ PackageDetails (already defined)
 Package.hasMany(PackageDetails, { foreignKey: 'package_id', as: 'details' });
 PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
@@ -57,6 +58,17 @@ PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
 // ✅ PackageDetails ↔ TicketType
 PackageDetails.belongsTo(TicketType, { foreignKey: 'ticket_type_id', as: 'ticketType' });
 TicketType.hasMany(PackageDetails, { foreignKey: 'ticket_type_id', as: 'packageDetails' });
+
+TicketType.hasMany(CommitteeAssignTickets, {
+  foreignKey: 'ticket_id',
+  as: 'committeeAssignedTickets'
+});
+
+CommitteeAssignTickets.belongsTo(TicketType, {
+  foreignKey: 'ticket_id',
+  as: 'ticket'
+});
+
 
 // ✅ PackageDetails ↔ AddonTypes
 PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
@@ -231,6 +243,11 @@ Cart.belongsTo(WellnessSlots, {
 Cart.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'events',
+})
+
+Cart.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
 })
 
 

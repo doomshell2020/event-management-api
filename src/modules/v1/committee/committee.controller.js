@@ -1,6 +1,42 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { CommitteeMembers, CommitteeAssignTickets, User, Event } = require('../../../models');
+const { CommitteeMembers, CommitteeAssignTickets, User, Event, Cart, TicketType } = require('../../../models');
 
+exports.requestList = async (req, res) => {
+    try {
+        const user_id = req.user.id;
+        const { status } = req.params;
+        
+        const whereCondition = { commitee_user_id: user_id, ticket_type: 'committesale' };
+        // if (status) whereCondition.status = status;
+        
+        const cartList = await Cart.findAll({
+            where: whereCondition,
+            order: [['id', 'DESC']],
+            include: [
+                {
+                    model: TicketType,
+                    attributes: ['id', 'title', 'price']
+                },
+                {
+                    model: User,
+                    as: 'user',
+                    attributes: ['id', 'first_name', 'last_name', 'email', 'mobile', 'profile_image']
+                },
+            ],
+            attributes: ['id', 'event_id','commitee_user_id', 'user_id', 'no_tickets', 'ticket_type', 'status', 'createdAt']
+        });
+
+        // ✅ Send raw Sequelize data directly
+        return apiResponse.success(res, 'Committee requests fetched', {
+            count: cartList.length,
+            list: cartList,
+        });
+
+    } catch (error) {
+        console.error(error);
+        return apiResponse.error(res, 'Error fetching committee requests', 500);
+    }
+};
 
 exports.updateAssignedTickets = async (req, res) => {
     try {

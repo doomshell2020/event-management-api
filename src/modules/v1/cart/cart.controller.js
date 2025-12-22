@@ -2,13 +2,12 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const requestTicket = require('../../../common/utils/emailTemplates/requestTicket');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets } = require('../../../models');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers } = require('../../../models');
 const { Op } = require('sequelize');
 const config = require('../../../config/app');
 
 
 module.exports = {
-    // ADD ITEM TO CART
     // ADD ITEM TO CART
     addToCart: async (req, res) => {
         try {
@@ -23,12 +22,15 @@ module.exports = {
                 count = 1,
                 committee_member_id
             } = req.body;
-
+            
             const user_id = req.user.id;
 
+            /* ================= EVENT CHECK ================= */
             const eventExists = await Event.findByPk(event_id);
             if (!eventExists)
                 return apiResponse.error(res, "Event not found", 404);
+
+            /* ========== SINGLE EVENT CART RULE ========== */
             const eventsInCart = await Cart.findAll({
                 where: { user_id },
                 attributes: ['event_id'],
@@ -44,7 +46,7 @@ module.exports = {
                     409
                 );
 
-            if (uniqueEvents.length == 1 && !uniqueEvents.includes(event_id))
+            if (uniqueEvents.length === 1 && !uniqueEvents.includes(event_id))
                 return apiResponse.error(
                     res,
                     "Your cart contains items from another event. Clear it first.",
@@ -52,6 +54,7 @@ module.exports = {
                     { cartEventId: uniqueEvents[0] }
                 );
 
+            /* ================= ITEM VALIDATION ================= */
             const modelMap = {
                 ticket: { id: ticket_id, model: TicketType },
                 committesale: { id: ticket_id, model: TicketType },
@@ -62,11 +65,8 @@ module.exports = {
             };
 
             const selected = modelMap[item_type];
-            if (!selected)
-                return apiResponse.error(res, "Invalid item type", 400);
-
-            if (!selected.id)
-                return apiResponse.error(res, "Invalid item ID", 400);
+            if (!selected || !selected.id)
+                return apiResponse.error(res, "Invalid item type or ID", 400);
 
             if (selected.model) {
                 const exists = await selected.model.findByPk(selected.id);
@@ -74,6 +74,7 @@ module.exports = {
                     return apiResponse.error(res, "Item not found", 404);
             }
 
+            /* ================= COMMITTEE LOGIC ================= */
             if (item_type == 'committesale') {
 
                 if (count > 1)
@@ -83,7 +84,7 @@ module.exports = {
                         400
                     );
 
-                const pending = await Cart.findOne({
+                const pendingSameTicket = await Cart.findOne({
                     where: {
                         user_id,
                         event_id,
@@ -93,10 +94,10 @@ module.exports = {
                     }
                 });
 
-                if (pending)
+                if (pendingSameTicket)
                     return apiResponse.error(
                         res,
-                        "You already have a pending committee ticket request",
+                        "You already have a pending request for this committee ticket",
                         400
                     );
 
@@ -104,7 +105,8 @@ module.exports = {
                     where: {
                         event_id,
                         ticket_id,
-                        user_id: committee_member_id
+                        user_id: committee_member_id,
+                        status: 'Y'
                     }
                 });
 
@@ -121,11 +123,12 @@ module.exports = {
                 if (available < 1)
                     return apiResponse.error(
                         res,
-                        `No committee ticket available for the selected committee member`,
+                        "No committee ticket available for selected member",
                         400
                     );
             }
 
+            /* ================= EXISTING CART CHECK ================= */
             const existing = await Cart.findOne({
                 where: {
                     user_id,
@@ -137,26 +140,20 @@ module.exports = {
                             : null,
                     addons_id: item_type == 'addon' ? addons_id : null,
                     package_id: item_type == 'package' ? package_id : null,
-                    appointment_id:
-                        item_type == 'appointment' ? appointment_id : null,
+                    appointment_id: item_type == 'appointment' ? appointment_id : null,
                     ticket_price_id:
                         item_type == 'ticket_price' ? ticket_price_id : null
                 }
             });
 
-            if (existing) {
-                if (item_type == 'committesale')
-                    return apiResponse.error(
-                        res,
-                        "Committee ticket request already exists",
-                        400
-                    );
-
+            // ❌ Do NOT block different committee tickets
+            if (existing && item_type !== 'committesale') {
                 existing.no_tickets += count;
                 await existing.save();
                 return apiResponse.success(res, "Cart updated", existing);
             }
 
+            /* ================= CREATE CART ITEM ================= */
             const createData = {
                 user_id,
                 event_id,
@@ -167,13 +164,17 @@ module.exports = {
                 package_id: package_id || null,
                 appointment_id: appointment_id || null,
                 ticket_price_id: ticket_price_id || null,
-                committee_member_id:
-                    item_type == 'committesale' ? committee_member_id : null,
+                commitee_user_id: item_type == 'committesale' ? committee_member_id : null,
                 status: item_type == 'committesale' ? 'N' : 'Y'
             };
 
+            // console.log('>>>>>>>>>>>>',createData);
+            // return false
+            
+
             const newItem = await Cart.create(createData);
 
+            /* ================= EMAIL (COMMITTEE) ================= */
             if (item_type == 'committesale') {
                 const committeeMember = await User.findByPk(
                     committee_member_id,
@@ -212,7 +213,7 @@ module.exports = {
             let where = {
                 user_id,
                 ticket_type: { [Op.ne]: "appointment" },
-                status : "Y"
+                status: "Y"
             };
 
             // console.log('>>>>>>>>>>>>',where);           
@@ -269,13 +270,6 @@ module.exports = {
 
                 const events = await Event.findOne({
                     where: { id: ev },
-                    include: [
-                        { model: TicketType, as: "tickets" },
-                        // { model: TicketPricing, as: "ticket_pricing", include: [{ model: TicketType, as: "ticket" }] },
-                        { model: AddonTypes, as: "addons" },
-                        { model: Company, as: "companyInfo", attributes: ["name"] },
-                        { model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }
-                    ],
                     attributes: [
                         "id",
                         "event_org_id",
@@ -288,6 +282,64 @@ module.exports = {
                         "sale_start",
                         "sale_end",
                         "event_timezone"
+                    ],
+                    include: [
+                        {
+                            model: TicketType,
+                            as: "tickets",
+                            required: false,
+                            attributes: {
+                                exclude: ["createdAt", "updatedAt"]
+                            },
+                            include: [
+                                {
+                                    model: CommitteeAssignTickets,
+                                    as: "committeeAssignedTickets",
+                                    required: false,
+                                    attributes: {
+                                        exclude: ["createdAt", "updatedAt"]
+                                    },
+                                    where: {
+                                        event_id: ev
+                                    },
+                                    include: [
+                                        {
+                                            model: CommitteeMembers,
+                                            as: "committeeMember",
+                                            required: false,
+                                            attributes: ['status'],
+                                            include: [
+                                                {
+                                                    model: User,
+                                                    as: "user",
+                                                    attributes: [
+                                                        "id",
+                                                        "first_name",
+                                                        "last_name",
+                                                        "email"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            model: AddonTypes,
+                            as: "addons",
+                            attributes: { exclude: ["createdAt", "updatedAt"] }
+                        },
+                        {
+                            model: Company,
+                            as: "companyInfo",
+                            attributes: ["name"]
+                        },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
                     ]
                 });
 
