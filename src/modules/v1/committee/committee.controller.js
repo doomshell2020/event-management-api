@@ -1,18 +1,24 @@
 const apiResponse = require('../../../common/utils/apiResponse');
+const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { CommitteeMembers, CommitteeAssignTickets, User, Event, Cart, TicketType } = require('../../../models');
 
 exports.requestList = async (req, res) => {
     try {
         const user_id = req.user.id;
         const { status } = req.params;
-        
+
         const whereCondition = { commitee_user_id: user_id, ticket_type: 'committesale' };
         // if (status) whereCondition.status = status;
-        
+
         const cartList = await Cart.findAll({
             where: whereCondition,
             order: [['id', 'DESC']],
             include: [
+                {
+                    model: Event,
+                    as: 'events',
+                    attributes: ['id','name', 'date_from', 'date_to', 'feat_image', 'location']
+                },
                 {
                     model: TicketType,
                     attributes: ['id', 'title', 'price']
@@ -23,13 +29,56 @@ exports.requestList = async (req, res) => {
                     attributes: ['id', 'first_name', 'last_name', 'email', 'mobile', 'profile_image']
                 },
             ],
-            attributes: ['id', 'event_id','commitee_user_id', 'user_id', 'no_tickets', 'ticket_type', 'status', 'createdAt']
+            attributes: ['id', 'event_id', 'commitee_user_id', 'user_id', 'no_tickets', 'ticket_type', 'status', 'createdAt']
         });
+
+        if (status == 'T') {
+            const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+            const imagePath = "uploads/events";
+            const eventMap = new Map();
+
+            cartList.forEach(item => {
+                if (!item.events) return;
+
+                const event = item.events.toJSON();
+                const tz = event.event_timezone || "UTC";
+
+                const formatDate = (date) =>
+                    date
+                        ? {
+                            utc: date,
+                            local: convertUTCToLocal(date, tz),
+                            timezone: tz,
+                        }
+                        : null;
+
+                if (!eventMap.has(event.id)) {
+                    eventMap.set(event.id, {
+                        id: event.id,
+                        name: event.name,
+                        location: event.location,
+                        feat_image: event.feat_image
+                            ? `${baseUrl.replace(/\/$/, '')}/${imagePath}/${event.feat_image}`
+                            : `${baseUrl.replace(/\/$/, '')}/${imagePath}/default.jpg`,
+                        date_from: formatDate(event.date_from),
+                        date_to: formatDate(event.date_to),
+                    });
+                }
+            });
+
+            const events = Array.from(eventMap.values());
+
+            return apiResponse.success(res, 'Committee requests fetched', {
+                count: cartList.length,
+                list: cartList, events
+            });
+        }
 
         // ✅ Send raw Sequelize data directly
         return apiResponse.success(res, 'Committee requests fetched', {
             count: cartList.length,
             list: cartList,
+            events:[]
         });
 
     } catch (error) {
@@ -291,4 +340,3 @@ exports.deleteMember = async (req, res) => {
         return apiResponse.error(res, "Failed to delete member", 500);
     }
 };
-

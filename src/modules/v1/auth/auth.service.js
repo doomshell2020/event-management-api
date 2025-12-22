@@ -1,7 +1,7 @@
 // const User = require('../../../models/user.model');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User } = require('../../../models');
+const { User, Cart } = require('../../../models');
 const config = require('../../../config/app');
 const path = require('path');
 const fs = require('fs');
@@ -95,6 +95,7 @@ module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, 
 module.exports.loginUser = async ({ email, password }) => {
     // Find user by email
     const user = await User.findOne({ where: { email } });
+
     if (!user) {
         throw new Error('Invalid email or password');
     }
@@ -109,6 +110,28 @@ module.exports.loginUser = async ({ email, password }) => {
     if (!isMatch) {
         throw new Error('Invalid email or password');
     }
+
+    // Total committee sale tickets in cart
+    const committeeCartCount = await Cart.count({
+        where: {
+            commitee_user_id: user.id,
+            ticket_type: 'committesale',
+        },
+    });
+
+    const committeeAssigned = committeeCartCount > 0;
+
+    // Pending committee requests (status = N)
+    const committeePendingCount = await Cart.count({
+        where: {
+            commitee_user_id: user.id,
+            ticket_type: 'committesale',
+            status: 'N', // Pending
+        },
+    });
+
+    console.log('committeeCartCount :', committeeCartCount);
+    console.log('committeePendingCount :', committeePendingCount);
 
     // Generate JWT token
     const token = jwt.sign(
@@ -127,13 +150,35 @@ module.exports.loginUser = async ({ email, password }) => {
             lastName: user.last_name,
             gender: user.gender,
             dob: user.dob,
-        }
+            committeeAssigned: committeeAssigned,
+            committeePendingCount: committeePendingCount, // ✅ FIXED
+        },
     };
+
 };
 
 module.exports.getUserInfo = async (userId) => {
     const imagePath = 'uploads/profile';
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000/'; // ✅ fallback base URL
+
+    // Total committee sale tickets in cart
+    const committeeCartCount = await Cart.count({
+        where: {
+            commitee_user_id: userId,
+            ticket_type: 'committesale',
+        },
+    });
+
+    const committeeAssigned = committeeCartCount > 0;
+
+    // Pending committee requests (status = N)
+    const committeePendingCount = await Cart.count({
+        where: {
+            commitee_user_id: userId,
+            ticket_type: 'committesale',
+            status: 'N', // Pending
+        },
+    });
 
     const user = await User.findByPk(userId, {
         attributes: [
@@ -161,6 +206,8 @@ module.exports.getUserInfo = async (userId) => {
     return {
         ...user.toJSON(),
         profile_image: profileImage,
+        committeeAssigned: committeeAssigned,
+        committeePendingCount: committeePendingCount,
     };
 };
 
@@ -207,7 +254,7 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
             }
 
             const isSamePassword = await bcrypt.compare(updates.password, user.password);
-            console.log("isSamePassword----------",isSamePassword)
+            console.log("isSamePassword----------", isSamePassword)
             if (isSamePassword) {
                 return { success: false, message: 'New password cannot be the same as current password', code: 'SAME_PASSWORD' };
             }
@@ -322,8 +369,6 @@ module.exports.resetPassword = async (token, password) => {
         return { success: false, message: 'Failed to reset password' };
     }
 };
-
-
 
 // User detail fetch api
 module.exports.getUserById = async (req, res) => {

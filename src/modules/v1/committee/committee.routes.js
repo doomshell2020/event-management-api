@@ -6,6 +6,18 @@ const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const { Committee } = require('../../../models');
 
+// ✅ Committee Requests List (by status)
+router.get('/requests/:status',
+    authenticate,
+    [
+        param('status')
+            .isIn(['T','Y', 'N', 'I'])
+            .withMessage('Invalid status Y|N|I is required Y=Approved, N=Rejected, I=Ignored'),
+    ],
+    validate,
+    committeeController.requestList
+);
+
 // ✅ Create Event Route
 router.post('/member/add-member',
     authenticate,
@@ -58,19 +70,6 @@ router.get('/members/list/:event_id',
     ],
     validate,
     committeeController.listMembers
-);
-
-// ✅ Committee Requests List (by status)
-router.get(
-    '/requests/:status',
-    authenticate,
-    [
-        param('status')
-            .isIn(['Y', 'N', 'I'])
-            .withMessage('Invalid status Y|N|I is required Y=Approved, N=Rejected, I=Ignored'),
-    ],
-    validate,
-    committeeController.requestList
 );
 
 router.get('/ticket/assign-list/:event_id',
