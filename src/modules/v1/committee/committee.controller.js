@@ -1,14 +1,148 @@
 const apiResponse = require('../../../common/utils/apiResponse');
+const committeeTicketIgnoredTemplate = require('../../../common/utils/emailTemplates/committeeIgnore');
+const committeeTicketApprovedTemplate = require('../../../common/utils/emailTemplates/committeeApprove');
+const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { CommitteeMembers, CommitteeAssignTickets, User, Event, Cart, TicketType } = require('../../../models');
+const config = require('../../../config/app');
+
+exports.handleAction = async (req, res) => {
+    try {
+        const committee_user_id = req.user.id;
+        const { cart_id, action } = req.body; // approve | ignore
+
+        /* ================= VALIDATION ================= */
+        if (!cart_id || !['approve', 'ignore'].includes(action)) {
+            return apiResponse.error(
+                res,
+                "Invalid request. cart_id and a valid action (approve or ignore) are required.",
+                400
+            );
+        }
+
+        /* ================= FIND CART ================= */
+        const cartItem = await Cart.findOne({
+            where: {
+                id: cart_id,
+                ticket_type: 'committesale',
+                commitee_user_id: committee_user_id
+            },
+            include: [
+                { model: User, as: 'user', attributes: ['id', 'first_name', 'last_name', 'email'] },
+                { model: Event, as: 'events', attributes: ['id', 'name'] },
+                { model: TicketType, attributes: ['id', 'title'] }
+            ]
+        });
+
+        if (!cartItem) {
+            return apiResponse.error(
+                res,
+                "Committee ticket request not found or already processed.",
+                404
+            );
+        }
+
+        const user = cartItem.user;
+        const event = cartItem.events;
+        const ticket = cartItem.TicketType;
+
+        /* ================= IGNORE REQUEST ================= */
+        if (action == 'ignore') {
+            await cartItem.update({ status: 'I' });
+
+            if (user?.email) {
+                sendEmail(
+                    user.email,
+                    'Committee Ticket Request Update',
+                    committeeTicketIgnoredTemplate(user, event, ticket)
+                );
+            }
+
+            return apiResponse.success(
+                res,
+                "The committee ticket request has been successfully ignored."
+            );
+        }
+
+        /* ================= APPROVE REQUEST ================= */
+        const assign = await CommitteeAssignTickets.findOne({
+            where: {
+                event_id: cartItem.event_id,
+                ticket_id: cartItem.ticket_id,
+                user_id: committee_user_id,
+                status: 'Y'
+            }
+        });
+
+        if (!assign) {
+            return apiResponse.error(
+                res,
+                "Committee ticket allocation not found for this event.",
+                404
+            );
+        }
+
+        const used = assign.usedticket || 0;
+        const available = assign.count - used;
+
+        if (available < 1) {
+            return apiResponse.error(
+                res,
+                "All committee tickets for this category have already been allocated.",
+                400
+            );
+        }
+
+        // 🔒 Update allocation and cart status
+        await assign.update({ usedticket: used + 1 });
+        await cartItem.update({ status: 'Y' });
+
+        /* ================= APPROVAL EMAIL ================= */
+        if (user?.email) {
+            sendEmail(
+                user.email,
+                'Committee Ticket Approved',
+                committeeTicketApprovedTemplate(
+                    user,
+                    event,
+                    ticket,
+                    `${config.clientUrl}/events/book/${event.id}`
+                )
+            );
+        }
+
+        return apiResponse.success(
+            res,
+            "Committee ticket approved successfully. The user has been notified via email."
+        );
+
+    } catch (error) {
+        console.error("handleAction error:", error);
+        return apiResponse.error(
+            res,
+            "Something went wrong while processing the committee ticket request.",
+            500
+        );
+    }
+};
 
 exports.requestList = async (req, res) => {
     try {
         const user_id = req.user.id;
         const { status } = req.params;
 
-        const whereCondition = { commitee_user_id: user_id, ticket_type: 'committesale' };
-        // if (status) whereCondition.status = status;
+        const whereCondition = {
+            commitee_user_id: user_id,
+            ticket_type: 'committesale',
+        };
+
+        const baseUrl = (process.env.BASE_URL || "http://localhost:5000").replace(/\/$/, '');
+
+        // ✅ FULL PATHS READY (no frontend concat needed)
+        const assets = {
+            event_image_path: `${baseUrl}/uploads/events`,
+            profile_image_path: `${baseUrl}/uploads/profile`,
+        };
 
         const cartList = await Cart.findAll({
             where: whereCondition,
@@ -17,7 +151,7 @@ exports.requestList = async (req, res) => {
                 {
                     model: Event,
                     as: 'events',
-                    attributes: ['id','name', 'date_from', 'date_to', 'feat_image', 'location']
+                    attributes: ['id', 'name', 'date_from', 'date_to', 'feat_image', 'location']
                 },
                 {
                     model: TicketType,
@@ -29,56 +163,35 @@ exports.requestList = async (req, res) => {
                     attributes: ['id', 'first_name', 'last_name', 'email', 'mobile', 'profile_image']
                 },
             ],
-            attributes: ['id', 'event_id', 'commitee_user_id', 'user_id', 'no_tickets', 'ticket_type', 'status', 'createdAt']
+            attributes: [
+                'id',
+                'event_id',
+                'commitee_user_id',
+                'user_id',
+                'no_tickets',
+                'ticket_type',
+                'status',
+                'createdAt'
+            ]
         });
 
+        let events = [];
+
+        // 🔥 Only when status = T
         if (status == 'T') {
-            const baseUrl = process.env.BASE_URL || "http://localhost:5000";
-            const imagePath = "uploads/events";
-            const eventMap = new Map();
+            const eventIds = [...new Set(cartList.map(item => item.event_id))];
 
-            cartList.forEach(item => {
-                if (!item.events) return;
-
-                const event = item.events.toJSON();
-                const tz = event.event_timezone || "UTC";
-
-                const formatDate = (date) =>
-                    date
-                        ? {
-                            utc: date,
-                            local: convertUTCToLocal(date, tz),
-                            timezone: tz,
-                        }
-                        : null;
-
-                if (!eventMap.has(event.id)) {
-                    eventMap.set(event.id, {
-                        id: event.id,
-                        name: event.name,
-                        location: event.location,
-                        feat_image: event.feat_image
-                            ? `${baseUrl.replace(/\/$/, '')}/${imagePath}/${event.feat_image}`
-                            : `${baseUrl.replace(/\/$/, '')}/${imagePath}/default.jpg`,
-                        date_from: formatDate(event.date_from),
-                        date_to: formatDate(event.date_to),
-                    });
-                }
-            });
-
-            const events = Array.from(eventMap.values());
-
-            return apiResponse.success(res, 'Committee requests fetched', {
-                count: cartList.length,
-                list: cartList, events
+            events = await Event.findAll({
+                where: { id: eventIds },
+                attributes: ['id', 'name', 'location', 'date_from', 'date_to', 'feat_image']
             });
         }
 
-        // ✅ Send raw Sequelize data directly
         return apiResponse.success(res, 'Committee requests fetched', {
             count: cartList.length,
             list: cartList,
-            events:[]
+            events,
+            assets, // ✅ FULL URLs INCLUDED
         });
 
     } catch (error) {

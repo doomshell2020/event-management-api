@@ -5,6 +5,7 @@ const sequelize = require('../config/database');
 // Import models
 const Questions = require('./questions.modal');
 const QuestionItems = require('./question_items.modal');
+const QuestionsBook = require('./questions_book.model');
 const AddonTypes = require('./addon.model');
 const TicketType = require('./ticket.model');
 const Company = require('./company.model');
@@ -26,7 +27,7 @@ const Payment = require('./payment.model');
 const PaymentSnapshotItems = require('./payment_snapshot_items');
 const CommitteeMembers = require('./committee_members.model');
 const CommitteeAssignTickets = require('./committee_assigntickets');
-
+const CartQuestionsDetails = require('./cart_questions_details');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -82,6 +83,9 @@ Cart.belongsTo(TicketType, { foreignKey: 'ticket_id' });
 Cart.belongsTo(AddonTypes, { foreignKey: 'addons_id' });
 Cart.belongsTo(Package, { foreignKey: 'package_id' });
 Cart.belongsTo(TicketPricing, { foreignKey: 'ticket_price_id' });
+Cart.belongsTo(WellnessSlots, {  foreignKey: 'appointment_id',  as: 'appointments'})
+Cart.belongsTo(Event, {  foreignKey: 'event_id',  as: 'events',})
+Cart.belongsTo(User, {  foreignKey: 'user_id',  as: 'user',})
 
 Orders.hasMany(OrderItems, {
   foreignKey: "order_id",
@@ -235,27 +239,12 @@ Wellness.belongsTo(Currency, {
   as: 'currencyName',
 });
 
-Cart.belongsTo(WellnessSlots, {
-  foreignKey: 'appointment_id',
-  as: 'appointments',
-})
-
-Cart.belongsTo(Event, {
-  foreignKey: 'event_id',
-  as: 'events',
-})
-
-Cart.belongsTo(User, {
-  foreignKey: 'user_id',
-  as: 'user',
-})
-
 
 // =============================
 // ✅ Export all
 // =============================
 module.exports = {
-  sequelize, Questions, QuestionItems, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
+  sequelize, Questions, QuestionItems,QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
   User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,
   Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets
 };

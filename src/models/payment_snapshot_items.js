@@ -24,6 +24,11 @@ const PaymentSnapshotItems = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: false
         },
+        
+        cart_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
 
         item_type: {
             type: DataTypes.STRING, // 'ticket' or 'appointment'

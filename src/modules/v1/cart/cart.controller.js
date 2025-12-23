@@ -2,8 +2,8 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const requestTicket = require('../../../common/utils/emailTemplates/requestTicket');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers } = require('../../../models');
-const { Op } = require('sequelize');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers, Questions, QuestionItems, CartQuestionsDetails } = require('../../../models');
+const { Op, Sequelize } = require("sequelize");
 const config = require('../../../config/app');
 
 
@@ -20,9 +20,10 @@ module.exports = {
                 ticket_price_id,
                 item_type,
                 count = 1,
-                committee_member_id
+                committee_member_id,
+                questionAnswers = []   // ✅ ADD THIS
             } = req.body;
-            
+
             const user_id = req.user.id;
 
             /* ================= EVENT CHECK ================= */
@@ -147,7 +148,7 @@ module.exports = {
             });
 
             // ❌ Do NOT block different committee tickets
-            if (existing && item_type !== 'committesale') {
+            if (existing && item_type != 'committesale') {
                 existing.no_tickets += count;
                 await existing.save();
                 return apiResponse.success(res, "Cart updated", existing);
@@ -170,31 +171,53 @@ module.exports = {
 
             // console.log('>>>>>>>>>>>>',createData);
             // return false
-            
+
 
             const newItem = await Cart.create(createData);
 
-            /* ================= EMAIL (COMMITTEE) ================= */
-            if (item_type == 'committesale') {
-                const committeeMember = await User.findByPk(
-                    committee_member_id,
-                    { attributes: ['first_name', 'last_name', 'email'] }
-                );
+            /* ================= SAVE QUESTION ANSWERS ================= */
+            if (
+                Array.isArray(questionAnswers) &&
+                questionAnswers.length > 0 &&
+                ['ticket', 'committesale'].includes(item_type)
+            ) {
+                const questionRows = questionAnswers.map(q => ({
+                    cart_id: newItem.id,          // ✅ LINK TO CART
+                    event_id,
+                    user_id,
+                    ticket_id,
+                    question_id: q.question_id,
+                    user_reply: q.answer,
+                    status: 'Y',
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                }));
 
-                if (committeeMember?.email) {
-                    sendEmail(
-                        committeeMember.email,
-                        `Ticket Request for ${eventExists.name}`,
-                        requestTicket({
-                            RequesterName: `${req.user.firstName} ${req.user.lastName}`,
-                            CommitteeName: `${committeeMember.first_name} ${committeeMember.last_name}`,
-                            EventName: eventExists.name,
-                            URL: `${config.clientUrl}/committee/sales`,
-                            SITE_URL: config.clientUrl
-                        })
-                    );
-                }
+                await CartQuestionsDetails.bulkCreate(questionRows);
             }
+
+
+            /* ================= EMAIL (COMMITTEE) ================= */
+            // if (item_type == 'committesale') {
+            //     const committeeMember = await User.findByPk(
+            //         committee_member_id,
+            //         { attributes: ['first_name', 'last_name', 'email'] }
+            //     );
+
+            //     if (committeeMember?.email) {
+            //         sendEmail(
+            //             committeeMember.email,
+            //             `Ticket Request for ${eventExists.name}`,
+            //             requestTicket({
+            //                 RequesterName: `${req.user.firstName} ${req.user.lastName}`,
+            //                 CommitteeName: `${committeeMember.first_name} ${committeeMember.last_name}`,
+            //                 EventName: eventExists.name,
+            //                 URL: `${config.clientUrl}/committee/sales`,
+            //                 SITE_URL: config.clientUrl
+            //             })
+            //         );
+            //     }
+            // }
 
             return apiResponse.success(res, "Item added to cart", newItem);
 
@@ -343,6 +366,56 @@ module.exports = {
                     ]
                 });
 
+
+                let questions = [];
+                if (events) {
+                    // 🔹 Collect all ticket type IDs from event tickets
+                    const ticketTypeIds = (events.tickets || [])
+                        .map(ticket => ticket.id)
+                        .filter(Boolean);
+
+                    console.log('ticketTypeIds :', ticketTypeIds);
+
+                    if (ticketTypeIds.length > 0) {
+                        questions = await Questions.findAll({
+                            where: {
+                                status: "Y",
+                                event_id: ev,
+                                [Op.or]: ticketTypeIds.map(id =>
+                                    Sequelize.where(
+                                        Sequelize.fn("FIND_IN_SET", id, Sequelize.col("ticket_type_id")),
+                                        { [Op.gt]: 0 }
+                                    )
+                                )
+                            },
+                            attributes: [
+                                "id",
+                                "type",
+                                "name",
+                                "question",
+                                "ticket_type_id",
+                                "status"
+                            ],
+                            include: [
+                                {
+                                    model: QuestionItems,
+                                    as: "questionItems",
+                                    required: false,
+                                    attributes: [
+                                        "id",
+                                        "items"
+                                    ],
+                                    order: [["sort_order", "ASC"]]
+                                }
+                            ],
+                            order: [["id", "ASC"]]
+                        });
+                    }
+
+                }
+
+
+
                 if (events) {
                     const data = events.toJSON();
                     const tz = data.event_timezone || "UTC";
@@ -364,7 +437,8 @@ module.exports = {
                         date_from: formatDate(data.date_from),
                         date_to: formatDate(data.date_to),
                         sale_start: formatDate(data.sale_start),
-                        sale_end: formatDate(data.sale_end)
+                        sale_end: formatDate(data.sale_end),
+                        questions
                     };
                 }
             }

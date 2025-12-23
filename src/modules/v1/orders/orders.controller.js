@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Payment, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency } = require('../../../models');
+const { Cart, Payment,QuestionsBook,CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
@@ -116,7 +116,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 user_id,
                 event_id,
                 type: item.item_type,
-                ticket_id: item.item_type == "ticket" ? item.ticket_id : null,
+                ticket_id: item.item_type == "ticket" || item.item_type == "committesale" ? item.ticket_id : null,
                 addon_id: item.item_type == "addon" ? item.ticket_id : null,
                 package_id: item.item_type == "package" ? item.ticket_id : null,
                 ticket_pricing_id: item.item_type == "ticket_price" ? item.ticket_id : null,
@@ -124,6 +124,13 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 price: item.price,
                 slot_id: item.slot_id || null,
             });
+
+            // here question find in the cartquesition modal and then insert 
+            const findQuestions = await CartQuestionsDetails.findOne({
+                where:{
+                    ticket_id
+                }
+            })
 
             const qr = await generateQRCode(orderItem);
 
@@ -263,6 +270,9 @@ exports.createOrder = async (req, res) => {
 
             if (item.ticket_type == 'ticket_price')
                 totalAmount += Number(item.TicketPricing.price || 0);
+
+            if (item.ticket_type == "committesale")
+                totalAmount += Number(item.TicketType.price || 0);
         });
 
         // CREATE ORDER
@@ -292,6 +302,10 @@ exports.createOrder = async (req, res) => {
 
             if (item.ticket_type == "ticket_price")
                 price = item.TicketPricing?.price || 0;
+
+            if (item.ticket_type == "committesale")
+                price = item.TicketType?.price || 0;
+
 
             // CREATE ORDER ITEM
             const orderItem = await OrderItems.create({
@@ -960,11 +974,12 @@ exports.getOrderDetails = async (req, res) => {
                         },
                     ]
                 },
-                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'], 
+                {
+                    model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'],
                     include: [
                         { model: Company, as: "companyInfo", attributes: ['name'] },
                         { model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }
-                    ] 
+                    ]
                 }
             ]
         });

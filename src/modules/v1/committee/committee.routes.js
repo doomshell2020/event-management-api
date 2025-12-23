@@ -18,6 +18,25 @@ router.get('/requests/:status',
     committeeController.requestList
 );
 
+// ✅ Committee Request Action (Approve / Ignore)
+router.post('/action',
+    authenticate,
+    [
+        body('cart_id')
+            .notEmpty()
+            .withMessage('Request cart_id is required')
+            .isInt()
+            .withMessage('Request cart_id must be a number'),
+        body('action')
+            .notEmpty()
+            .withMessage('Action is required')
+            .isIn(['approve', 'ignore'])
+            .withMessage('Action must be either "approve" or "ignore"'),
+    ],
+    validate,
+    committeeController.handleAction
+);
+
 // ✅ Create Event Route
 router.post('/member/add-member',
     authenticate,
@@ -99,5 +118,6 @@ router.post('/ticket/update',
     validate,
     committeeController.updateAssignedTickets
 );
+
 
 module.exports = router;
