@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Payment,QuestionsBook,CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency } = require('../../../models');
+const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
@@ -126,11 +126,28 @@ module.exports.fulfilOrderFromSnapshot = async ({
             });
 
             // here question find in the cartquesition modal and then insert 
-            const findQuestions = await CartQuestionsDetails.findOne({
-                where:{
-                    ticket_id
+            if (item.cart_id) {
+                const cartQuestions = await CartQuestionsDetails.findAll({
+                    where: {
+                        cart_id: item.cart_id,
+                        status: 'Y' // optional but recommended
+                    }
+                });
+
+                if (cartQuestions.length > 0) {
+                    const questionBooks = cartQuestions.map(q => ({
+                        order_id: order.id,
+                        ticketdetail_id: orderItem.id, // 🔗 link with order item
+                        question_id: q.question_id,
+                        event_id: q.event_id,
+                        user_id: q.user_id,
+                        user_reply: q.user_reply
+                    }));
+
+                    await QuestionsBook.bulkCreate(questionBooks);
                 }
-            })
+            }
+
 
             const qr = await generateQRCode(orderItem);
 
