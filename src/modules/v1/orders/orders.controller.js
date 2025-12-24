@@ -736,7 +736,21 @@ exports.organizerOrderList = async (req, res) => {
             where,
             include: [
                 { model: User, as: "user", attributes: ["id", "first_name", "last_name", "email"] },
-                { model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to"] },
+                {
+                    model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to"],
+                    include: [
+                        {
+                            model: Company,
+                            as: "companyInfo",
+                            attributes: ["name"]
+                        },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
+                    ]
+                },
                 { model: OrderItems, as: "orderItems" }
             ],
             order: [["createdAt", "DESC"]],
@@ -875,6 +889,18 @@ exports.organizerTicketExports = async (req, res) => {
                 {
                     model: Event,
                     as: "event",
+                    include: [
+                        {
+                            model: Company,
+                            as: "companyInfo",
+                            attributes: ["name"]
+                        },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
+                    ],
                     attributes: ["name", "feat_image", "date_from", "date_to"]
                 }
             ],

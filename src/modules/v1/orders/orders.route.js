@@ -68,7 +68,6 @@ router.get('/organizer/ticket-exports',
     ordersController.organizerTicketExports
 );
 
-
 // create appointment order.. new kamal
 router.post('/create-appointment',
     authenticate,

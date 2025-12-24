@@ -3,8 +3,239 @@ const committeeTicketIgnoredTemplate = require('../../../common/utils/emailTempl
 const committeeTicketApprovedTemplate = require('../../../common/utils/emailTemplates/committeeApprove');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { CommitteeMembers, CommitteeAssignTickets, User, Event, Cart, TicketType } = require('../../../models');
+const { sequelize } = require("../../../models"); 
+
+const { CommitteeMembers, CommitteeAssignTickets, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
 const config = require('../../../config/app');
+const committeeTicketAssignedTemplate = require('../../../common/utils/emailTemplates/committeeTicketAssignedTemplate ');
+
+exports.handleCommitteePushTicket = async (req, res) => {
+    const transaction = await sequelize.transaction();
+
+    try {
+        const committee_user_id = req.user.id;
+        const { event_id, email, tickets } = req.body;
+
+        /* ================= EVENT CHECK ================= */
+        const event = await Event.findByPk(event_id);
+        if (!event) {
+            return apiResponse.error(res, "Event not found", 404);
+        }
+
+        /* ================= USER CHECK ================= */
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            return apiResponse.error(res, "User not found with this email", 404);
+        }
+
+        /* ================= ASSIGNED TICKETS ================= */
+        const assignedTickets = await CommitteeAssignTickets.findAll({
+            where: { event_id, user_id: committee_user_id, status: "Y" },
+            raw: true
+        });
+
+        if (!assignedTickets.length) {
+            return apiResponse.error(res, "No tickets assigned to committee member", 403);
+        }
+
+        const assignedMap = {};
+        assignedTickets.forEach(t => {
+            assignedMap[String(t.ticket_id)] = t;
+        });
+
+        /* ================= TICKET TYPES ================= */
+        const ticketTypeIds = tickets.map(t => t.ticket_id);
+        const ticketTypes = await TicketType.findAll({
+            where: { id: ticketTypeIds },
+            attributes: ["id", "title", "type"],
+            raw: true
+        });
+
+        const ticketMap = {};
+        ticketTypes.forEach(t => {
+            ticketMap[String(t.id)] = t;
+        });
+
+        /* ================= PROCESS TICKETS ================= */
+        for (const item of tickets) {
+            const { ticket_id, qty } = item;
+
+            const assigned = assignedMap[String(ticket_id)];
+            if (!assigned) {
+                throw new Error("Ticket not assigned to committee member");
+            }
+
+            const ticketType = ticketMap[String(ticket_id)];
+            if (!ticketType) {
+                throw new Error("Invalid ticket type");
+            }
+
+            /* ===== DUPLICATE CART CHECK ===== */
+            const exists = await Cart.findOne({
+                where: {
+                    user_id: user.id,
+                    event_id,
+                    ticket_id,
+                    ticket_type: ticketType.type,
+                    status: "Y"
+                },
+                transaction
+            });
+
+            if (exists) {
+                throw new Error(`Ticket "${ticketType.title}" already assigned`);
+            }
+
+            const available = assigned.count - assigned.usedticket;
+            if (qty > available) {
+                throw new Error(`Only ${available} tickets available`);
+            }
+
+            /* ===== CREATE CART ===== */
+            await Cart.create({
+                user_id: user.id,
+                event_id,
+                ticket_id,
+                no_tickets: qty,
+                ticket_type: ticketType.type,
+                commitee_user_id: committee_user_id,
+                status: "Y",
+            }, { transaction });
+
+            /* ===== ATOMIC UPDATE ===== */
+            await CommitteeAssignTickets.update(
+                {
+                    usedticket: sequelize.literal(`usedticket + ${qty}`)
+                },
+                {
+                    where: { id: assigned.id },
+                    transaction
+                }
+            );
+        }
+
+        await transaction.commit();
+
+        /* ================= EMAIL ================= */
+        const emailTickets = tickets.map(t => ({
+            title: ticketMap[String(t.ticket_id)].title,
+            qty: t.qty
+        }));
+
+        await sendEmail(
+            user.email,
+            "Committee Ticket Assigned",
+            committeeTicketAssignedTemplate(
+                user,
+                event,
+                emailTickets,
+                `${config.clientUrl}/events/book/${event.id}`
+            )
+        );
+
+        return apiResponse.success(
+            res,
+            "Tickets successfully pushed and email sent",
+            null
+        );
+
+    } catch (error) {
+        await transaction.rollback();
+
+        console.error("handleCommitteePushTicket error:", error);
+        return apiResponse.error(
+            res,
+            error.message || "Something went wrong while pushing tickets",
+            400
+        );
+    }
+};
+
+
+exports.handleCommitteeTicketDetails = async (req, res) => {
+    try {
+        const committee_user_id = req.user.id;
+        const { event_id } = req.body;
+
+        /* ================= VALIDATION ================= */
+        if (!event_id) {
+            return apiResponse.error(
+                res,
+                "Event ID is required",
+                400
+            );
+        }
+
+        /* ================= EVENT CHECK ================= */
+        const eventExists = await Event.findByPk(event_id);
+        if (!eventExists) {
+            return apiResponse.error(
+                res,
+                "Associated event not found",
+                404
+            );
+        }
+
+        /* ================= EVENT DETAILS ================= */
+        const eventDetails = await Event.findOne({
+            where: { id: event_id },
+            attributes: ["id", "name", "location", "slug"],
+            include: [
+                {
+                    model: Company,
+                    as: "companyInfo",
+                    attributes: ["name"]
+                },
+                {
+                    model: Currency,
+                    as: "currencyName",
+                    attributes: ["Currency_symbol", "Currency"]
+                }
+            ]
+        });
+
+        /* ================= ASSIGNED TICKET DETAILS ================= */
+        const assignedTickets = await CommitteeAssignTickets.findAll({
+            where: {
+                event_id,
+                user_id: committee_user_id,
+                status: 'Y'
+            },
+            include: [
+                {
+                    model: TicketType,
+                    as: 'ticket',
+                    attributes: ['id', 'title', 'price', 'type']
+                }
+            ],
+            attributes: [
+                'id',
+                'ticket_id',
+                'count',
+                'usedticket',
+                'status'
+            ]
+        });
+
+        /* ================= RESPONSE ================= */
+        return apiResponse.success(
+            res,
+            "Committee ticket details fetched successfully",
+            {
+                event: eventDetails,
+                tickets: assignedTickets
+            }
+        );
+
+    } catch (error) {
+        console.error("handleCommitteeTicketDetails error:", error);
+        return apiResponse.error(
+            res,
+            "Something went wrong while fetching committee ticket details",
+            500
+        );
+    }
+};
 
 exports.handleAction = async (req, res) => {
     try {
@@ -283,6 +514,7 @@ exports.updateAssignedTickets = async (req, res) => {
         );
     }
 };
+
 /* 🔁 COMMON FUNCTION */
 const fetchMemberList = async (event_id) => {
     return await CommitteeMembers.findAll({

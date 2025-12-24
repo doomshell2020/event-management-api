@@ -6,12 +6,53 @@ const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const { Committee } = require('../../../models');
 
+router.post("/push-ticket",
+    authenticate,
+    [
+        body("event_id")
+            .notEmpty().withMessage("event_id is required")
+            .isInt().withMessage("event_id must be a number"),
+
+        body("email")
+            .notEmpty().withMessage("Email is required")
+            .isEmail().withMessage("Invalid email address"),
+
+        body("tickets")
+            .isArray({ min: 1 })
+            .withMessage("At least one ticket must be selected"),
+
+        body("tickets.*.ticket_id")
+            .notEmpty().withMessage("ticket_id is required")
+            .isInt().withMessage("ticket_id must be a number"),
+
+        body("tickets.*.qty")
+            .notEmpty().withMessage("qty is required")
+            .isInt({ min: 1 })
+            .withMessage("qty must be at least 1"),
+    ],
+    validate,
+    committeeController.handleCommitteePushTicket
+);
+
+router.post(`/committee-ticket-details`,
+    authenticate,
+    [
+        body('event_id')
+            .notEmpty()
+            .withMessage('Request event_id is required')
+            .isInt()
+            .withMessage('Request event_id must be a number')
+    ],
+    validate,
+    committeeController.handleCommitteeTicketDetails
+)
+
 // ✅ Committee Requests List (by status)
 router.get('/requests/:status',
     authenticate,
     [
         param('status')
-            .isIn(['T','Y', 'N', 'I'])
+            .isIn(['T', 'Y', 'N', 'I'])
             .withMessage('Invalid status Y|N|I is required Y=Approved, N=Rejected, I=Ignored'),
     ],
     validate,

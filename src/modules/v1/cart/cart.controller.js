@@ -47,7 +47,7 @@ module.exports = {
                     409
                 );
 
-            if (uniqueEvents.length === 1 && !uniqueEvents.includes(event_id))
+            if (uniqueEvents.length == 1 && !uniqueEvents.includes(event_id))
                 return apiResponse.error(
                     res,
                     "Your cart contains items from another event. Clear it first.",
