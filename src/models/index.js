@@ -28,6 +28,8 @@ const PaymentSnapshotItems = require('./payment_snapshot_items');
 const CommitteeMembers = require('./committee_members.model');
 const CommitteeAssignTickets = require('./committee_assigntickets');
 const CartQuestionsDetails = require('./cart_questions_details');
+const CommitteeGroup = require('./committee_group.model');
+const CommitteeGroupMember = require('./committee_group_member.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -86,6 +88,7 @@ Cart.belongsTo(TicketPricing, { foreignKey: 'ticket_price_id' });
 Cart.belongsTo(WellnessSlots, {  foreignKey: 'appointment_id',  as: 'appointments'})
 Cart.belongsTo(Event, {  foreignKey: 'event_id',  as: 'events',})
 Cart.belongsTo(User, {  foreignKey: 'user_id',  as: 'user',})
+CommitteeGroupMember.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 Orders.hasMany(OrderItems, {
   foreignKey: "order_id",
@@ -246,5 +249,5 @@ Wellness.belongsTo(Currency, {
 module.exports = {
   sequelize, Questions, QuestionItems,QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
   User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,
-  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets
+  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets,CommitteeGroup,CommitteeGroupMember
 };

@@ -4,7 +4,60 @@ const committeeController = require('./committee.controller');
 const { body, param } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
-const { Committee } = require('../../../models');
+
+// ✅ List all members of a group
+router.get(
+    '/groups/:groupId/members',
+    authenticate,
+    [
+        param('groupId').notEmpty().withMessage('Group ID is required').isInt().withMessage('Group ID must be an integer')
+    ],
+    validate,
+    committeeController.listGroupMembers
+);
+
+router.post(
+    '/group/add-member',
+    authenticate,
+    [
+        body('group_id').notEmpty().withMessage('Group ID is required').isInt().withMessage('Group ID must be an integer'),
+        body('user_id').notEmpty().withMessage('User ID is required').isInt().withMessage('User ID must be an integer'),
+        body('event_id').notEmpty().withMessage('Event ID is required').isInt().withMessage('Event ID must be an integer')
+    ],
+    validate,
+    committeeController.addGroupMember
+);
+
+router.get(
+    '/groups/:event_id',
+    authenticate,
+    [
+        param('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number'),
+    ],
+    validate,
+    committeeController.listCommitteeGroups
+);
+
+// ✅ CREATE COMMITTEE GROUP
+router.post(
+    '/groups/create',
+    authenticate,
+    [
+        body('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number'),
+
+        body('group_name')
+            .notEmpty().withMessage('Group name is required')
+            .isLength({ min: 2 })
+            .withMessage('Group name must be at least 2 characters'),
+    ],
+    validate,
+    committeeController.createCommitteeGroup
+);
+
 
 router.post("/push-ticket",
     authenticate,
@@ -159,6 +212,5 @@ router.post('/ticket/update',
     validate,
     committeeController.updateAssignedTickets
 );
-
 
 module.exports = router;

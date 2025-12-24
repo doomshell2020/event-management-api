@@ -3,11 +3,145 @@ const committeeTicketIgnoredTemplate = require('../../../common/utils/emailTempl
 const committeeTicketApprovedTemplate = require('../../../common/utils/emailTemplates/committeeApprove');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { sequelize } = require("../../../models"); 
+const { sequelize } = require("../../../models");
 
-const { CommitteeMembers, CommitteeAssignTickets, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
+const { CommitteeMembers, CommitteeAssignTickets, CommitteeGroup,CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
 const config = require('../../../config/app');
 const committeeTicketAssignedTemplate = require('../../../common/utils/emailTemplates/committeeTicketAssignedTemplate ');
+
+exports.listGroupMembers = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+
+        const members = await CommitteeGroupMember.findAll({
+            where: { group_id: groupId },
+            include: [
+                {
+                    model: User,
+                    as: 'user',
+                    attributes: ['id', 'first_name', 'last_name', 'email', 'mobile']
+                }
+            ],
+            order: [['createdAt', 'ASC']]
+        });
+
+        return apiResponse.success(res, 'Group members fetched successfully', members);
+    } catch (err) {
+        console.error(err);
+        return apiResponse.error(res, 'Failed to fetch group members');
+    }
+};
+
+exports.addGroupMember = async (req, res) => {
+    try {
+        const { group_id, user_id, event_id } = req.body;
+        const addedBy = req.user.id;
+
+        // check if already added
+        const existing = await CommitteeGroupMember.findOne({
+            where: { group_id, user_id }
+        });
+
+        if (existing) {
+            return apiResponse.error(res, 'User already in this group');
+        }
+
+        const member = await CommitteeGroupMember.create({
+            group_id,
+            user_id,
+            event_id,
+            added_by:addedBy
+        });
+
+        return apiResponse.success(res, 'Member added successfully', member);
+    } catch (err) {
+        console.error(err);
+        return apiResponse.error(res, 'Failed to add member');
+    }
+};
+
+exports.listCommitteeGroups = async (req, res) => {
+    try {
+        const committee_user_id = req.user.id;
+        const { event_id } = req.params;
+
+        const groups = await CommitteeGroup.findAll({
+            where: {
+                event_id,
+                // committee_user_id,
+                status: 'Y'
+            },
+            attributes: {
+                exclude: ['createdAt', 'updatedAt']
+            },
+            order: [['createdAt', 'DESC']],
+            raw: true
+        });
+
+        return apiResponse.success(
+            res,
+            "Committee groups fetched successfully",
+            groups
+        );
+
+    } catch (error) {
+        console.error("listCommitteeGroups error:", error);
+        return apiResponse.error(
+            res,
+            "Failed to fetch committee groups",
+            500
+        );
+    }
+};
+
+exports.createCommitteeGroup = async (req, res) => {
+    try {
+        const committee_user_id = req.user.id;
+        const { event_id, group_name } = req.body;
+
+        const normalizedName = group_name.trim();
+
+        /* ================= DUPLICATE CHECK ================= */
+        const existingGroup = await CommitteeGroup.findOne({
+            where: {
+                event_id,
+                name: normalizedName,
+                status: 'Y'
+            }
+        });
+
+        if (existingGroup) {
+            return apiResponse.error(
+                res,
+                "Group with this name already exists",
+                409
+            );
+        }
+
+        /* ================= CREATE GROUP ================= */
+        const newGroup = await CommitteeGroup.create({
+            event_id,
+            committee_user_id,
+            name: normalizedName,
+            status: 'Y'
+        });
+
+        return apiResponse.success(
+            res,
+            "Committee group created successfully",
+            newGroup
+        );
+
+    } catch (error) {
+        console.error("createCommitteeGroup error:", error);
+        return apiResponse.error(
+            res,
+            "Failed to create committee group",
+            500
+        );
+    }
+};
+
 
 exports.handleCommitteePushTicket = async (req, res) => {
     const transaction = await sequelize.transaction();
@@ -150,7 +284,6 @@ exports.handleCommitteePushTicket = async (req, res) => {
         );
     }
 };
-
 
 exports.handleCommitteeTicketDetails = async (req, res) => {
     try {
