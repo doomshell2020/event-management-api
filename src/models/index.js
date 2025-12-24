@@ -57,8 +57,7 @@ QuestionItems.belongsTo(Questions, {
 // ✅ Package ↔ PackageDetails (already defined)
 Package.hasMany(PackageDetails, { foreignKey: 'package_id', as: 'details' });
 PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
-
-// ✅ PackageDetails ↔ TicketType
+PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
 PackageDetails.belongsTo(TicketType, { foreignKey: 'ticket_type_id', as: 'ticketType' });
 TicketType.hasMany(PackageDetails, { foreignKey: 'ticket_type_id', as: 'packageDetails' });
 
@@ -74,7 +73,6 @@ CommitteeAssignTickets.belongsTo(TicketType, {
 
 
 // ✅ PackageDetails ↔ AddonTypes
-PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
 AddonTypes.hasMany(PackageDetails, { foreignKey: 'addon_id', as: 'packageDetails' });
 
 // ✅ Package ↔ Event
@@ -176,6 +174,11 @@ Event.hasMany(AddonTypes, {
   onDelete: 'CASCADE'
 });
 
+Event.hasMany(Package, {
+  foreignKey: 'event_id',
+  as: 'package',    // fetch addons via event.addons
+  onDelete: 'CASCADE'
+});
 
 TicketType.hasMany(TicketPricing, {
   foreignKey: 'ticket_type_id',

@@ -2,7 +2,7 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const requestTicket = require('../../../common/utils/emailTemplates/requestTicket');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers, Questions, QuestionItems, CartQuestionsDetails } = require('../../../models');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers, Questions, QuestionItems, CartQuestionsDetails, PackageDetails } = require('../../../models');
 const { Op, Sequelize } = require("sequelize");
 const config = require('../../../config/app');
 
@@ -239,8 +239,6 @@ module.exports = {
                 status: "Y"
             };
 
-            // console.log('>>>>>>>>>>>>',where);           
-
             if (event_id) where.event_id = event_id;
             if (item_type) where.ticket_type = item_type;
 
@@ -293,19 +291,20 @@ module.exports = {
 
                 const events = await Event.findOne({
                     where: { id: ev },
-                    attributes: [
-                        "id",
-                        "event_org_id",
-                        "name",
-                        "desp",
-                        "location",
-                        "feat_image",
-                        "date_from",
-                        "date_to",
-                        "sale_start",
-                        "sale_end",
-                        "event_timezone"
-                    ],
+                    attributes:
+                        [
+                            "id",
+                            "event_org_id",
+                            "name",
+                            // "desp",
+                            "location",
+                            "feat_image",
+                            "date_from",
+                            "date_to",
+                            "sale_start",
+                            "sale_end",
+                            "event_timezone"
+                        ],
                     include: [
                         {
                             model: TicketType,
@@ -352,6 +351,22 @@ module.exports = {
                             model: AddonTypes,
                             as: "addons",
                             attributes: { exclude: ["createdAt", "updatedAt"] }
+                        },
+                        {
+                            model: Package,
+                            as: "package",
+                            attributes: { exclude: ["CreatedAt", "UpdatedAt"] },
+                            include: [
+                                {
+                                    model: PackageDetails,
+                                    as: "details",
+                                    attributes: { exclude: ["CreatedAt", "UpdatedAt"] },
+                                    include: [
+                                        { model: AddonTypes, as: "addonType", attributes: { exclude: ["createdAt", "updatedAt"] } },
+                                        { model: TicketType, as: "ticketType", attributes: { exclude: ["createdAt", "updatedAt"] } }
+                                    ]
+                                },
+                            ]
                         },
                         {
                             model: Company,
