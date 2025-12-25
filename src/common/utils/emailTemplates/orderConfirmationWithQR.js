@@ -20,7 +20,7 @@ const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
 
   return `
   <div style="font-family:Arial, sans-serif; background:#f4f4f7; padding:40px 20px;">
-    <div style="max-width:820px; margin:0 auto; background:#ffffff;
+    <div style="max-width:100%; margin:0 auto; background:#ffffff;
                 border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,0.12);
                 overflow:hidden;">
 
@@ -114,8 +114,8 @@ const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
         <h3 style="margin-top:10px;">🎟 Your Items & QR Codes</h3>
 
         ${qrResults.map(qr => {
-    const type = getItemTypeLabel(order, qr.order_item_id);
-    return `
+          const type = getItemTypeLabel(order, qr.order_item_id);
+          return `
           <div style="border:1px solid #e0e0e0; padding:22px; margin:20px 0;
                       border-radius:16px; background:#ffffff;">
 
@@ -136,7 +136,7 @@ const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
                         border-radius:12px; background:#fafafa;" />
           </div>
           `;
-  }).join("")}
+        }).join("")}
       </div>
 
       <!-- FOOTER -->
