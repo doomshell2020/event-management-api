@@ -389,7 +389,7 @@ module.exports = {
                         .map(ticket => ticket.id)
                         .filter(Boolean);
 
-                    console.log('ticketTypeIds :', ticketTypeIds);
+                    // console.log('ticketTypeIds :', ticketTypeIds);
 
                     if (ticketTypeIds.length > 0) {
                         questions = await Questions.findAll({
