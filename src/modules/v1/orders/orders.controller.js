@@ -60,6 +60,16 @@ module.exports.fulfilOrderFromSnapshot = async ({
     // ----------------------------
     const event = await Event.findOne({
         where: { id: event_id },
+        include: [{
+            model: Company,
+            as: "companyInfo",
+            attributes: ["name"]
+        },
+        {
+            model: Currency,
+            as: "currencyName",
+            attributes: ["Currency_symbol", "Currency"]
+        }]
         raw: true,
     });
 
@@ -110,7 +120,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
     for (const item of snapshotItems) {
         for (let i = 0; i < item.quantity; i++) {
-            // console.log('Creating order item for snapshot item:', item);
+
             const orderItem = await OrderItems.create({
                 order_id: order.id,
                 user_id,
@@ -125,7 +135,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 slot_id: item.slot_id || null,
             });
 
-            // here question find in the cartquesition modal and then insert 
+            // here question find in the cartQuestion modal and then insert 
             if (item.cart_id) {
                 const cartQuestions = await CartQuestionsDetails.findAll({
                     where: {
@@ -147,7 +157,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     await QuestionsBook.bulkCreate(questionBooks);
                 }
             }
-
 
             const qr = await generateQRCode(orderItem);
 
@@ -172,7 +181,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
             }
         }
     }
-
 
     // CLEANUP
     // ----------------------------
