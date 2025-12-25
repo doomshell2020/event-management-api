@@ -53,12 +53,11 @@ const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
 
         <!-- ORDER INFO -->
         <p><strong>🧾 Order ID:</strong> ${order.order_uid}</p>
-        <p><strong>💰 Total Amount:</strong> ₹${order.grand_total}</p>
-
+        <p><strong>💰 Total Amount:</strong> ${event.currency_symbol || "₹"}${order.grand_total}</p>
         <h3 style="margin-top:30px; font-size:20px;">Your Items & QR Codes</h3>
 
         ${qrResults.map((qr) => {
-    const type = getItemTypeLabel(order, qr.order_item_id);
+        const type = getItemTypeLabel(order, qr.order_item_id);
 
     return `
           <div style="border:1px solid #e0e0e0; padding:20px; margin:18px 0;

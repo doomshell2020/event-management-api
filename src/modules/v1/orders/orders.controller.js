@@ -69,7 +69,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
             model: Currency,
             as: "currencyName",
             attributes: ["Currency_symbol", "Currency"]
-        }]
+        }],
         raw: true,
     });
 
@@ -91,7 +91,9 @@ module.exports.fulfilOrderFromSnapshot = async ({
         date_to: formatDateReadable(event.date_to, timezone),
 
         // Keep timezone for email
-        timezone
+        timezone,
+        currency_symbol: event["currencyName.Currency_symbol"] || "₹",
+        currency_name: event["currencyName.Currency"] || "INR"
     };
     // console.log('formattedEvent :', formattedEvent);
 
