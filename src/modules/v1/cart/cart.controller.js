@@ -520,6 +520,7 @@ module.exports = {
             // ✅ 4) FINAL response
             // -------------------------------------------------------
             return apiResponse.success(res, "Cart fetched", {
+                user_id,
                 event: formattedEvent,   // may be null if no event id found
                 cart: formatted
             });

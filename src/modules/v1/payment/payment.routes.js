@@ -3,10 +3,11 @@ const router = express.Router();
 const paymentController = require('./payment.controller');
 const { body } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
+const authenticate = require('../../../middlewares/auth.middleware');
 
 // ------------------- CREATE PAYMENT INTENT -------------------
-router.post(
-    "/create-payment-intent",
+router.post("/create-payment-intent",
+    authenticate,
     [
         // REQUIRED
         body("user_id")
@@ -61,8 +62,8 @@ router.post(
 
 
 // ------------------- STRIPE WEBHOOK -------------------
-router.post(
-    "/webhook",
+router.post("/webhook",
+    authenticate,
     paymentController.stripeWebhook
 );
 
