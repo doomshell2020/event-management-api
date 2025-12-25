@@ -20,7 +20,7 @@ const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
 
   return `
   <div style="font-family:Arial, sans-serif; background:#f4f4f7; padding:40px 20px;">
-    <div style="max-width:100%; margin:0 auto; background:#ffffff;
+    <div style="max-width:1060px; margin:0 auto; background:#ffffff;
                 border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,0.12);
                 overflow:hidden;">
 
@@ -70,11 +70,11 @@ const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
             </tr>
             <tr>
               <td>Discount</td>
-              <td align="right">-${currency}${order.discount || "0.00"}</td>
+              <td align="right">-${currency}${order.discount_amount || "0.00"}</td>
             </tr>
             <tr>
               <td>Tax</td>
-              <td align="right">${currency}${order.tax_amount}</td>
+              <td align="right">${currency}${order.tax_total}</td>
             </tr>
             <tr>
               <td colspan="2">
@@ -95,17 +95,17 @@ const orderConfirmationTemplateWithQR = (user, order, qrResults, event) => {
                  style="border-collapse:collapse; font-size:14px; color:#555;">
             <tr>
               <td>Payment Method</td>
-              <td align="right">${order.payment_gateway || "Online Payment"}</td>
+              <td align="right">${order.paymentgateway || "Online Payment"}</td>
             </tr>
             <tr>
               <td>Transaction ID</td>
               <td align="right" style="word-break:break-all;">
-                ${order.payment_intent || "-"}
+                ${order.RRN || "-"}
               </td>
             </tr>
             <tr>
               <td>Order Date</td>
-              <td align="right">${order.created_at}</td>
+              <td align="right">${order.createdAt}</td>
             </tr>
           </table>
         </div>
