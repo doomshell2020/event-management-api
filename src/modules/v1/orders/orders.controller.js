@@ -44,10 +44,10 @@ module.exports.fulfilOrderFromSnapshot = async ({
         where: { RRN: payment.payment_intent },
     });
 
-    if (existingOrder) {
-        console.log("⚠️ Order already exists for this payment intent. Skipping creation.");
-        return { order: existingOrder, duplicated: true };
-    }
+    // if (existingOrder) {
+    //     console.log("⚠️ Order already exists for this payment intent. Skipping creation.");
+    //     return { order: existingOrder, duplicated: true };
+    // }
 
     const userInfo = await User.findOne({
         where: { id: user_id },
