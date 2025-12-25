@@ -63,7 +63,6 @@ router.post("/create-payment-intent",
 
 // ------------------- STRIPE WEBHOOK -------------------
 router.post("/webhook",
-    authenticate,
     paymentController.stripeWebhook
 );
 
