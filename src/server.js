@@ -39,6 +39,14 @@ const ticketsRoutesV2 = require('./modules/v2/tickets/tickets.routes');
 // const subscriptionsRoutesV1 = require('./modules/v1/subscriptions/subscriptions.routes');
 // const apiKeysRoutesV1 = require('./modules/v1/apiKeys/apiKeys.routes');
 
+// Admin Routes...
+const authAdminRoutesV1 = require('./modules/v1/admin/auth/auth.routes');
+const eventOrganizerAdminRoutesV1 = require('./modules/v1/admin/event-organizer/eventOrganizer.routes');
+const eventAdminRoutesV1 = require('./modules/v1/admin/event/event.routes');
+const ordersAdminRoutesV1 = require('./modules/v1/admin/orders/orders.routes');
+const ticketsAdminRoutesV1 = require('./modules/v1/admin/tickets/tickets.routes');
+
+
 // Initialize Express
 const app = express();
 
@@ -87,6 +95,16 @@ app.use('/api/v1/payment',paymentRoutesV1);
 // API v2 routes
 app.use('/api/v2/events', eventsRoutesV2);
 app.use('/api/v2/tickets', ticketsRoutesV2);
+
+// API V1 Admin Routes
+app.use('/api/v1/admin/auth',authAdminRoutesV1)
+app.use('/api/v1/admin/event-organizer',eventOrganizerAdminRoutesV1)
+app.use('/api/v1/admin/events',eventAdminRoutesV1)
+app.use('/api/v1/admin/orders',ordersAdminRoutesV1)
+app.use('/api/v1/admin/tickets',ticketsAdminRoutesV1)
+
+
+
 
 // Handle 404 errors
 app.use((req, res) => {

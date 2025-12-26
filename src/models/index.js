@@ -86,6 +86,15 @@ Event.hasMany(OrderItems, {
   as: "orderItems"
 });
 
+Event.hasMany(Orders, {
+  foreignKey: "event_id",
+  as: "orders"
+});
+
+
+
+
+
 Event.belongsTo(Company, {
   foreignKey: "company_id",
   as: "companyInfo"
@@ -192,6 +201,10 @@ Wellness.hasMany(WellnessSlots, {
   foreignKey: 'wellness_id',
   as: 'wellnessSlots',
 });
+Event.belongsTo(Currency, {
+  foreignKey: 'payment_currency',
+  as: 'currencyName',
+});
 Wellness.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'eventList',
@@ -212,6 +225,11 @@ Cart.belongsTo(Event, {
 Event.hasMany(Wellness, {
   foreignKey: 'event_id',
   as: 'wellness',
+})
+
+Event.belongsTo(User, {
+  foreignKey: 'event_org_id',
+  as: 'Organizer',
 })
 
 // =============================
