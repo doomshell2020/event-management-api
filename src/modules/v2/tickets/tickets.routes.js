@@ -37,7 +37,7 @@ router.post('/create',
 
         body('type')
             .optional()
-            .isIn(['open_sales', 'comps'])
+            .isIn(['open_sales', 'comps','committee_sales'])
             .withMessage('Invalid ticket type open_sales is paid and the comps is for free'),
 
         body('hidden')
@@ -75,7 +75,7 @@ router.put('/update/:id',
 
         body('type')
             .optional()
-            .isIn(['open_sales', 'comps'])
+            .isIn(['open_sales', 'comps','committee_sales'])
             .withMessage('Invalid ticket type open_sales is paid and the comps is for free'),
 
     ],

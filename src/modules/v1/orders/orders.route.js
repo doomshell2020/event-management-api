@@ -68,7 +68,6 @@ router.get('/organizer/ticket-exports',
     ordersController.organizerTicketExports
 );
 
-
 // create appointment order.. new kamal
 router.post('/create-appointment',
     authenticate,
@@ -97,5 +96,16 @@ router.put(
     // validate,
     ordersController.cancelAppointment
 );
+
+// routes/sales.routes.js
+router.get('/event-sales-summary',
+    authenticate,
+    [
+        query('event_id').notEmpty().withMessage('event_id is required'),
+    ],
+    validate,
+    ordersController.eventSalesAnalytics
+);
+
 
 module.exports = router;

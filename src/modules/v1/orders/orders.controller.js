@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Payment, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency } = require('../../../models');
+const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
@@ -7,7 +7,7 @@ const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
 const { generateUniqueOrderId } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Op } = require("sequelize");
+const { Op, fn, col, literal } = require("sequelize");
 const config = require('../../../config/app');
 
 // Convert to user-friendly readable format
@@ -28,6 +28,92 @@ const formatDateReadable = (dateStr, timezone) => {
     });
 };
 
+exports.eventSalesAnalytics = async (req, res) => {
+    try {
+        const { event_id } = req.query;
+
+        if (!event_id) {
+            return apiResponse.error(res, "event_id is required", 400);
+        }
+
+        /* ===========================
+           🎟 SALES BY TICKET
+        ============================ */
+        const salesByTicket = await OrderItems.findAll({
+            where: {
+                event_id,
+                type: 'ticket'
+            },
+            attributes: [
+                'ticket_id',
+                [fn('SUM', col('OrderItems.count')), 'tickets_sold'],
+                [fn('SUM', literal('OrderItems.count * OrderItems.price')), 'ticket_revenue']
+            ],
+            include: [
+                {
+                    model: TicketType,
+                    as: 'ticketType',
+                    attributes: ['id', 'title', 'price']
+                }
+            ],
+            group: ['OrderItems.ticket_id', 'ticketType.id']
+        });
+
+        /* ===========================
+           💳 SALES BY PAYMENT METHOD
+        ============================ */
+        const salesByMethod = await Orders.findAll({
+            where: {
+                event_id,
+                status: 'Y'
+            },
+            attributes: [
+                'paymenttype',
+                [fn('COUNT', col('Orders.id')), 'total_orders'],
+                [fn('SUM', col('Orders.grand_total')), 'method_revenue']
+            ],
+            group: ['paymenttype']
+        });
+
+        /* ===========================
+           📊 OVERALL TOTALS
+        ============================ */
+        const totalOrders = await Orders.count({
+            where: { event_id, status: 'Y' }
+        });
+
+        const totalRevenue = await Orders.sum('grand_total', {
+            where: { event_id, status: 'Y' }
+        });
+
+        const totalTicketsSold = await OrderItems.sum('count', {
+            where: {
+                event_id,
+                type: 'ticket'
+            }
+        });
+
+        /* ===========================
+           ✅ FINAL RESPONSE
+        ============================ */
+        return apiResponse.success(res, "Event sales analytics fetched", {
+            event_id,
+            summary: {
+                total_orders: totalOrders || 0,
+                total_revenue: totalRevenue || 0,
+                total_tickets_sold: totalTicketsSold || 0
+            },
+            sales_by_ticket: salesByTicket,
+            sales_by_payment_method: salesByMethod
+        });
+
+    } catch (error) {
+        console.error("Event Sales Analytics Error:", error);
+        return apiResponse.error(res, "Failed to fetch event sales analytics", 500);
+    }
+};
+
+
 module.exports.fulfilOrderFromSnapshot = async ({
     meta_data,
     user_id,
@@ -44,10 +130,10 @@ module.exports.fulfilOrderFromSnapshot = async ({
         where: { RRN: payment.payment_intent },
     });
 
-    if (existingOrder) {
-        console.log("⚠️ Order already exists for this payment intent. Skipping creation.");
-        return { order: existingOrder, duplicated: true };
-    }
+    // if (existingOrder) {
+    //     console.log("⚠️ Order already exists for this payment intent. Skipping creation.");
+    //     return { order: existingOrder, duplicated: true };
+    // }
 
     const userInfo = await User.findOne({
         where: { id: user_id },
@@ -60,6 +146,16 @@ module.exports.fulfilOrderFromSnapshot = async ({
     // ----------------------------
     const event = await Event.findOne({
         where: { id: event_id },
+        include: [{
+            model: Company,
+            as: "companyInfo",
+            attributes: ["name"]
+        },
+        {
+            model: Currency,
+            as: "currencyName",
+            attributes: ["Currency_symbol", "Currency"]
+        }],
         raw: true,
     });
 
@@ -81,7 +177,9 @@ module.exports.fulfilOrderFromSnapshot = async ({
         date_to: formatDateReadable(event.date_to, timezone),
 
         // Keep timezone for email
-        timezone
+        timezone,
+        currency_symbol: event["currencyName.Currency_symbol"] || "₹",
+        currency_name: event["currencyName.Currency"] || "INR"
     };
     // console.log('formattedEvent :', formattedEvent);
 
@@ -110,13 +208,13 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
     for (const item of snapshotItems) {
         for (let i = 0; i < item.quantity; i++) {
-            // console.log('Creating order item for snapshot item:', item);
+
             const orderItem = await OrderItems.create({
                 order_id: order.id,
                 user_id,
                 event_id,
                 type: item.item_type,
-                ticket_id: item.item_type == "ticket" ? item.ticket_id : null,
+                ticket_id: item.item_type == "ticket" || item.item_type == "committesale" ? item.ticket_id : null,
                 addon_id: item.item_type == "addon" ? item.ticket_id : null,
                 package_id: item.item_type == "package" ? item.ticket_id : null,
                 ticket_pricing_id: item.item_type == "ticket_price" ? item.ticket_id : null,
@@ -124,6 +222,29 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 price: item.price,
                 slot_id: item.slot_id || null,
             });
+
+            // here question find in the cartQuestion modal and then insert 
+            if (item.cart_id) {
+                const cartQuestions = await CartQuestionsDetails.findAll({
+                    where: {
+                        cart_id: item.cart_id,
+                        status: 'Y' // optional but recommended
+                    }
+                });
+
+                if (cartQuestions.length > 0) {
+                    const questionBooks = cartQuestions.map(q => ({
+                        order_id: order.id,
+                        ticketdetail_id: orderItem.id, // 🔗 link with order item
+                        question_id: q.question_id,
+                        event_id: q.event_id,
+                        user_id: q.user_id,
+                        user_reply: q.user_reply
+                    }));
+
+                    await QuestionsBook.bulkCreate(questionBooks);
+                }
+            }
 
             const qr = await generateQRCode(orderItem);
 
@@ -148,7 +269,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
             }
         }
     }
-
 
     // CLEANUP
     // ----------------------------
@@ -263,6 +383,9 @@ exports.createOrder = async (req, res) => {
 
             if (item.ticket_type == 'ticket_price')
                 totalAmount += Number(item.TicketPricing.price || 0);
+
+            if (item.ticket_type == "committesale")
+                totalAmount += Number(item.TicketType.price || 0);
         });
 
         // CREATE ORDER
@@ -292,6 +415,10 @@ exports.createOrder = async (req, res) => {
 
             if (item.ticket_type == "ticket_price")
                 price = item.TicketPricing?.price || 0;
+
+            if (item.ticket_type == "committesale")
+                price = item.TicketType?.price || 0;
+
 
             // CREATE ORDER ITEM
             const orderItem = await OrderItems.create({
@@ -705,7 +832,21 @@ exports.organizerOrderList = async (req, res) => {
             where,
             include: [
                 { model: User, as: "user", attributes: ["id", "first_name", "last_name", "email"] },
-                { model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to"] },
+                {
+                    model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to"],
+                    include: [
+                        {
+                            model: Company,
+                            as: "companyInfo",
+                            attributes: ["name"]
+                        },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
+                    ]
+                },
                 { model: OrderItems, as: "orderItems" }
             ],
             order: [["createdAt", "DESC"]],
@@ -844,6 +985,18 @@ exports.organizerTicketExports = async (req, res) => {
                 {
                     model: Event,
                     as: "event",
+                    include: [
+                        {
+                            model: Company,
+                            as: "companyInfo",
+                            attributes: ["name"]
+                        },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
+                    ],
                     attributes: ["name", "feat_image", "date_from", "date_to"]
                 }
             ],
@@ -960,7 +1113,13 @@ exports.getOrderDetails = async (req, res) => {
                         },
                     ]
                 },
-                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'], include: { model: Company, as: "companyInfo", attributes: ['name'] } }
+                {
+                    model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'],
+                    include: [
+                        { model: Company, as: "companyInfo", attributes: ['name'] },
+                        { model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }
+                    ]
+                }
             ]
         });
 
@@ -1066,5 +1225,3 @@ exports.cancelAppointment = async (req, res) => {
         });
     }
 };
-
-

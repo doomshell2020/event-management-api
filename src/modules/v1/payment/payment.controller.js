@@ -34,6 +34,7 @@ exports.createPaymentIntent = async (req, res) => {
         user_id,
         event_id,
         ticket_id: item.ticketId || null,
+        cart_id: item.id || null,
         addon_id: item.addonId || null,
         appointment_id: item.appointmentId || null,
         item_type: item.ticketType,

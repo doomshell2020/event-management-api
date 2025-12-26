@@ -33,15 +33,7 @@ router.post('/create',
 
         body('count')
             .optional()
-            .isInt({ min: 1 }).withMessage('Ticket count must be at least 1'),
-
-        // body('sale_start')
-        //     .optional()
-        //     .isISO8601().withMessage('Sale start date must be a valid ISO date'),
-
-        // body('sale_end')
-        //     .optional()
-        //     .isISO8601().withMessage('Sale end date must be a valid ISO date')
+            .isInt({ min: 1 }).withMessage('Ticket count must be at least 1')
     ],
     validate,
     ticketController.createTicket

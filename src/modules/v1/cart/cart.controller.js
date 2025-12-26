@@ -1,7 +1,10 @@
 const apiResponse = require('../../../common/utils/apiResponse');
+const requestTicket = require('../../../common/utils/emailTemplates/requestTicket');
+const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company,Currency } = require('../../../models');
-const { Op } = require('sequelize');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers, Questions, QuestionItems, CartQuestionsDetails, PackageDetails } = require('../../../models');
+const { Op, Sequelize } = require("sequelize");
+const config = require('../../../config/app');
 
 
 module.exports = {
@@ -16,138 +19,210 @@ module.exports = {
                 appointment_id,
                 ticket_price_id,
                 item_type,
-                count
+                count = 1,
+                committee_member_id,
+                questionAnswers = []   // ✅ ADD THIS
             } = req.body;
-            // console.log("--------req.body", req.body)
-            // return false
+
             const user_id = req.user.id;
-            // 1️⃣ CHECK EVENT EXISTS
+
+            /* ================= EVENT CHECK ================= */
             const eventExists = await Event.findByPk(event_id);
             if (!eventExists)
                 return apiResponse.error(res, "Event not found", 404);
 
-
-            // 2️⃣ CHECK IF CART HAS ITEMS FROM ANOTHER EVENT
+            /* ========== SINGLE EVENT CART RULE ========== */
             const eventsInCart = await Cart.findAll({
                 where: { user_id },
                 attributes: ['event_id'],
                 group: ['event_id']
             });
 
-            // Array of event IDs already in cart
             const uniqueEvents = eventsInCart.map(e => e.event_id);
-            // console.log('uniqueEvents :', uniqueEvents);
 
-            // 🟥 If cart contains items from multiple events → conflict
-            if (uniqueEvents.length > 1) {
+            if (uniqueEvents.length > 1)
                 return apiResponse.error(
                     res,
-                    "Your cart contains items from multiple events. Please clear the cart before adding new items.",
+                    "Your cart contains items from multiple events. Please clear the cart.",
                     409
                 );
-            }
 
-            // 🟨 If cart contains exactly 1 event → it must match new event_id
-            if (uniqueEvents.length == 1 && !uniqueEvents.includes(event_id)) {
+            if (uniqueEvents.length == 1 && !uniqueEvents.includes(event_id))
                 return apiResponse.error(
                     res,
-                    "Your cart contains items from another event. Confirm to clear the old cart.",
+                    "Your cart contains items from another event. Clear it first.",
                     409,
                     { cartEventId: uniqueEvents[0] }
                 );
-            }
 
-            // 2️⃣ MAP MODEL BASED ON item_type
+            /* ================= ITEM VALIDATION ================= */
             const modelMap = {
                 ticket: { id: ticket_id, model: TicketType },
+                committesale: { id: ticket_id, model: TicketType },
                 addon: { id: addons_id, model: AddonTypes },
                 package: { id: package_id, model: Package },
                 ticket_price: { id: ticket_price_id, model: TicketPricing },
-                appointment: { id: appointment_id, model: WellnessSlots },
-
-                // Special types
-                // committesale: { id: ticket_id || addons_id, model: null },
-                // opensale: { id: ticket_id || addons_id, model: null },
+                appointment: { id: appointment_id, model: WellnessSlots }
             };
 
             const selected = modelMap[item_type];
-            if (!selected)
-                return apiResponse.error(res, "Invalid item type", 400);
+            if (!selected || !selected.id)
+                return apiResponse.error(res, "Invalid item type or ID", 400);
 
-            // ⭐ 3️⃣ ENSURE AT LEAST ONE ID EXISTS
-            const incomingId =
-                ticket_id ||
-                addons_id ||
-                package_id ||
-                appointment_id ||
-                ticket_price_id ||
-                null;
-
-            if (!incomingId)
-                return apiResponse.error(res, "No valid item ID provided", 400);
-
-            // ⭐ 4️⃣ VALIDATE PROVIDED ID EXISTS IN DB
             if (selected.model) {
-                const itemExists = await selected.model.findByPk(selected.id);
+                const exists = await selected.model.findByPk(selected.id);
+                if (!exists)
+                    return apiResponse.error(res, "Item not found", 404);
+            }
 
-                if (!itemExists) {
+            /* ================= COMMITTEE LOGIC ================= */
+            if (item_type == 'committesale') {
+
+                if (count > 1)
                     return apiResponse.error(
                         res,
-                        `${item_type} with provided ID not found`,
-                        404
+                        "Only 1 committee ticket can be requested",
+                        400
                     );
-                }
+
+                const pendingSameTicket = await Cart.findOne({
+                    where: {
+                        user_id,
+                        event_id,
+                        ticket_id,
+                        ticket_type: 'committesale',
+                        status: 'N'
+                    }
+                });
+
+                if (pendingSameTicket)
+                    return apiResponse.error(
+                        res,
+                        "You already have a pending request for this committee ticket",
+                        400
+                    );
+
+                const committeeAssign = await CommitteeAssignTickets.findOne({
+                    where: {
+                        event_id,
+                        ticket_id,
+                        user_id: committee_member_id,
+                        status: 'Y'
+                    }
+                });
+
+                if (!committeeAssign)
+                    return apiResponse.error(
+                        res,
+                        "No committee ticket allocation available",
+                        400
+                    );
+
+                const available =
+                    committeeAssign.count - (committeeAssign.usedticket || 0);
+
+                if (available < 1)
+                    return apiResponse.error(
+                        res,
+                        "No committee ticket available for selected member",
+                        400
+                    );
             }
 
-            // 3️⃣ Validate item exists (except special)
-            if (!["committesale", "opensale"].includes(item_type)) {
-                if (!selected.id)
-                    return apiResponse.error(res, `${item_type}_id is required`, 400);
-
-                const itemExists = await selected.model.findByPk(selected.id);
-                if (!itemExists)
-                    return apiResponse.error(res, `${item_type} not found`, 404);
-            }
-            // 4️⃣ CHECK IF SAME ITEM ALREADY IN CART
+            /* ================= EXISTING CART CHECK ================= */
             const existing = await Cart.findOne({
                 where: {
                     user_id,
                     event_id,
                     ticket_type: item_type,
-                    ticket_id: item_type == "ticket" ? ticket_id : null,
-                    addons_id: item_type == "addon" ? addons_id : null,
-                    package_id: item_type == "package" ? package_id : null,
-                    appointment_id: item_type == "appointment" ? appointment_id : null,
-                    ticket_price_id: item_type == "ticket_price" ? ticket_price_id : null
+                    ticket_id:
+                        ['ticket', 'committesale'].includes(item_type)
+                            ? ticket_id
+                            : null,
+                    addons_id: item_type == 'addon' ? addons_id : null,
+                    package_id: item_type == 'package' ? package_id : null,
+                    appointment_id: item_type == 'appointment' ? appointment_id : null,
+                    ticket_price_id:
+                        item_type == 'ticket_price' ? ticket_price_id : null
                 }
             });
 
-            if (existing) {
+            // ❌ Do NOT block different committee tickets
+            if (existing && item_type != 'committesale') {
                 existing.no_tickets += count;
                 await existing.save();
-                return apiResponse.success(res, "Item quantity updated", existing);
+                return apiResponse.success(res, "Cart updated", existing);
             }
 
-            // 5️⃣ CREATE NEW CART ENTRY
+            /* ================= CREATE CART ITEM ================= */
             const createData = {
                 user_id,
                 event_id,
-                no_tickets: count,
+                no_tickets: item_type == 'committesale' ? 1 : count,
                 ticket_type: item_type,
-                ticket_price_id: ticket_price_id || null
+                ticket_id: ticket_id || null,
+                addons_id: addons_id || null,
+                package_id: package_id || null,
+                appointment_id: appointment_id || null,
+                ticket_price_id: ticket_price_id || null,
+                commitee_user_id: item_type == 'committesale' ? committee_member_id : null,
+                status: item_type == 'committesale' ? 'N' : 'Y'
             };
 
-            if (ticket_id) createData.ticket_id = ticket_id;
-            if (addons_id) createData.addons_id = addons_id;
-            if (package_id) createData.package_id = package_id;
-            if (appointment_id) createData.appointment_id = appointment_id;
+            // console.log('>>>>>>>>>>>>',createData);
+            // return false
 
-            // console.log('>>>>>>>>>>>>>>', createData); return
+
             const newItem = await Cart.create(createData);
+
+            /* ================= SAVE QUESTION ANSWERS ================= */
+            if (
+                Array.isArray(questionAnswers) &&
+                questionAnswers.length > 0 &&
+                ['ticket', 'committesale'].includes(item_type)
+            ) {
+                const questionRows = questionAnswers.map(q => ({
+                    cart_id: newItem.id,          // ✅ LINK TO CART
+                    event_id,
+                    user_id,
+                    ticket_id,
+                    question_id: q.question_id,
+                    user_reply: q.answer,
+                    status: 'Y',
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                }));
+
+                await CartQuestionsDetails.bulkCreate(questionRows);
+            }
+
+
+            /* ================= EMAIL (COMMITTEE) ================= */
+            // if (item_type == 'committesale') {
+            //     const committeeMember = await User.findByPk(
+            //         committee_member_id,
+            //         { attributes: ['first_name', 'last_name', 'email'] }
+            //     );
+
+            //     if (committeeMember?.email) {
+            //         sendEmail(
+            //             committeeMember.email,
+            //             `Ticket Request for ${eventExists.name}`,
+            //             requestTicket({
+            //                 RequesterName: `${req.user.firstName} ${req.user.lastName}`,
+            //                 CommitteeName: `${committeeMember.first_name} ${committeeMember.last_name}`,
+            //                 EventName: eventExists.name,
+            //                 URL: `${config.clientUrl}/committee/sales`,
+            //                 SITE_URL: config.clientUrl
+            //             })
+            //         );
+            //     }
+            // }
+
             return apiResponse.success(res, "Item added to cart", newItem);
 
         } catch (error) {
-            console.log(error);
+            console.error(error);
             return apiResponse.error(res, "Something went wrong", 500);
         }
     },
@@ -160,7 +235,8 @@ module.exports = {
 
             let where = {
                 user_id,
-                ticket_type: { [Op.ne]: "appointment" }
+                ticket_type: { [Op.ne]: "appointment" },
+                status: "Y"
             };
 
             if (event_id) where.event_id = event_id;
@@ -169,6 +245,7 @@ module.exports = {
             const cartList = await Cart.findAll({
                 where,
                 order: [["id", "DESC"]],
+                where: where,
                 include: [
                     { model: TicketType, attributes: ["id", "title", "price"] },
                     { model: AddonTypes, attributes: ["id", "name", "price"] },
@@ -214,25 +291,146 @@ module.exports = {
 
                 const events = await Event.findOne({
                     where: { id: ev },
+                    attributes:
+                        [
+                            "id",
+                            "event_org_id",
+                            "name",
+                            // "desp",
+                            "ticket_limit",
+                            "location",
+                            "feat_image",
+                            "date_from",
+                            "date_to",
+                            "sale_start",
+                            "sale_end",
+                            "event_timezone"
+                        ],
                     include: [
-                        { model: TicketType, as: "tickets" },
-                        { model: AddonTypes, as: "addons" },
-                        { model: Company, as: "companyInfo", attributes: ["name"] }
-                    ],
-                    attributes: [
-                        "id",
-                        "event_org_id",
-                        "name",
-                        "desp",
-                        "location",
-                        "feat_image",
-                        "date_from",
-                        "date_to",
-                        "sale_start",
-                        "sale_end",
-                        "event_timezone"
+                        {
+                            model: TicketType,
+                            as: "tickets",
+                            required: false,
+                            attributes: {
+                                exclude: ["createdAt", "updatedAt"]
+                            },
+                            include: [
+                                {
+                                    model: CommitteeAssignTickets,
+                                    as: "committeeAssignedTickets",
+                                    required: false,
+                                    attributes: {
+                                        exclude: ["createdAt", "updatedAt"]
+                                    },
+                                    where: {
+                                        event_id: ev
+                                    },
+                                    include: [
+                                        {
+                                            model: CommitteeMembers,
+                                            as: "committeeMember",
+                                            required: false,
+                                            attributes: ['status'],
+                                            include: [
+                                                {
+                                                    model: User,
+                                                    as: "user",
+                                                    attributes: [
+                                                        "id",
+                                                        "first_name",
+                                                        "last_name",
+                                                        "email"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            model: AddonTypes,
+                            as: "addons",
+                            attributes: { exclude: ["createdAt", "updatedAt"] }
+                        },
+                        {
+                            model: Package,
+                            as: "package",
+                            attributes: { exclude: ["CreatedAt", "UpdatedAt"] },
+                            include: [
+                                {
+                                    model: PackageDetails,
+                                    as: "details",
+                                    attributes: { exclude: ["CreatedAt", "UpdatedAt"] },
+                                    include: [
+                                        { model: AddonTypes, as: "addonType", attributes: { exclude: ["createdAt", "updatedAt"] } },
+                                        { model: TicketType, as: "ticketType", attributes: { exclude: ["createdAt", "updatedAt"] } }
+                                    ]
+                                },
+                            ]
+                        },
+                        {
+                            model: Company,
+                            as: "companyInfo",
+                            attributes: ["name"]
+                        },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
                     ]
                 });
+
+
+                let questions = [];
+                if (events) {
+                    // 🔹 Collect all ticket type IDs from event tickets
+                    const ticketTypeIds = (events.tickets || [])
+                        .map(ticket => ticket.id)
+                        .filter(Boolean);
+
+                    // console.log('ticketTypeIds :', ticketTypeIds);
+
+                    if (ticketTypeIds.length > 0) {
+                        questions = await Questions.findAll({
+                            where: {
+                                status: "Y",
+                                event_id: ev,
+                                [Op.or]: ticketTypeIds.map(id =>
+                                    Sequelize.where(
+                                        Sequelize.fn("FIND_IN_SET", id, Sequelize.col("ticket_type_id")),
+                                        { [Op.gt]: 0 }
+                                    )
+                                )
+                            },
+                            attributes: [
+                                "id",
+                                "type",
+                                "name",
+                                "question",
+                                "ticket_type_id",
+                                "status"
+                            ],
+                            include: [
+                                {
+                                    model: QuestionItems,
+                                    as: "questionItems",
+                                    required: false,
+                                    attributes: [
+                                        "id",
+                                        "items"
+                                    ],
+                                    order: [["sort_order", "ASC"]]
+                                }
+                            ],
+                            order: [["id", "ASC"]]
+                        });
+                    }
+
+                }
+
+
 
                 if (events) {
                     const data = events.toJSON();
@@ -255,7 +453,8 @@ module.exports = {
                         date_from: formatDate(data.date_from),
                         date_to: formatDate(data.date_to),
                         sale_start: formatDate(data.sale_start),
-                        sale_end: formatDate(data.sale_end)
+                        sale_end: formatDate(data.sale_end),
+                        questions
                     };
                 }
             }
@@ -270,6 +469,12 @@ module.exports = {
 
                 switch (item.ticket_type) {
                     case "ticket":
+                        displayName = item.TicketType?.title || "";
+                        ticketPrice = item.TicketType?.price || 0;
+                        uniqueId = item.TicketType?.id || null;
+                        break;
+
+                    case "committesale":
                         displayName = item.TicketType?.title || "";
                         ticketPrice = item.TicketType?.price || 0;
                         uniqueId = item.TicketType?.id || null;
@@ -316,6 +521,7 @@ module.exports = {
             // ✅ 4) FINAL response
             // -------------------------------------------------------
             return apiResponse.success(res, "Cart fetched", {
+                user_id,
                 event: formattedEvent,   // may be null if no event id found
                 cart: formatted
             });
@@ -344,12 +550,14 @@ module.exports = {
                         model: WellnessSlots,
                         as: 'appointments',
                         // attributes: ["id", "title", "price"]
-                        include: [{ model: Wellness, as: 'wellnessList',
+                        include: [{
+                            model: Wellness, as: 'wellnessList',
                             include: {
-                            model: Currency,
-                            as: 'currencyName',
-                            attributes: ['Currency_symbol', 'Currency']
-                        } }]
+                                model: Currency,
+                                as: 'currencyName',
+                                attributes: ['Currency_symbol', 'Currency']
+                            }
+                        }]
                     }
                 ]
             });
@@ -438,7 +646,6 @@ module.exports = {
             return apiResponse.error(res, "Error increasing item", 500);
         }
     },
-
 
     // DECREASE ITEM COUNT
     decreaseItem: async (req, res) => {

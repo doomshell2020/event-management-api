@@ -46,7 +46,9 @@ router.post('/login',
 );
 
 router.get('/me', authenticate, authController.getUserInfo);
+
 router.get('/verify-email', authController.verifyEmail);
+
 router.patch('/update-profile',
   authenticate,
   [
@@ -106,15 +108,7 @@ router.post('/reset-password',
   authController.resetPassword
 );
 
-router.get('/:id',
-    //  authenticate,
-     authController.getUserById);
-
-
-
-
-
-
+router.get('/:id',authController.getUserById);
 
 
 module.exports = router;

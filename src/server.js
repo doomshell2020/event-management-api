@@ -32,6 +32,8 @@ const cartRoutesV1 = require('./modules/v1/cart/cart.routes');
 const ordersRoutesV1 = require('./modules/v1/orders/orders.route');
 const wellnessRoutesV1 = require('./modules/v1/wellness/wellness.routes');
 const paymentRoutesV1 = require('./modules/v1/payment/payment.routes');
+const committeeRoutesV1 = require('./modules/v1/committee/committee.routes');
+const usersRoutesV1 = require('./modules/v1/users/users.routes');
 
 
 const eventsRoutesV2 = require('./modules/v2/events/events.routes');
@@ -88,6 +90,8 @@ app.use('/api/v1/cart', cartRoutesV1);
 app.use('/api/v1/orders', ordersRoutesV1);
 app.use('/api/v1/wellness',wellnessRoutesV1);
 app.use('/api/v1/payment',paymentRoutesV1);
+app.use('/api/v1/committee',committeeRoutesV1);
+app.use('/api/v1/users',usersRoutesV1);
 
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);
 // app.use('/api/v1/api-keys', apiKeysRoutesV1);

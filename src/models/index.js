@@ -5,6 +5,7 @@ const sequelize = require('../config/database');
 // Import models
 const Questions = require('./questions.modal');
 const QuestionItems = require('./question_items.modal');
+const QuestionsBook = require('./questions_book.model');
 const AddonTypes = require('./addon.model');
 const TicketType = require('./ticket.model');
 const Company = require('./company.model');
@@ -24,6 +25,20 @@ const OrderItems = require('./order_items.model');
 const Currency = require('./currency.model');
 const Payment = require('./payment.model');
 const PaymentSnapshotItems = require('./payment_snapshot_items');
+const CommitteeMembers = require('./committee_members.model');
+const CommitteeAssignTickets = require('./committee_assigntickets');
+const CartQuestionsDetails = require('./cart_questions_details');
+const CommitteeGroup = require('./committee_group.model');
+const CommitteeGroupMember = require('./committee_group_member.model');
+
+CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+Event.hasMany(CommitteeAssignTickets, { foreignKey: 'event_id', as: 'assignedTickets' });
+CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
+CommitteeAssignTickets.belongsTo(CommitteeMembers, { foreignKey: 'user_id', targetKey: 'user_id', as: 'committeeMember' });
+User.hasMany(CommitteeMembers, { foreignKey: 'user_id', as: 'committeeMembers' });
+
+
 
 // 🔹 One Question → Many QuestionItems
 Questions.hasMany(QuestionItems, {
@@ -38,16 +53,26 @@ QuestionItems.belongsTo(Questions, {
   as: 'question'
 });
 
+
 // ✅ Package ↔ PackageDetails (already defined)
 Package.hasMany(PackageDetails, { foreignKey: 'package_id', as: 'details' });
 PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
-
-// ✅ PackageDetails ↔ TicketType
+PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
 PackageDetails.belongsTo(TicketType, { foreignKey: 'ticket_type_id', as: 'ticketType' });
 TicketType.hasMany(PackageDetails, { foreignKey: 'ticket_type_id', as: 'packageDetails' });
 
+TicketType.hasMany(CommitteeAssignTickets, {
+  foreignKey: 'ticket_id',
+  as: 'committeeAssignedTickets'
+});
+
+CommitteeAssignTickets.belongsTo(TicketType, {
+  foreignKey: 'ticket_id',
+  as: 'ticket'
+});
+
+
 // ✅ PackageDetails ↔ AddonTypes
-PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
 AddonTypes.hasMany(PackageDetails, { foreignKey: 'addon_id', as: 'packageDetails' });
 
 // ✅ Package ↔ Event
@@ -58,6 +83,10 @@ Cart.belongsTo(TicketType, { foreignKey: 'ticket_id' });
 Cart.belongsTo(AddonTypes, { foreignKey: 'addons_id' });
 Cart.belongsTo(Package, { foreignKey: 'package_id' });
 Cart.belongsTo(TicketPricing, { foreignKey: 'ticket_price_id' });
+Cart.belongsTo(WellnessSlots, {  foreignKey: 'appointment_id',  as: 'appointments'})
+Cart.belongsTo(Event, {  foreignKey: 'event_id',  as: 'events',})
+Cart.belongsTo(User, {  foreignKey: 'user_id',  as: 'user',})
+CommitteeGroupMember.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 Orders.hasMany(OrderItems, {
   foreignKey: "order_id",
@@ -154,6 +183,11 @@ Event.hasMany(AddonTypes, {
   onDelete: 'CASCADE'
 });
 
+Event.hasMany(Package, {
+  foreignKey: 'event_id',
+  as: 'package',    // fetch addons via event.addons
+  onDelete: 'CASCADE'
+});
 
 TicketType.hasMany(TicketPricing, {
   foreignKey: 'ticket_type_id',
@@ -168,6 +202,16 @@ Event.hasMany(EventSlots, {
   onDelete: 'CASCADE'
 });
 
+Event.belongsTo(Currency, {
+  foreignKey: 'payment_currency',
+  as: 'currencyName',
+});
+
+Event.hasMany(Wellness, {
+  foreignKey: 'event_id',
+  as: 'wellness',
+})
+
 EventSlots.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'event'
@@ -178,7 +222,6 @@ EventSlots.hasMany(TicketPricing, {
   as: 'pricings',
   onDelete: 'CASCADE'
 });
-
 
 TicketPricing.belongsTo(TicketType, {
   foreignKey: 'ticket_type_id',
@@ -209,23 +252,12 @@ Wellness.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'eventList',
 });
+
 Wellness.belongsTo(Currency, {
   foreignKey: 'currency',
   as: 'currencyName',
 });
-Cart.belongsTo(WellnessSlots, {
-  foreignKey: 'appointment_id',
-  as: 'appointments',
-})
 
-Cart.belongsTo(Event, {
-  foreignKey: 'event_id',
-  as: 'events',
-})
-Event.hasMany(Wellness, {
-  foreignKey: 'event_id',
-  as: 'wellness',
-})
 
 Event.belongsTo(User, {
   foreignKey: 'event_org_id',
@@ -236,7 +268,7 @@ Event.belongsTo(User, {
 // ✅ Export all
 // =============================
 module.exports = {
-  sequelize,
-  Questions, QuestionItems, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
-  User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,Currency,Payment,PaymentSnapshotItems
+  sequelize, Questions, QuestionItems,QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
+  User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,
+  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets,CommitteeGroup,CommitteeGroupMember
 };
