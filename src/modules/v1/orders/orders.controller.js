@@ -28,82 +28,236 @@ const formatDateReadable = (dateStr, timezone) => {
     });
 };
 
-exports.eventSalesAnalytics = async (req, res) => {
+exports.eventDashboardAnalytics = async (req, res) => {
     try {
         const { event_id } = req.query;
 
-        if (!event_id) {
-            return apiResponse.error(res, "event_id is required", 400);
-        }
+        if (!event_id) return apiResponse.error(res, "event_id is required", 400);
 
-        /* ===========================
-           🎟 SALES BY TICKET
-        ============================ */
-        const salesByTicket = await OrderItems.findAll({
-            where: {
-                event_id,
-                type: 'ticket'
-            },
+        // 🔹 Fetch Event Currency
+        const event = await Event.findByPk(event_id, {
+            include: [{ model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }]
+        });
+        const currency = event?.currencyName?.Currency_symbol || "€"; // fallback
+
+        /* ==========================
+           📊 SUMMARY CARDS
+        ========================== */
+        const totalOrders = await Orders.count({ where: { event_id, status: "Y" } });
+        const totalRevenue = await Orders.sum("grand_total", { where: { event_id, status: "Y" } });
+        const totalItemsSold = await OrderItems.sum("count", { where: { event_id } });
+
+        /* ==========================
+           📈 SALES OVER TIME
+        ========================== */
+        const salesOverTimeRaw = await Orders.findAll({
+            where: { event_id, status: "Y" },
             attributes: [
-                'ticket_id',
-                [fn('SUM', col('OrderItems.count')), 'tickets_sold'],
-                [fn('SUM', literal('OrderItems.count * OrderItems.price')), 'ticket_revenue']
+                [fn("MONTH", col("created")), "month_num"],
+                [fn("SUM", col("grand_total")), "revenue"]
+            ],
+            group: [fn("MONTH", col("created"))],
+            order: [[fn("MONTH", col("created")), "ASC"]],
+            raw: true
+        });
+
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const salesOverTime = salesOverTimeRaw.map(row => ({
+            month: months[row.month_num - 1],
+            revenue: Number(row.revenue),
+            currency
+        }));
+
+        /* ==========================
+           🎟 SALES BY ITEM
+        ========================== */
+        const salesByItemRaw = await OrderItems.findAll({
+            where: { event_id },
+            attributes: [
+                "type",
+                [fn("SUM", col("OrderItems.count")), "sold"],
+                [fn("SUM", literal("OrderItems.count * OrderItems.price")), "revenue"],
+                "ticket_id",
+                "appointment_id"
+            ],
+            include: [
+                { model: TicketType, as: "ticketType", attributes: ["title"], required: false },
+                {
+                    model: WellnessSlots,
+                    as: "appointment",
+                    attributes: ["id"],
+                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }],
+                    required: false
+                }
+            ],
+            group: [
+                "type",
+                "ticket_id",
+                "appointment_id",
+                "ticketType.id",
+                "appointment.id",
+                "appointment->wellnessList.id"
+            ]
+        });
+
+        const salesByItem = salesByItemRaw.map(row => ({
+            type: row.type,
+            id: row.ticket_id || row.appointment_id,
+            name: row.type == "ticket" ? row.ticketType?.title : row.appointment?.wellnessList?.name,
+            sold: Number(row.get("sold")),
+            revenue: Number(row.get("revenue")),
+            currency
+        }));
+
+        /* ==========================
+           💳 SALES BY PAYMENT METHOD
+        ========================== */
+        const salesByPaymentMethodRaw = await Orders.findAll({
+            where: { event_id, status: "Y" },
+            attributes: [
+                "paymenttype",
+                [fn("COUNT", col("id")), "total_orders"],
+                [fn("SUM", col("grand_total")), "method_revenue"]
+            ],
+            group: ["paymenttype"],
+            raw: true
+        });
+
+        const salesByPaymentMethod = salesByPaymentMethodRaw.map(row => ({
+            paymenttype: row.paymenttype,
+            total_orders: Number(row.total_orders),
+            method_revenue: Number(row.method_revenue),
+            currency
+        }));
+
+        /* ==========================
+           ✅ FINAL RESPONSE
+        ========================== */
+        return apiResponse.success(res, "Event dashboard analytics fetched", {
+            event_id,
+            summary: {
+                total_orders: totalOrders || 0,
+                total_revenue: totalRevenue || 0,
+                total_items_sold: totalItemsSold || 0,
+                currency
+            },
+            sales_over_time: salesOverTime,
+            sales_by_item: salesByItem,
+            sales_by_payment_method: salesByPaymentMethod
+        });
+    } catch (error) {
+        console.error("Dashboard Analytics Error:", error);
+        return apiResponse.error(res, "Failed to fetch dashboard analytics", 500);
+    }
+};
+
+exports.eventSalesAnalytics = async (req, res) => {
+    try {
+        const { event_id } = req.query;
+        if (!event_id) return apiResponse.error(res, "event_id is required", 400);
+
+        // 🔹 Fetch Event Currency
+        const event = await Event.findByPk(event_id, {
+            include: [{ model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }]
+        });
+        const currency = event?.currencyName?.Currency_symbol || "€"; // fallback
+
+        /* ==========================
+           🎟 SALES BY TICKET
+        ========================== */
+        const salesByTicket = await OrderItems.findAll({
+            where: { event_id, type: "ticket" },
+            attributes: [
+                "ticket_id",
+                [fn("SUM", col("OrderItems.count")), "items_sold"],
+                [fn("SUM", literal("OrderItems.count * OrderItems.price")), "total_revenue"]
+            ],
+            include: [{ model: TicketType, as: "ticketType", attributes: ["id", "title", "price"] }],
+            group: ["OrderItems.ticket_id", "ticketType.id"]
+        });
+
+        /* ==========================
+           🧘 SALES BY APPOINTMENT
+        ========================== */
+        const salesByAppointment = await OrderItems.findAll({
+            where: { event_id, type: "appointment" },
+            attributes: [
+                "appointment_id",
+                [fn("SUM", col("OrderItems.count")), "items_sold"],
+                [fn("SUM", literal("OrderItems.count * OrderItems.price")), "total_revenue"]
             ],
             include: [
                 {
-                    model: TicketType,
-                    as: 'ticketType',
-                    attributes: ['id', 'title', 'price']
+                    model: WellnessSlots,
+                    as: "appointment",
+                    attributes: ["id"],
+                    include: [{ model: Wellness, as: "wellnessList", attributes: ["id", "name"] }]
                 }
             ],
-            group: ['OrderItems.ticket_id', 'ticketType.id']
+            group: ["OrderItems.appointment_id", "appointment.id", "appointment->wellnessList.id"]
         });
 
-        /* ===========================
+        /* ==========================
            💳 SALES BY PAYMENT METHOD
-        ============================ */
-        const salesByMethod = await Orders.findAll({
-            where: {
-                event_id,
-                status: 'Y'
-            },
+        ========================== */
+        const salesByMethodRaw = await Orders.findAll({
+            where: { event_id, status: "Y" },
             attributes: [
-                'paymenttype',
-                [fn('COUNT', col('Orders.id')), 'total_orders'],
-                [fn('SUM', col('Orders.grand_total')), 'method_revenue']
+                "paymenttype",
+                [fn("COUNT", col("Orders.id")), "total_orders"],
+                [fn("SUM", col("Orders.grand_total")), "method_revenue"]
             ],
-            group: ['paymenttype']
+            group: ["paymenttype"],
+            raw: true
         });
 
-        /* ===========================
-           📊 OVERALL TOTALS
-        ============================ */
-        const totalOrders = await Orders.count({
-            where: { event_id, status: 'Y' }
-        });
+        const salesByMethod = salesByMethodRaw.map(row => ({
+            paymenttype: row.paymenttype,
+            total_orders: Number(row.total_orders),
+            method_revenue: Number(row.method_revenue),
+            currency
+        }));
 
-        const totalRevenue = await Orders.sum('grand_total', {
-            where: { event_id, status: 'Y' }
-        });
+        /* ==========================
+           📊 SUMMARY
+        ========================== */
+        const [totalOrders, totalRevenue, totalItemsSold] = await Promise.all([
+            Orders.count({ where: { event_id, status: "Y" } }),
+            Orders.sum("grand_total", { where: { event_id, status: "Y" } }),
+            OrderItems.sum("count", { where: { event_id } })
+        ]);
 
-        const totalTicketsSold = await OrderItems.sum('count', {
-            where: {
-                event_id,
-                type: 'ticket'
-            }
-        });
+        /* ==========================
+           🔁 FORMAT FOR FRONTEND
+        ========================== */
+        const salesByItem = [
+            ...salesByTicket.map(row => ({
+                type: "ticket",
+                id: row.ticket_id,
+                name: row.ticketType?.title,
+                sold: row.get("items_sold"),
+                revenue: row.get("total_revenue"),
+                currency
+            })),
+            ...salesByAppointment.map(row => ({
+                type: "appointment",
+                id: row.appointment_id,
+                name: row.appointment?.wellnessList?.name,
+                sold: row.get("items_sold"),
+                revenue: row.get("total_revenue"),
+                currency
+            }))
+        ];
 
-        /* ===========================
-           ✅ FINAL RESPONSE
-        ============================ */
         return apiResponse.success(res, "Event sales analytics fetched", {
             event_id,
             summary: {
                 total_orders: totalOrders || 0,
                 total_revenue: totalRevenue || 0,
-                total_tickets_sold: totalTicketsSold || 0
+                total_items_sold: totalItemsSold || 0,
+                currency
             },
-            sales_by_ticket: salesByTicket,
+            sales_by_item: salesByItem,
             sales_by_payment_method: salesByMethod
         });
 

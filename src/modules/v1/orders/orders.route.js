@@ -107,5 +107,15 @@ router.get('/event-sales-summary',
     ordersController.eventSalesAnalytics
 );
 
+router.get("/event-dashboard-analytics",
+    authenticate,
+    [
+        query("event_id").notEmpty().withMessage("event_id is required")
+    ],
+    validate,
+    ordersController.eventDashboardAnalytics
+);
+
+
 
 module.exports = router;
