@@ -244,10 +244,10 @@ Wellness.hasMany(WellnessSlots, {
   foreignKey: 'wellness_id',
   as: 'wellnessSlots',
 });
-Event.belongsTo(Currency, {
-  foreignKey: 'payment_currency',
-  as: 'currencyName',
-});
+// Event.belongsTo(Currency, {
+//   foreignKey: 'payment_currency',
+//   as: 'currencyName',
+// });
 Wellness.belongsTo(Event, {
   foreignKey: 'event_id',
   as: 'eventList',
