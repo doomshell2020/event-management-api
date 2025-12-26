@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const eventController = require('./events.controller');
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
@@ -219,6 +219,20 @@ router.get('/public-event-detail/:id',
     ],
     validate,
     eventController.publicEventDetail
+);
+
+// Search Events (For Import Committee / Dropdown Search)
+router.get(
+    '/search',
+    authenticate,
+    [
+        query('keyword')
+            .optional()
+            .isLength({ min: 2 })
+            .withMessage('Search query must be at least 2 characters long'),
+    ],
+    validate,
+    eventController.searchEvents
 );
 
 

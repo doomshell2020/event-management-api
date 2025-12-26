@@ -97,4 +97,15 @@ router.put(
     ordersController.cancelAppointment
 );
 
+// routes/sales.routes.js
+router.get('/event-sales-summary',
+    authenticate,
+    [
+        query('event_id').notEmpty().withMessage('event_id is required'),
+    ],
+    validate,
+    ordersController.eventSalesAnalytics
+);
+
+
 module.exports = router;

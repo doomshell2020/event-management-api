@@ -3,6 +3,53 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const path = require('path');
 const fs = require('fs');
 
+module.exports.searchEvents = async (req, res) => {
+    try {
+        const loginId = req.user.id;
+        const { keyword } = req.query;
+
+        // ✅ Keyword is required
+        if (!keyword || !keyword.trim()) {
+            return apiResponse.validation(
+                res,
+                [],
+                'Search keyword is required'
+            );
+        }
+
+        // ✅ Call service
+        const result = await eventService.searchEvents({ keyword: keyword.trim(), loginId });
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'NOT_FOUND':
+                    return apiResponse.success(
+                        res,
+                        'No events found',
+                        { events: [] }
+                    );
+
+                default:
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Failed to search events'
+                    );
+            }
+        }
+
+        // ✅ Success
+        return apiResponse.success(
+            res,
+            'Events fetched successfully',
+            { events: result.data }
+        );
+
+    } catch (error) {
+        console.error('Error in searchEvents controller:', error);
+        return apiResponse.error(res, 'Internal server error', 500);
+    }
+};
+
 module.exports.eventList = async (req, res) => {
     try {
         const result = await eventService.eventList(req, res);

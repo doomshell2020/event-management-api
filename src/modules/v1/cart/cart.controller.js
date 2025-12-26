@@ -297,6 +297,7 @@ module.exports = {
                             "event_org_id",
                             "name",
                             // "desp",
+                            "ticket_limit",
                             "location",
                             "feat_image",
                             "date_from",

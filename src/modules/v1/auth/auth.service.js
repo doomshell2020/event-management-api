@@ -130,8 +130,8 @@ module.exports.loginUser = async ({ email, password }) => {
         },
     });
 
-    console.log('committeeCartCount :', committeeCartCount);
-    console.log('committeePendingCount :', committeePendingCount);
+    // console.log('committeeCartCount :', committeeCartCount);
+    // console.log('committeePendingCount :', committeePendingCount);
 
     // Generate JWT token
     const token = jwt.sign(

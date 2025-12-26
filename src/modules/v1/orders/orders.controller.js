@@ -7,7 +7,7 @@ const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
 const { generateUniqueOrderId } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Op } = require("sequelize");
+const { Op, fn, col, literal } = require("sequelize");
 const config = require('../../../config/app');
 
 // Convert to user-friendly readable format
@@ -27,6 +27,92 @@ const formatDateReadable = (dateStr, timezone) => {
         hour12: true
     });
 };
+
+exports.eventSalesAnalytics = async (req, res) => {
+    try {
+        const { event_id } = req.query;
+
+        if (!event_id) {
+            return apiResponse.error(res, "event_id is required", 400);
+        }
+
+        /* ===========================
+           🎟 SALES BY TICKET
+        ============================ */
+        const salesByTicket = await OrderItems.findAll({
+            where: {
+                event_id,
+                type: 'ticket'
+            },
+            attributes: [
+                'ticket_id',
+                [fn('SUM', col('OrderItems.count')), 'tickets_sold'],
+                [fn('SUM', literal('OrderItems.count * OrderItems.price')), 'ticket_revenue']
+            ],
+            include: [
+                {
+                    model: TicketType,
+                    as: 'ticketType',
+                    attributes: ['id', 'title', 'price']
+                }
+            ],
+            group: ['OrderItems.ticket_id', 'ticketType.id']
+        });
+
+        /* ===========================
+           💳 SALES BY PAYMENT METHOD
+        ============================ */
+        const salesByMethod = await Orders.findAll({
+            where: {
+                event_id,
+                status: 'Y'
+            },
+            attributes: [
+                'paymenttype',
+                [fn('COUNT', col('Orders.id')), 'total_orders'],
+                [fn('SUM', col('Orders.grand_total')), 'method_revenue']
+            ],
+            group: ['paymenttype']
+        });
+
+        /* ===========================
+           📊 OVERALL TOTALS
+        ============================ */
+        const totalOrders = await Orders.count({
+            where: { event_id, status: 'Y' }
+        });
+
+        const totalRevenue = await Orders.sum('grand_total', {
+            where: { event_id, status: 'Y' }
+        });
+
+        const totalTicketsSold = await OrderItems.sum('count', {
+            where: {
+                event_id,
+                type: 'ticket'
+            }
+        });
+
+        /* ===========================
+           ✅ FINAL RESPONSE
+        ============================ */
+        return apiResponse.success(res, "Event sales analytics fetched", {
+            event_id,
+            summary: {
+                total_orders: totalOrders || 0,
+                total_revenue: totalRevenue || 0,
+                total_tickets_sold: totalTicketsSold || 0
+            },
+            sales_by_ticket: salesByTicket,
+            sales_by_payment_method: salesByMethod
+        });
+
+    } catch (error) {
+        console.error("Event Sales Analytics Error:", error);
+        return apiResponse.error(res, "Failed to fetch event sales analytics", 500);
+    }
+};
+
 
 module.exports.fulfilOrderFromSnapshot = async ({
     meta_data,
@@ -1139,5 +1225,3 @@ exports.cancelAppointment = async (req, res) => {
         });
     }
 };
-
-

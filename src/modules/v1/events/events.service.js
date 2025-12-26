@@ -4,6 +4,54 @@ const { Op } = require('sequelize');
 const { Company, Event, TicketType, AddonTypes } = require('../../../models');
 const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 
+module.exports.searchEvents = async ({ keyword, loginId }) => {
+    try {
+        if (!loginId) {
+            return {
+                success: false,
+                code: 'VALIDATION_FAILED',
+                message: 'Invalid login user'
+            };
+        }
+
+        if (!keyword || !keyword.trim()) {
+            return {
+                success: false,
+                code: 'VALIDATION_FAILED',
+                message: 'Keyword is required'
+            };
+        }
+
+        const searchText = keyword.trim();
+
+        const events = await Event.findAll({
+            where: {
+                event_org_id: loginId, // ✅ now safe
+                [Op.or]: [
+                    { name: { [Op.like]: `%${searchText}%` } },
+                    { desp: { [Op.like]: `%${searchText}%` } },
+                    { location: { [Op.like]: `%${searchText}%` } }
+                ]
+            },
+            order: [['created', 'DESC']],
+            limit: 10,
+            attributes: ['id', 'name', 'location', 'date_from']
+        });
+
+        return {
+            success: true,
+            data: events || []
+        };
+
+    } catch (error) {
+        console.error('Error in searchEvents service:', error);
+        return {
+            success: false,
+            code: 'INTERNAL_ERROR',
+            message: 'Something went wrong while searching events'
+        };
+    }
+};
 
 module.exports.deleteEvent = async (eventId) => {
     try {
@@ -507,6 +555,15 @@ module.exports.createEvent = async (req, res) => {
                 code: 'CREATION_FAILED',
             };
         }
+
+        // ✅ Create ticket
+        const newTicket = await TicketType.create({
+            eventid: newEvent.id,
+            userid: user_id,
+            title: 'Complimentary',
+            type: "comps",
+            price: parseFloat(0) || 0
+        });
 
         return { success: true, event: newEvent };
 

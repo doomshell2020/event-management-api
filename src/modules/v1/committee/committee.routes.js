@@ -5,9 +5,23 @@ const { body, param } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 
-// ✅ List all members of a group
-router.get(
-    '/groups/:groupId/members',
+router.post('/import-committee-members',
+    authenticate,
+    [
+        body('from_event_id')
+            .notEmpty().withMessage('Source event ID is required')
+            .isInt().withMessage('Source event ID must be a number'),
+
+        body('to_event_id')
+            .notEmpty().withMessage('Target event ID is required')
+            .isInt().withMessage('Target event ID must be a number'),
+    ],
+    validate,
+    committeeController.importCommitteeMembers
+);
+
+// List all members of a group
+router.get('/groups/:groupId/members',
     authenticate,
     [
         param('groupId').notEmpty().withMessage('Group ID is required').isInt().withMessage('Group ID must be an integer')
@@ -16,8 +30,7 @@ router.get(
     committeeController.listGroupMembers
 );
 
-router.post(
-    '/group/add-member',
+router.post('/group/add-member',
     authenticate,
     [
         body('group_id').notEmpty().withMessage('Group ID is required').isInt().withMessage('Group ID must be an integer'),
@@ -28,8 +41,7 @@ router.post(
     committeeController.addGroupMember
 );
 
-router.get(
-    '/groups/:event_id',
+router.get('/groups/:event_id',
     authenticate,
     [
         param('event_id')
@@ -40,9 +52,8 @@ router.get(
     committeeController.listCommitteeGroups
 );
 
-// ✅ CREATE COMMITTEE GROUP
-router.post(
-    '/groups/create',
+// CREATE COMMITTEE GROUP
+router.post('/groups/create',
     authenticate,
     [
         body('event_id')
@@ -57,7 +68,6 @@ router.post(
     validate,
     committeeController.createCommitteeGroup
 );
-
 
 router.post("/push-ticket",
     authenticate,
@@ -100,7 +110,7 @@ router.post(`/committee-ticket-details`,
     committeeController.handleCommitteeTicketDetails
 )
 
-// ✅ Committee Requests List (by status)
+// Committee Requests List (by status)
 router.get('/requests/:status',
     authenticate,
     [
@@ -112,7 +122,8 @@ router.get('/requests/:status',
     committeeController.requestList
 );
 
-// ✅ Committee Request Action (Approve / Ignore)
+
+// Committee Request Action (Approve / Ignore)
 router.post('/action',
     authenticate,
     [
@@ -131,7 +142,7 @@ router.post('/action',
     committeeController.handleAction
 );
 
-// ✅ Create Event Route
+// Create Event Route
 router.post('/member/add-member',
     authenticate,
     [
@@ -175,7 +186,7 @@ router.delete('/member/:id',
     validate,
     committeeController.deleteMember
 );
-/* ✅ LIST MEMBERS */
+/* LIST MEMBERS */
 router.get('/members/list/:event_id',
     authenticate,
     [

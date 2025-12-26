@@ -1,13 +1,109 @@
 const apiResponse = require('../../../common/utils/apiResponse');
 const committeeTicketIgnoredTemplate = require('../../../common/utils/emailTemplates/committeeIgnore');
 const committeeTicketApprovedTemplate = require('../../../common/utils/emailTemplates/committeeApprove');
+const committeeTicketAssignedTemplate = require('../../../common/utils/emailTemplates/committeeTicketAssignedTemplate ');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { sequelize } = require("../../../models");
-
-const { CommitteeMembers, CommitteeAssignTickets, CommitteeGroup,CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
 const config = require('../../../config/app');
-const committeeTicketAssignedTemplate = require('../../../common/utils/emailTemplates/committeeTicketAssignedTemplate ');
+const { CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
+
+exports.importCommitteeMembers = async (req, res) => {
+    try {
+        const { from_event_id, to_event_id } = req.body;
+        const addedBy = req.user.id;
+
+        // ✅ Basic validation
+        if (!from_event_id || !to_event_id) {
+            return apiResponse.validation(
+                res,
+                [],
+                'from_event_id and to_event_id are required'
+            );
+        }
+
+        if (from_event_id == to_event_id) {
+            return apiResponse.validation(
+                res,
+                [],
+                'Source and destination events cannot be the same'
+            );
+        }
+
+        // ✅ Check events exist
+        const [fromEvent, toEvent] = await Promise.all([
+            Event.findByPk(from_event_id),
+            Event.findByPk(to_event_id)
+        ]);
+
+        if (!fromEvent || !toEvent) {
+            return apiResponse.notFound(
+                res,
+                'One or both events not found'
+            );
+        }
+
+        // ✅ Fetch source event committee members
+        const sourceMembers = await CommitteeMembers.findAll({
+            where: { event_id: from_event_id }
+        });
+
+        if (!sourceMembers.length) {
+            return apiResponse.success(
+                res,
+                'No committee members found to import',
+                { imported: 0 }
+            );
+        }
+
+        // ✅ Fetch existing committee members of target event
+        const existingMembers = await CommitteeMembers.findAll({
+            where: { event_id: to_event_id },
+            attributes: ['user_id']
+        });
+
+        const existingUserIds = new Set(
+            existingMembers.map(m => m.user_id)
+        );
+
+        // ✅ Prepare members to insert (skip existing)
+        const membersToInsert = sourceMembers
+            .filter(member => !existingUserIds.has(member.user_id))
+            .map(member => ({
+                event_id: to_event_id,
+                user_id: member.user_id,
+                status: member.status || 'Y',
+                // added_by: addedBy,
+            }));
+
+        if (!membersToInsert.length) {
+            return apiResponse.success(
+                res,
+                'All committee members already exist in this event',
+                { imported: 0 }
+            );
+        }
+
+        // ✅ Bulk insert new members
+        await CommitteeMembers.bulkCreate(membersToInsert);
+
+        return apiResponse.success(
+            res,
+            'Committee members imported successfully',
+            {
+                imported: membersToInsert.length
+            }
+        );
+
+    } catch (error) {
+        console.error('Error importing committee members:', error);
+        return apiResponse.error(
+            res,
+            'Internal server error',
+            500
+        );
+    }
+};
 
 exports.listGroupMembers = async (req, res) => {
     try {
@@ -50,7 +146,7 @@ exports.addGroupMember = async (req, res) => {
             group_id,
             user_id,
             event_id,
-            added_by:addedBy
+            added_by: addedBy
         });
 
         return apiResponse.success(res, 'Member added successfully', member);
@@ -541,15 +637,35 @@ exports.requestList = async (req, res) => {
 
         let events = [];
 
-        // 🔥 Only when status = T
         if (status == 'T') {
-            const eventIds = [...new Set(cartList.map(item => item.event_id))];
+            
+            const committeeEvents = await CommitteeMembers.findAll({
+                where: {
+                    user_id: user_id,
+                    status: 'Y'
+                },
+                attributes: ['event_id'],
+                group: ['event_id'], // 🔑 UNIQUE event_id
+                raw: true
+            });
+
+            const eventIds = committeeEvents.map(item => item.event_id);
 
             events = await Event.findAll({
-                where: { id: eventIds },
-                attributes: ['id', 'name', 'location', 'date_from', 'date_to', 'feat_image']
+                where: {
+                    id: eventIds
+                },
+                attributes: [
+                    'id',
+                    'name',
+                    'location',
+                    'date_from',
+                    'date_to',
+                    'feat_image'
+                ]
             });
         }
+
 
         return apiResponse.success(res, 'Committee requests fetched', {
             count: cartList.length,
