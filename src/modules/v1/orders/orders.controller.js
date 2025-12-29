@@ -28,6 +28,69 @@ const formatDateReadable = (dateStr, timezone) => {
     });
 };
 
+exports.salesAddons = async (req, res) => {
+    try {
+        const { event_id } = req.query;
+
+        if (!event_id) {
+            return apiResponse.error(res, "event_id is required", 400);
+        }
+
+        const event = await Event.findByPk(event_id, {
+            include: [
+                {
+                    model: Currency,
+                    as: "currencyName",
+                    attributes: ["Currency_symbol"]
+                }
+            ]
+        });
+
+        const currency = event?.currencyName?.Currency_symbol || "€";
+
+        const salesByAddonRaw = await OrderItems.findAll({
+            where: {
+                event_id,
+                type: "addon"
+            },
+            attributes: [
+                "addon_id",
+                [fn("SUM", col("OrderItems.count")), "sold"],
+                [fn("SUM", literal("OrderItems.count * OrderItems.price")), "revenue"]
+            ],
+            include: [
+                {
+                    model: AddonTypes,
+                    as: "addonType",
+                    attributes: ["name"],
+                    required: false
+                }
+            ],
+            group: ["addon_id", "addonType.id"]
+        });
+
+        const sales_by_addon = salesByAddonRaw.map(row => ({
+            addon_id: row.addon_id,
+            addon_name: row.addonType?.name,
+            sold: Number(row.get("sold")),
+            revenue: Number(row.get("revenue")),
+            currency
+        }));
+
+        return apiResponse.success(res, "Addon booking sales fetched", {
+            event_id,
+            total_addon_types: sales_by_addon.length,
+            sales_by_addon
+        });
+
+    } catch (error) {
+        console.error("Addon Sales Error:", error);
+        return apiResponse.error(res, "Failed to fetch addon booking sales", 500);
+    }
+};
+
+
+
 exports.eventDashboardAnalytics = async (req, res) => {
     try {
         const { event_id } = req.query;
@@ -40,16 +103,10 @@ exports.eventDashboardAnalytics = async (req, res) => {
         });
         const currency = event?.currencyName?.Currency_symbol || "€"; // fallback
 
-        /* ==========================
-           📊 SUMMARY CARDS
-        ========================== */
         const totalOrders = await Orders.count({ where: { event_id, status: "Y" } });
         const totalRevenue = await Orders.sum("grand_total", { where: { event_id, status: "Y" } });
         const totalItemsSold = await OrderItems.sum("count", { where: { event_id } });
 
-        /* ==========================
-           📈 SALES OVER TIME
-        ========================== */
         const salesOverTimeRaw = await Orders.findAll({
             where: { event_id, status: "Y" },
             attributes: [
@@ -68,33 +125,59 @@ exports.eventDashboardAnalytics = async (req, res) => {
             currency
         }));
 
-        /* ==========================
-           🎟 SALES BY ITEM
-        ========================== */
         const salesByItemRaw = await OrderItems.findAll({
             where: { event_id },
             attributes: [
                 "type",
-                [fn("SUM", col("OrderItems.count")), "sold"],
-                [fn("SUM", literal("OrderItems.count * OrderItems.price")), "revenue"],
                 "ticket_id",
-                "appointment_id"
+                "addon_id",
+                "package_id",
+                "appointment_id",
+                [fn("SUM", col("OrderItems.count")), "sold"],
+                [fn("SUM", literal("OrderItems.count * OrderItems.price")), "revenue"]
             ],
             include: [
-                { model: TicketType, as: "ticketType", attributes: ["title"], required: false },
+                {
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["title"],
+                    required: false
+                },
+                {
+                    model: AddonTypes,
+                    as: "addonType",
+                    attributes: ["name"],
+                    required: false
+                },
+                {
+                    model: Package,
+                    as: "package",
+                    attributes: ["name"],
+                    required: false
+                },
                 {
                     model: WellnessSlots,
                     as: "appointment",
                     attributes: ["id"],
-                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }],
+                    include: [
+                        {
+                            model: Wellness,
+                            as: "wellnessList",
+                            attributes: ["name"]
+                        }
+                    ],
                     required: false
                 }
             ],
             group: [
                 "type",
                 "ticket_id",
+                "addon_id",
+                "package_id",
                 "appointment_id",
                 "ticketType.id",
+                "addonType.id",
+                "package.id",
                 "appointment.id",
                 "appointment->wellnessList.id"
             ]
@@ -102,16 +185,26 @@ exports.eventDashboardAnalytics = async (req, res) => {
 
         const salesByItem = salesByItemRaw.map(row => ({
             type: row.type,
-            id: row.ticket_id || row.appointment_id,
-            name: row.type == "ticket" ? row.ticketType?.title : row.appointment?.wellnessList?.name,
+            id:
+                row.type == "ticket" ? row.ticket_id :
+                    row.type == "addon" ? row.addon_id :
+                        row.type == "package" ? row.package_id :
+                            row.type == "appointment" ? row.appointment_id :
+                                null,
+
+            name:
+                row.type == "ticket" ? row.ticketType?.title :
+                    row.type == "addon" ? row.addonType?.name :
+                        row.type == "package" ? row.package?.name :
+                            row.type == "appointment" ? row.appointment?.wellnessList?.name :
+                                null,
+
             sold: Number(row.get("sold")),
             revenue: Number(row.get("revenue")),
             currency
         }));
 
-        /* ==========================
-           💳 SALES BY PAYMENT METHOD
-        ========================== */
+
         const salesByPaymentMethodRaw = await Orders.findAll({
             where: { event_id, status: "Y" },
             attributes: [

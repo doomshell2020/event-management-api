@@ -116,6 +116,15 @@ router.get("/event-dashboard-analytics",
     ordersController.eventDashboardAnalytics
 );
 
+router.get("/sales-addons",
+    authenticate,
+    [
+        query("event_id").notEmpty().withMessage("event_id is required")
+    ],
+    validate,
+    ordersController.salesAddons
+);
+
 
 
 module.exports = router;
