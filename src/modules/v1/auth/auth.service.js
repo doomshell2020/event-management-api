@@ -36,7 +36,7 @@ module.exports.verifyEmailToken = async (token) => {
         user.is_email_verified = 'Y';
         await user.save();
 
-        const loginUrl = CLIENT_URL + '/login';
+        const loginUrl = `${config.clientUrl}/login`;
 
         // Send email notification for successful verification
         const html = emailVerifiedTemplate(user.first_name, loginUrl);
