@@ -1212,6 +1212,11 @@ exports.organizerTicketExports = async (req, res) => {
                     attributes: ["title", "price"],
                 },
                 {
+                    model: Package,
+                    as: "package",
+                    attributes: ["name", "grandtotal"],
+                },
+                {
                     model: AddonTypes,
                     as: "addonType",
                     attributes: ["name", "price"],

@@ -125,6 +125,4 @@ router.get("/sales-addons",
     ordersController.salesAddons
 );
 
-
-
 module.exports = router;
