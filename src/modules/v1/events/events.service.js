@@ -162,7 +162,7 @@ module.exports.eventList = async (req, res) => {
             include: [
                 { model: Company, as: "companyInfo", attributes: ["name"] }
             ],
-            order: [["date_from", "DESC"]],
+            order: [["created", "DESC"]],
         });
 
         // ✅ Format and Convert Dates

@@ -191,7 +191,8 @@ module.exports.getUserInfo = async (userId) => {
             'dob',
             'emailNewsLetter',
             'emailRelatedEvents',
-            'mobile'
+            'mobile',
+            'createdAt'
         ],
     });
 
