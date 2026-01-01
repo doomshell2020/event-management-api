@@ -153,7 +153,7 @@ exports.organizerTicketExports = async (req, res) => {
                         {
                             model: Questions,
                             as: "question",
-                            attributes: ["id", "question",'type'], 
+                            attributes: ["id", "question", 'type', 'name'],
                             include: [
                                 {
                                     model: QuestionItems,
@@ -425,7 +425,10 @@ exports.eventSalesAnalytics = async (req, res) => {
            🎟 SALES BY TICKET
         ========================== */
         const salesByTicket = await OrderItems.findAll({
-            where: { event_id, type: "ticket" },
+            where: {
+                event_id,
+                type: { [Op.in]: ["ticket", "committeesale"] } // ✅ allow both types
+            },
             attributes: [
                 "ticket_id",
                 [fn("SUM", col("OrderItems.count")), "items_sold"],
@@ -523,6 +526,110 @@ exports.eventSalesAnalytics = async (req, res) => {
     } catch (error) {
         console.error("Event Sales Analytics Error:", error);
         return apiResponse.error(res, "Failed to fetch event sales analytics", 500);
+    }
+};
+
+exports.userEventSalesAnalytics = async (req, res) => {
+    try {
+        const { event_id, user_id } = req.query;
+        if (!event_id) return apiResponse.error(res, "event_id is required", 400);
+        if (!user_id) return apiResponse.error(res, "user_id is required", 400);
+
+        // 🔹 Fetch Event Currency
+        const event = await Event.findByPk(event_id, {
+            include: [{ model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }]
+        });
+        const currency = event?.currencyName?.Currency_symbol || "€";
+
+        /* ==========================
+           🎟 SALES BY TICKET
+        ========================== */
+        const salesByTicket = await OrderItems.findAll({
+            where: {
+                event_id,
+                committee_user_id: user_id
+            },
+            attributes: [
+                "ticket_id",                
+                [fn("SUM", col("OrderItems.count")), "items_sold"],
+                [fn("SUM", literal("OrderItems.count * OrderItems.price")), "total_revenue"]
+            ],
+            include: [
+                {
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["id", "title", "price"]
+                }
+            ],
+            group: ["OrderItems.ticket_id", "ticketType.id"]
+        });
+
+          // First get all order IDs belonging to this user
+        const orderItemOrders = await OrderItems.findAll({
+            where: { event_id, committee_user_id: user_id },
+            attributes: ["order_id"],
+            group: ["order_id"],
+            raw: true
+        });
+        const orderIds = orderItemOrders.map(item => item.order_id);
+
+        const salesByMethodRaw = await Orders.findAll({
+            where: { id: orderIds },
+            attributes: [
+                "paymenttype",
+                [fn("COUNT", col("Orders.id")), "total_orders"],
+                [fn("SUM", col("Orders.grand_total")), "method_revenue"]
+            ],
+            group: ["paymenttype"],
+            raw: true
+        });
+
+        const salesByMethod = salesByMethodRaw.map(row => ({
+            paymenttype: row.paymenttype,
+            total_orders: Number(row.total_orders),
+            method_revenue: Number(row.method_revenue),
+            currency
+        }));
+
+        const totalItemsSold = await OrderItems.sum("count", {
+            where: { event_id, committee_user_id: user_id }
+        });
+
+        const totalRevenueData = await OrderItems.findAll({
+            where: { event_id, committee_user_id: user_id },
+            attributes: [[fn("SUM", literal("count * price")), "total_revenue"]],
+            raw: true
+        });
+        const totalRevenue = totalRevenueData[0]?.total_revenue || 0;
+
+        const totalOrders = orderIds.length;
+
+        const salesByItem = [
+            ...salesByTicket.map(row => ({
+                type: "ticket",
+                id: row.ticket_id,
+                name: row.ticketType?.title,
+                sold: Number(row.get("items_sold")),
+                revenue: Number(row.get("total_revenue")),
+                currency
+            }))
+        ];
+
+        return apiResponse.success(res, "User-specific event sales analytics fetched", {
+            event_id,
+            summary: {
+                total_orders: totalOrders || 0,
+                total_revenue: totalRevenue || 0,
+                total_items_sold: totalItemsSold || 0,
+                currency
+            },
+            sales_by_item: salesByItem,
+            sales_by_payment_method: salesByMethod
+        });
+
+    } catch (error) {
+        console.error("User Event Sales Analytics Error:", error);
+        return apiResponse.error(res, "Failed to fetch user event sales analytics", 500);
     }
 };
 

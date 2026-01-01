@@ -115,8 +115,11 @@ router.put('/update/:id',
             .isInt().withMessage('Country ID must be a number'),
 
         body('slug')
-            .optional()
-            .matches(/^[a-z0-9-]+$/).withMessage('Slug must contain only lowercase letters, numbers, and hyphens'),
+            .notEmpty().withMessage('Slug is required')
+            .isLength({ max: 100 }).withMessage('Slug must not exceed 100 characters')
+            .matches(/^[a-z0-9-]+$/).withMessage(
+                'Slug must contain only lowercase letters, numbers, and hyphens'
+            ),
 
         // Conditional validation for non-free events
         body('ticket_limit')

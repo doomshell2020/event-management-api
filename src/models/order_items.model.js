@@ -24,6 +24,10 @@ const OrderItems = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: false
         },
+        committee_user_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
 
         type: {
             type: DataTypes.ENUM(

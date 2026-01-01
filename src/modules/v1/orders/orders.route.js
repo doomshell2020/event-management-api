@@ -85,8 +85,7 @@ router.post('/create-appointment',
 );
 
 // ... appointment cancel
-router.put(
-    '/cancel-appointment/:id',
+router.put('/cancel-appointment/:id',
     // authenticate,
     // [
     //     body('order_id')
@@ -114,6 +113,16 @@ router.get("/event-dashboard-analytics",
     ],
     validate,
     ordersController.eventDashboardAnalytics
+);
+
+router.get("/user-sales-analytics",
+    authenticate,
+    [
+        query("event_id").notEmpty().withMessage("event_id is required"),
+        query("user_id").notEmpty().withMessage("user_id is required")
+    ],
+    validate,
+    ordersController.userEventSalesAnalytics
 );
 
 router.get("/sales-addons",

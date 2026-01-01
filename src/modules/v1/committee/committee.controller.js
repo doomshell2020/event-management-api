@@ -6,7 +6,7 @@ const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { sequelize } = require("../../../models");
 const config = require('../../../config/app');
-const { CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
+const { CommitteeMembers, CartQuestionsDetails, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
 
 exports.importCommitteeMembers = async (req, res) => {
     try {
@@ -237,7 +237,6 @@ exports.createCommitteeGroup = async (req, res) => {
         );
     }
 };
-
 
 exports.handleCommitteePushTicket = async (req, res) => {
     const transaction = await sequelize.transaction();
@@ -607,11 +606,33 @@ exports.requestList = async (req, res) => {
         const cartList = await Cart.findAll({
             where: whereCondition,
             order: [['id', 'DESC']],
+            attributes: [
+                'id',
+                'event_id',
+                'commitee_user_id',
+                'user_id',
+                'no_tickets',
+                'ticket_type',
+                'status',
+                'createdAt'
+            ],
             include: [
                 {
                     model: Event,
                     as: 'events',
-                    attributes: ['id', 'name', 'date_from', 'date_to', 'feat_image', 'location']
+                    attributes: ['id', 'name', 'date_from', 'date_to', 'feat_image', 'location'],
+                    include: [
+                        {
+                            model: Company,
+                            as: 'companyInfo',
+                            attributes: ['name']
+                        },
+                        {
+                            model: Currency,
+                            as: 'currencyName',
+                            attributes: ['Currency_symbol', 'Currency']
+                        }
+                    ]
                 },
                 {
                     model: TicketType,
@@ -622,23 +643,33 @@ exports.requestList = async (req, res) => {
                     as: 'user',
                     attributes: ['id', 'first_name', 'last_name', 'email', 'mobile', 'profile_image']
                 },
-            ],
-            attributes: [
-                'id',
-                'event_id',
-                'commitee_user_id',
-                'user_id',
-                'no_tickets',
-                'ticket_type',
-                'status',
-                'createdAt'
+                {
+                    model: CartQuestionsDetails,
+                    as: 'questionsList',
+                    attributes: ['id', 'user_reply'],
+                    include: [
+                        {
+                            model: Questions,
+                            as: 'question',
+                            attributes: ['question', 'type', 'name'],
+                            include: [
+                                {
+                                    model: QuestionItems,
+                                    as: 'questionItems',
+                                    attributes: ['items']
+                                }
+                            ]
+                        }
+                    ]
+                }
             ]
         });
+
 
         let events = [];
 
         if (status == 'T') {
-            
+
             const committeeEvents = await CommitteeMembers.findAll({
                 where: {
                     user_id: user_id,
@@ -662,6 +693,10 @@ exports.requestList = async (req, res) => {
                     'date_from',
                     'date_to',
                     'feat_image'
+                ],
+                include: [
+                    { model: Company, as: "companyInfo", attributes: ["name"] },
+                    { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] }
                 ]
             });
         }

@@ -232,18 +232,19 @@ module.exports = {
         try {
             const user_id = req.user.id;
             const { event_id, item_type } = req.query;
+            console.log('req.query :', req.query);
 
             let where = {
                 user_id,
                 ticket_type: { [Op.ne]: "appointment" },
                 status: "Y"
             };
-
-            if (event_id) where.event_id = event_id;
+            
+            if (event_id) where.event_id = Number(event_id);
             if (item_type) where.ticket_type = item_type;
-
+            
+            // console.log('where :', where);
             const cartList = await Cart.findAll({
-                where,
                 order: [["id", "DESC"]],
                 where: where,
                 include: [

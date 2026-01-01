@@ -117,7 +117,7 @@ module.exports.createTicket = async (req) => {
         // ✅ Create ticket
         const newTicket = await TicketType.create({
             eventid: event_id,
-            userid: user_id,
+            userid: eventExists.userid || user_id,
             title: title.trim(),
             access_type,
             type: type ?? type,

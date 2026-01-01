@@ -41,7 +41,10 @@ router.post('/create',
 
         body('slug')
             .notEmpty().withMessage('Slug is required')
-            .matches(/^[a-z0-9-]+$/).withMessage('Slug must contain only lowercase letters, numbers, and hyphens'),
+            .isLength({ max: 100 }).withMessage('Slug must not exceed 100 characters')
+            .matches(/^[a-z0-9-]+$/).withMessage(
+                'Slug must contain only lowercase letters, numbers, and hyphens'
+            ),
 
         body('event_timezone')
             .optional()

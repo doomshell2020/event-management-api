@@ -132,7 +132,7 @@ module.exports.deleteTicket = async (req, res) => {
                 case 'TICKET_NOT_FOUND':
                     return apiResponse.notFound(res, 'Ticket not found');
                 case 'FORBIDDEN':
-                    return apiResponse.forbidden(res, 'You are not authorized to delete this ticket');
+                    return apiResponse.error(res, 'You are not authorized to delete this ticket');
                 case 'DB_ERROR':
                     return apiResponse.error(res, 'Database error occurred while deleting ticket');
                 default:

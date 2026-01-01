@@ -380,7 +380,12 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             video_url,
             payment_currency,
             slug,
-            status
+            status,
+            is_free,
+            request_rsvp,
+            approve_timer,
+            allow_register,
+            event_timezone
         } = updateData;
 
         if (
@@ -397,7 +402,6 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             };
         }
 
-        // ✅ Conditional duplicate check (only if name or slug is changed)
         if (name || slug) {
             const duplicateEvent = await Event.findOne({
                 where: {
@@ -414,8 +418,27 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             }
         }
 
+        const effectiveIsFree = is_free !== undefined ? is_free : existingEvent.is_free;
+        const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;
 
-        // ✅ Paid event validation
+        if (effectiveIsFree == 'Y' && !effectiveRequestRsvp) {
+            return { success: false, message: 'request_rsvp is required for free events', code: 'VALIDATION_FAILED' };
+        }
+
+        if (effectiveIsFree !== 'Y') {
+            if ((ticket_limit == undefined && !existingEvent.ticket_limit) ||
+                (payment_currency == undefined && !existingEvent.payment_currency) ||
+                (sale_start == undefined && !existingEvent.sale_start) ||
+                (sale_end == undefined && !existingEvent.sale_end) ||
+                (approve_timer == undefined && !existingEvent.approve_timer)) {
+                return {
+                    success: false,
+                    message: 'Paid events require ticket_limit, payment_currency, sale_start, sale_end, and approve_timer',
+                    code: 'VALIDATION_FAILED'
+                };
+            }
+        }
+
         if ((ticket_limit == undefined && !existingEvent.ticket_limit) ||
             (payment_currency == undefined && !existingEvent.payment_currency) ||
             (sale_start == undefined && !existingEvent.sale_start) ||
@@ -427,8 +450,6 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             };
         }
 
-
-        // ✅ Update only provided fields
         if (name) existingEvent.name = name.trim();
         if (desp) existingEvent.desp = desp.trim();
         if (date_from) existingEvent.date_from = new Date(date_from);
@@ -436,34 +457,34 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (location) existingEvent.location = location;
         if (company_id) existingEvent.company_id = company_id;
         if (country_id) existingEvent.country_id = country_id;
-        if (ticket_limit !== undefined) existingEvent.ticket_limit = ticket_limit;
+        if (ticket_limit != undefined) existingEvent.ticket_limit = ticket_limit;
         if (video_url) existingEvent.video_url = video_url;
         if (payment_currency) existingEvent.payment_currency = payment_currency;
         if (slug) existingEvent.slug = slug.trim();
         if (sale_start) existingEvent.sale_start = new Date(sale_start);
         if (sale_end) existingEvent.sale_end = new Date(sale_end);
-        if (status !== undefined && status !== null) existingEvent.status = status;
+        if (status != undefined && status !== null) existingEvent.status = status;
+        if (event_timezone != undefined && event_timezone !== null) existingEvent.event_timezone = event_timezone;
 
-        // ✅ Handle optional image update
+        if (approve_timer !== undefined) existingEvent.approve_timer = approve_timer;
+        if (allow_register !== undefined) existingEvent.allow_register = allow_register == 'Y' ? 'Y' : 'N';
+        if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
+        if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
+
+        // Handle optional image update
         if (feat_image) {
             const allowedExt = ['png', 'jpg', 'jpeg'];
             const ext = feat_image.split('.').pop().toLowerCase();
             if (!allowedExt.includes(ext)) {
                 return { success: false, message: 'Uploaded file is not a valid image', code: 'INVALID_IMAGE' };
             }
-
-            // Remove old image
             const oldImagePath = path.join(process.cwd(), 'uploads/events', existingEvent.feat_image);
             if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
-
             existingEvent.feat_image = feat_image;
         }
-
-        // ✅ Save updates
+        // Save updates
         await existingEvent.save();
-
         return { success: true, event: existingEvent };
-
     } catch (error) {
         console.error('Error updating event:', error);
         return { success: false, message: 'Internal server error: ' + error.message, code: 'INTERNAL_ERROR' };

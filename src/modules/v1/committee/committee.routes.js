@@ -122,7 +122,6 @@ router.get('/requests/:status',
     committeeController.requestList
 );
 
-
 // Committee Request Action (Approve / Ignore)
 router.post('/action',
     authenticate,

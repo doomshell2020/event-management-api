@@ -238,13 +238,13 @@ module.exports.deleteTicket = async (req) => {
         }
 
         // ✅ Optional: Check if the user is the ticket owner (if applicable)
-        if (user_id && existingTicket.userid && existingTicket.userid !== user_id) {
-            return {
-                success: false,
-                message: 'You are not authorized to delete this ticket',
-                code: 'FORBIDDEN'
-            };
-        }
+        // if (user_id && existingTicket.userid && existingTicket.userid !== user_id) {
+        //     return {
+        //         success: false,
+        //         message: 'You are not authorized to delete this ticket',
+        //         code: 'FORBIDDEN'
+        //     };
+        // }
 
         // ✅ Remove associated image if exists
         if (existingTicket.ticket_image) {

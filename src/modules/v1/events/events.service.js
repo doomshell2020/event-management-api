@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes } = require('../../../models');
+const { Company, Event, TicketType, AddonTypes, Currency } = require('../../../models');
 const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 
 module.exports.searchEvents = async ({ keyword, loginId }) => {
@@ -106,7 +106,7 @@ module.exports.eventList = async (req, res) => {
             date_from,
             date_to,
             sale_start,
-            sale_end
+            sale_end 
         } = req.body || {};
 
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
@@ -160,7 +160,8 @@ module.exports.eventList = async (req, res) => {
         const events = await Event.findAll({
             where: whereCondition,
             include: [
-                { model: Company, as: "companyInfo", attributes: ["name"] }
+                { model: Company, as: "companyInfo", attributes: ["name"] },
+                { model: Currency, as: "currencyName", attributes: ["Currency_symbol","Currency"] }
             ],
             order: [["created", "DESC"]],
         });
@@ -603,7 +604,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             allow_register,
             request_rsvp,
             feat_image,
-            status
+            status,event_timezone
         } = updateData;
 
         if (
@@ -683,6 +684,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
         if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
         if (status !== undefined && status !== null) existingEvent.status = status;
+        if (event_timezone !== undefined && event_timezone !== null) existingEvent.event_timezone = event_timezone;
 
         // ✅ Handle optional image update
         if (feat_image) {
