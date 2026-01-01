@@ -550,7 +550,7 @@ exports.userEventSalesAnalytics = async (req, res) => {
                 committee_user_id: user_id
             },
             attributes: [
-                "ticket_id",                
+                "ticket_id",
                 [fn("SUM", col("OrderItems.count")), "items_sold"],
                 [fn("SUM", literal("OrderItems.count * OrderItems.price")), "total_revenue"]
             ],
@@ -564,7 +564,7 @@ exports.userEventSalesAnalytics = async (req, res) => {
             group: ["OrderItems.ticket_id", "ticketType.id"]
         });
 
-          // First get all order IDs belonging to this user
+        // First get all order IDs belonging to this user
         const orderItemOrders = await OrderItems.findAll({
             where: { event_id, committee_user_id: user_id },
             attributes: ["order_id"],
@@ -1198,6 +1198,7 @@ exports.createAppointmentOrder = async (req, res) => {
 exports.listOrders = async (req, res) => {
     try {
         const user_id = req.user.id;
+        console.log('user_id :', user_id);
         const { event_id } = req.query;
 
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
@@ -1256,16 +1257,19 @@ exports.listOrders = async (req, res) => {
                                     attributes: ['Currency_symbol', 'Currency']
                                 }
                             }
-                        },
+                        }
                     ]
                 },
-                { model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'] },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'],
+                    include: [{ model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }]
+                },
                 { model: User, as: "user", attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile', "gender"] },
             ]
         });
 
-
-        // console.log('orders :', orders);
         // FORMAT RESPONSE
         const formattedOrders = orders.map(order => {
             const orderData = order.toJSON();
@@ -1460,7 +1464,7 @@ exports.getOrderDetails = async (req, res) => {
                         "count",
                         "price",
                         "qr_image",
-                        "qr_data",
+                        // "qr_data",
                         "secure_hash",
                         "cancel_status",
                         "cancel_date"
@@ -1469,7 +1473,7 @@ exports.getOrderDetails = async (req, res) => {
                         {
                             model: TicketType,
                             as: "ticketType",
-                            attributes: ["id", "type"]
+                            attributes: ["id", "title"]
                         },
                         {
                             model: AddonTypes,
@@ -1500,7 +1504,7 @@ exports.getOrderDetails = async (req, res) => {
                                     attributes: ['Currency_symbol', 'Currency']
                                 }
                             }
-                        },
+                        }
                     ]
                 },
                 {
@@ -1514,43 +1518,46 @@ exports.getOrderDetails = async (req, res) => {
         });
 
         if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: "Order not found"
-            });
+            return apiResponse.error(res, "Order not found", 404);
         }
 
-        const orderJSON = order.toJSON();
+        // const orderJSON = order.toJSON();
 
-        // ---- FORMAT ORDER ITEMS ----
-        orderJSON.orderItems = orderJSON.orderItems.map(item => {
-            const newItem = {
-                ...item,
-                qr_image_url: item.qr_image
-                    ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
-                    : null
-            };
-            delete newItem.qr_data;
-            return newItem;
-        });
+        // // ---- FORMAT ORDER ITEMS ----
+        // orderJSON.orderItems = orderJSON.orderItems.map(item => {
+        //     const newItem = {
+        //         ...item,
+        //         qr_image_url: item.qr_image
+        //             ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
+        //             : null
+        //     };
+        //     delete newItem.qr_data;
+        //     return newItem;
+        // });
 
 
-        // ---- FORMAT EVENT OBJECT ----
-        if (orderJSON.event) {
-            const event = { ...orderJSON.event };
-            event.feat_image_url = event.feat_image
-                ? `${baseUrl.replace(/\/$/, "")}/uploads/events/${event.feat_image}`
-                : null;
-            delete event.feat_image; // remove old key
-            orderJSON.event = event;
-        }
+        // // ---- FORMAT EVENT OBJECT ----
+        // if (orderJSON.event) {
+        //     const event = { ...orderJSON.event };
+        //     event.feat_image_url = event.feat_image
+        //         ? `${baseUrl.replace(/\/$/, "")}/uploads/events/${event.feat_image}`
+        //         : null;
+        //     delete event.feat_image; // remove old key
+        //     orderJSON.event = event;
+        // }
 
 
         return res.json({
             success: true,
             message: "Order details fetched",
-            data: orderJSON
+            data: order
         });
+
+
+        // return apiResponse.success(res, "Order details fetched", {
+        //     order
+        // });
+
 
     } catch (error) {
         console.log("Order Details Error:", error);

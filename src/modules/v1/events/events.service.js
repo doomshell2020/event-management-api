@@ -527,6 +527,7 @@ module.exports.createEvent = async (req, res) => {
             location,
             company_id,
             country_id,
+            entry_type,
             ticket_limit: ticket_limit || 0,
             video_url,
             payment_currency,
@@ -543,8 +544,6 @@ module.exports.createEvent = async (req, res) => {
             request_rsvp: formatted_request_rsvp,
             event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
         };
-
-        // console.log('>>>>>>>>>>>>>>>>>', eventData);
 
         // ✅ Save to DB
         const newEvent = await Event.create(eventData);
