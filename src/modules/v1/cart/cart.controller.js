@@ -232,7 +232,7 @@ module.exports = {
         try {
             const user_id = req.user.id;
             const { event_id, item_type } = req.query;
-            console.log('req.query :', req.query);
+            // console.log('req.query :', req.query);
 
             let where = {
                 user_id,
@@ -430,8 +430,6 @@ module.exports = {
                     }
 
                 }
-
-
 
                 if (events) {
                     const data = events.toJSON();

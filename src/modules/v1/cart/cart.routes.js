@@ -62,7 +62,7 @@ router.post("/add",
 
         // COMMITTE SALE → ticket OR addon
         body().custom((value) => {
-            if (value.item_type === "committesale") {
+            if (value.item_type == "committesale") {
                 if (!value.ticket_id && !value.addons_id) {
                     throw new Error("ticket_id or addons_id required for committesale");
                 }

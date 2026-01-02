@@ -109,6 +109,11 @@ Wellness.hasMany(WellnessSlots, { foreignKey: 'wellness_id', as: 'wellnessSlots'
 Wellness.belongsTo(Event, { foreignKey: 'event_id', as: 'eventList', });
 Wellness.belongsTo(Currency, { foreignKey: 'currency', as: 'currencyName' });
 
+PaymentSnapshotItems.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticketType' });
+PaymentSnapshotItems.belongsTo(AddonTypes, { foreignKey: 'ticket_id', as: 'addonType' });
+PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
+// PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
+
 module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
   User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,

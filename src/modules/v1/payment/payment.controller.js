@@ -1,8 +1,12 @@
 const Stripe = require("stripe");
-const { Payment, PaymentSnapshotItems } = require("../../../models");
+const { Payment, PaymentSnapshotItems, OrderItems, TicketType, AddonTypes, Package } = require("../../../models");
 const apiResponse = require("../../../common/utils/apiResponse");
 const config = require("../../../config/app");
 const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
+
+const { Op, fn, col } = require("sequelize");
+const sequelize = require("../../../models").sequelize;
+
 
 const stripe = new Stripe(config.stripeKey, {
   apiVersion: "2024-06-20",
@@ -28,7 +32,90 @@ exports.createPaymentIntent = async (req, res) => {
       return apiResponse.error(res, "Missing required fields", 400);
     }
 
-    // 1️⃣ Create snapshot rows
+
+    // -------------------------------------------------------------
+    // VALIDATE LIMITS (Ticket / Committee / Addon / Package)
+    // -------------------------------------------------------------
+    for (const item of cartData) {
+
+      // 🚫 Skip appointment items completely
+      if (item.ticketType == "appointment") {
+        continue;
+      }
+
+      let Model = null;
+      let whereClause = {};
+      let itemId = null;
+      let typeLabel = "";
+      let limitField = null;
+      let nameField = null;
+
+      // 🔹 Decide source table, limit field & name field
+      if (item.ticketType == "ticket" || item.ticketType == "committesale") {
+        Model = TicketType;
+        whereClause.ticket_id = item.ticketId;
+        itemId = item.ticketId;
+        typeLabel = "Ticket";
+        limitField = "count";
+        nameField = "title";
+      }
+      else if (item.ticketType == "addon") {
+        Model = AddonTypes;
+        whereClause.addon_id = item.ticketId;
+        itemId = item.ticketId;
+        typeLabel = "Addon";
+        limitField = "count";
+        nameField = "name";
+      }
+      else if (item.ticketType == "package") {
+        Model = Package;
+        whereClause.package_id = item.ticketId;
+        itemId = item.ticketId;
+        typeLabel = "Package";
+        limitField = "total_package";
+        nameField = "name";
+      }
+      else {
+        continue;
+      }
+
+      // 🔹 Fetch limit + display name
+      const masterItem = await Model.findOne({
+        where: { id: itemId },
+        attributes: ["id", limitField, nameField]
+      });
+
+      const totalLimit = Number(masterItem?.[limitField] || 0);
+
+      // If no limit defined → allow
+      if (!totalLimit) continue;
+
+      // 🔹 Count already booked
+      const booked = await OrderItems.findOne({
+        where: {
+          ...whereClause,
+          event_id
+        },
+        attributes: [
+          [fn("SUM", col("count")), "totalBooked"]
+        ],
+        raw: true
+      });
+
+      const alreadyBooked = Number(booked?.totalBooked || 0);
+      const requested = Number(item.quantity || 1);
+
+      // 🔥 LIMIT CHECK
+      if (alreadyBooked + requested > totalLimit) {
+        return apiResponse.error(
+          res,
+          `${typeLabel} "${masterItem?.[nameField] || "Item"}" is sold out or its booking limit has been reached. Please remove this item from your cart and add another available option.`,
+          400
+        );
+      }
+    }
+
+    // Create snapshot rows
     const snapshotRows = await PaymentSnapshotItems.bulkCreate(
       cartData.map((item) => ({
         user_id,
@@ -51,7 +138,7 @@ exports.createPaymentIntent = async (req, res) => {
 
       Object.entries(data).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== "") {
-          metadata[key] = String(value).slice(0, 500); 
+          metadata[key] = String(value).slice(0, 500);
         }
       });
       return metadata;
@@ -136,7 +223,7 @@ exports.stripeWebhook = async (req, res) => {
       });
 
       const order = await fulfilOrderFromSnapshot({
-        meta_data : pi.metadata,
+        meta_data: pi.metadata,
         user_id: pi.metadata.user_id,
         event_id: pi.metadata.event_id,
         payment,
@@ -144,7 +231,7 @@ exports.stripeWebhook = async (req, res) => {
         payment_method: "stripe",
       });
       // console.log('>>>>>>>>>>>>>>order',order);      
-      
+
       console.log("✅ Payment → Order → QR completed");
     }
 
@@ -152,7 +239,6 @@ exports.stripeWebhook = async (req, res) => {
     // ---------------------------------------------------------
     if (event.type == "payment_intent.payment_failed") {
       const pi = event.data.object;
-
       const snapshotIds = pi.metadata.snapshot_ids
         .split(",")
         .map(Number);

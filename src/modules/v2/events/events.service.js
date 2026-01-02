@@ -929,7 +929,116 @@ module.exports.deleteEvent = async (eventId) => {
 // };
 
 
-// service......
+// service......comment(01-01-2026)
+// module.exports.getEventAppointmentsDetails = async (req, res) => {
+//     try {
+//         const { event_id } = req.params;
+
+//         if (!event_id) {
+//             return {
+//                 success: false,
+//                 code: "VALIDATION_FAILED",
+//                 message: "Event ID is required"
+//             };
+//         }
+
+//         // Step 1️⃣: Fetch event with wellness & slots
+//         const event = await Event.findOne({
+//             where: { id: event_id },
+//             include: [
+//                 {
+//                     model: Wellness,
+//                     as: "wellness",
+//                     where: { status: 'Y' },
+//                     include: [
+//                         { model: WellnessSlots, as: 'wellnessSlots' },
+//                         { model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }
+//                     ]
+//                 }
+//             ],
+//             attributes: ['id', 'event_org_id', 'name', 'desp', 'location', 'feat_image']
+//         });
+
+//         if (!event) {
+//             return {
+//                 success: false,
+//                 code: "EVENT_NOT_FOUND",
+//                 message: "Event not found"
+//             };
+//         }
+
+//         // Convert to JSON
+//         const data = event.toJSON();
+
+//         // Step 2️⃣: Format event image path
+//         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+//         const imagePath = "uploads/events";
+
+//         const formattedEvent = {
+//             ...data,
+//             feat_image: data.feat_image
+//                 ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+//                 : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`
+//         };
+
+//         // Step 3️⃣: Hide fully booked slots
+//         if (formattedEvent.wellness && Array.isArray(formattedEvent.wellness)) {
+//             // Collect all slot IDs
+//             const allSlotIds = [];
+//             formattedEvent.wellness.forEach(well => {
+//                 if (well.wellnessSlots && Array.isArray(well.wellnessSlots)) {
+//                     well.wellnessSlots.forEach(slot => allSlotIds.push(slot.id));
+//                 }
+//             });
+
+//             // Fetch all booked order items for these slots
+//             const bookedOrders = await OrderItems.findAll({
+//                 where: { appointment_id: allSlotIds },
+//                 attributes: ['appointment_id', 'count']
+//             });
+
+//             // Calculate booked count per slot
+//             const bookedMap = {};
+//             bookedOrders.forEach(order => {
+//                 if (!bookedMap[order.appointment_id]) bookedMap[order.appointment_id] = 0;
+//                 bookedMap[order.appointment_id] += order.count;
+//             });
+
+//             // Format wellness & filter slots
+//             formattedEvent.wellness = formattedEvent.wellness.map(well => {
+//                 // Format wellness image
+//                 well.Image = well.Image
+//                     ? `${baseUrl.replace(/\/$/, "")}/uploads/wellness/${well.Image}`
+//                     : `${baseUrl.replace(/\/$/, "")}/uploads/wellness/default.jpg`;
+
+//                 // Filter fully booked slots
+//                 if (well.wellnessSlots && Array.isArray(well.wellnessSlots)) {
+//                     well.wellnessSlots = well.wellnessSlots.filter(slot => {
+//                         const booked = bookedMap[slot.id] || 0;
+//                         return booked < slot.count; // keep only available slots
+//                     });
+//                 }
+
+//                 return well;
+//             });
+//         }
+
+//         // Step 4️⃣: Final response
+//         return {
+//             success: true,
+//             message: "Event & appointment slot details fetched successfully",
+//             data: formattedEvent
+//         };
+
+//     } catch (error) {
+//         console.error("❌ Error fetching event details:", error.message);
+//         return {
+//             success: false,
+//             code: "DB_ERROR",
+//             message: "Internal server error: " + error.message
+//         };
+//     }
+// };
 module.exports.getEventAppointmentsDetails = async (req, res) => {
     try {
         const { event_id } = req.params;
@@ -938,104 +1047,129 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
             return {
                 success: false,
                 code: "VALIDATION_FAILED",
-                message: "Event ID is required"
+                message: "Event ID is required",
             };
         }
 
-        // Step 1️⃣: Fetch event with wellness & slots
+        // STEP 1️⃣ Fetch event with wellness & slots
         const event = await Event.findOne({
             where: { id: event_id },
+            attributes: ["id", "event_org_id", "name", "desp", "location", "feat_image"],
             include: [
                 {
                     model: Wellness,
                     as: "wellness",
-                    where: { status: 'Y' },
+                    where: { status: "Y" },
                     include: [
-                        { model: WellnessSlots, as: 'wellnessSlots' },
-                        { model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }
-                    ]
-                }
+                        { model: WellnessSlots, as: "wellnessSlots" },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"],
+                        },
+                    ],
+                },
             ],
-            attributes: ['id', 'event_org_id', 'name', 'desp', 'location', 'feat_image']
         });
 
         if (!event) {
             return {
                 success: false,
                 code: "EVENT_NOT_FOUND",
-                message: "Event not found"
+                message: "Event not found",
             };
         }
 
-        // Convert to JSON
         const data = event.toJSON();
 
-        // Step 2️⃣: Format event image path
-        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
-        const imagePath = "uploads/events";
+        const baseUrl = (process.env.BASE_URL || "http://localhost:5000").replace(
+            /\/$/,
+            ""
+        );
 
+        // STEP 2️⃣ Format event image
         const formattedEvent = {
             ...data,
             feat_image: data.feat_image
-                ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
-                : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`
+                ? `${baseUrl}/uploads/events/${data.feat_image}`
+                : `${baseUrl}/uploads/events/default.jpg`,
         };
 
-        // Step 3️⃣: Hide fully booked slots
-        if (formattedEvent.wellness && Array.isArray(formattedEvent.wellness)) {
-            // Collect all slot IDs
-            const allSlotIds = [];
-            formattedEvent.wellness.forEach(well => {
-                if (well.wellnessSlots && Array.isArray(well.wellnessSlots)) {
-                    well.wellnessSlots.forEach(slot => allSlotIds.push(slot.id));
-                }
-            });
+        // STEP 3️⃣ Collect all slot IDs
+        let allSlotIds = [];
+        formattedEvent.wellness?.forEach((well) => {
+            well.wellnessSlots?.forEach((slot) => allSlotIds.push(slot.id));
+        });
 
-            // Fetch all booked order items for these slots
-            const bookedOrders = await OrderItems.findAll({
+        // STEP 4️⃣ Get booked counts (existing logic)
+        const bookedOrders = allSlotIds.length
+            ? await OrderItems.findAll({
                 where: { appointment_id: allSlotIds },
-                attributes: ['appointment_id', 'count']
-            });
+                attributes: ["appointment_id", "count"],
+            })
+            : [];
 
-            // Calculate booked count per slot
-            const bookedMap = {};
-            bookedOrders.forEach(order => {
-                if (!bookedMap[order.appointment_id]) bookedMap[order.appointment_id] = 0;
-                bookedMap[order.appointment_id] += order.count;
-            });
+        const bookedMap = {};
+        bookedOrders.forEach((o) => {
+            bookedMap[o.appointment_id] =
+                (bookedMap[o.appointment_id] || 0) + o.count;
+        });
 
-            // Format wellness & filter slots
-            formattedEvent.wellness = formattedEvent.wellness.map(well => {
-                // Format wellness image
+        const now = new Date();
+
+        // STEP 5️⃣ Format wellness & FILTER slots
+        formattedEvent.wellness = formattedEvent.wellness
+            .map((well) => {
+                // Wellness image
                 well.Image = well.Image
-                    ? `${baseUrl.replace(/\/$/, "")}/uploads/wellness/${well.Image}`
-                    : `${baseUrl.replace(/\/$/, "")}/uploads/wellness/default.jpg`;
+                    ? `${baseUrl}/uploads/wellness/${well.Image}`
+                    : `${baseUrl}/uploads/wellness/default.jpg`;
 
-                // Filter fully booked slots
-                if (well.wellnessSlots && Array.isArray(well.wellnessSlots)) {
-                    well.wellnessSlots = well.wellnessSlots.filter(slot => {
+                if (Array.isArray(well.wellnessSlots)) {
+                    well.wellnessSlots = well.wellnessSlots.filter((slot) => {
+                        /** ❌ 1. Fully booked slots (existing) */
                         const booked = bookedMap[slot.id] || 0;
-                        return booked < slot.count; // keep only available slots
+                        if (booked >= slot.count) return false;
+
+                        /** ❌ 2. Expired slots (NEW LOGIC) */
+                        const slotEndTime = new Date(
+                            `${slot.date} ${slot.slot_end_time}`
+                        );
+                        if (now > slotEndTime) return false;
+
+                        return true; // ✅ valid slot
                     });
                 }
 
                 return well;
-            });
+            })
+            // STEP 6️⃣ Remove wellness if no slots left
+            .filter(
+                (well) =>
+                    Array.isArray(well.wellnessSlots) &&
+                    well.wellnessSlots.length > 0
+            );
+
+        // STEP 7️⃣ If all appointments expired
+        if (!formattedEvent.wellness.length) {
+            return {
+                success: true,
+                message: "No active appointment slots available",
+                data: formattedEvent,
+            };
         }
 
-        // Step 4️⃣: Final response
         return {
             success: true,
             message: "Event & appointment slot details fetched successfully",
-            data: formattedEvent
+            data: formattedEvent,
         };
-
     } catch (error) {
-        console.error("❌ Error fetching event details:", error.message);
+        console.error("❌ Error fetching event details:", error);
         return {
             success: false,
             code: "DB_ERROR",
-            message: "Internal server error: " + error.message
+            message: "Internal server error",
         };
     }
 };

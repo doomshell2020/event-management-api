@@ -115,8 +115,8 @@ router.get('/requests/:status',
     authenticate,
     [
         param('status')
-            .isIn(['T', 'Y', 'N', 'I'])
-            .withMessage('Invalid status Y|N|I is required Y=Approved, N=Rejected, I=Ignored'),
+            .isIn(['T', 'Y', 'N', 'I', 'C'])
+            .withMessage('Invalid status Y|N|I|C is required Y=Approved, N=Rejected, I=Ignored, C=Completed'),
     ],
     validate,
     committeeController.requestList

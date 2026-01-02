@@ -6,7 +6,7 @@ const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { sequelize } = require("../../../models");
 const config = require('../../../config/app');
-const { CommitteeMembers, CartQuestionsDetails, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
+const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
 
 exports.importCommitteeMembers = async (req, res) => {
     try {
@@ -667,6 +667,7 @@ exports.requestList = async (req, res) => {
 
 
         let events = [];
+        let completedData;
 
         if (status == 'T') {
 
@@ -701,10 +702,28 @@ exports.requestList = async (req, res) => {
             });
         }
 
+        completedData = await OrderItems.findAll({
+            where: { committee_user_id: user_id },
+            attributes: ["order_id"],
+            include: [
+                {
+                    model: User,
+                    as: 'user',
+                    attributes: ['first_name', 'last_name', 'email', 'mobile', 'profile_image']
+                },
+                {
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["id", "title", "price"]
+                }
+            ],
+            raw: true
+        });
 
         return apiResponse.success(res, 'Committee requests fetched', {
             count: cartList.length,
             list: cartList,
+            completedData,
             events,
             assets, // ✅ FULL URLs INCLUDED
         });
