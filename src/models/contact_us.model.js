@@ -25,7 +25,7 @@ const contactUs = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true
         },
-        subject: {
+        description: {
             type: DataTypes.TEXT,
             allowNull: true
         },
