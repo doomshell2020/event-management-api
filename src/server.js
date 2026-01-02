@@ -47,6 +47,11 @@ const eventOrganizerAdminRoutesV1 = require('./modules/v1/admin/event-organizer/
 const eventAdminRoutesV1 = require('./modules/v1/admin/event/event.routes');
 const ordersAdminRoutesV1 = require('./modules/v1/admin/orders/orders.routes');
 const ticketsAdminRoutesV1 = require('./modules/v1/admin/tickets/tickets.routes');
+const staticAdminRoutesV1 = require('./modules/v1/admin/static/static.routes');
+const contactUsAdminRoutesV1 = require('./modules/v1/admin/contact-us/contact.routes');
+const seoAdminRoutesV1 = require('./modules/v1/admin/seo/seo.routes');
+const templateAdminRoutesV1 = require('./modules/v1/admin/email-templates/email.routes');
+const customerAdminRoutesV1 = require('./modules/v1/admin/customers/customer.routes');
 
 
 // Initialize Express
@@ -106,6 +111,11 @@ app.use('/api/v1/admin/event-organizer',eventOrganizerAdminRoutesV1)
 app.use('/api/v1/admin/events',eventAdminRoutesV1)
 app.use('/api/v1/admin/orders',ordersAdminRoutesV1)
 app.use('/api/v1/admin/tickets',ticketsAdminRoutesV1)
+app.use('/api/v1/admin/static',staticAdminRoutesV1)
+app.use('/api/v1/admin/contact-us',contactUsAdminRoutesV1)
+app.use('/api/v1/admin/seo',seoAdminRoutesV1)
+app.use('/api/v1/admin/email-templates',templateAdminRoutesV1)
+app.use('/api/v1/admin/customers',customerAdminRoutesV1)
 
 
 
