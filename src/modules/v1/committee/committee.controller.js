@@ -358,7 +358,7 @@ exports.handleCommitteePushTicket = async (req, res) => {
                 user,
                 event,
                 emailTickets,
-                `${config.clientUrl}/events/book/${event.id}`
+                `${config.clientUrl}`
             )
         );
 
@@ -565,7 +565,7 @@ exports.handleAction = async (req, res) => {
                     user,
                     event,
                     ticket,
-                    `${config.clientUrl}/events/book/${event.id}`
+                    `${config.clientUrl}`
                 )
             );
         }

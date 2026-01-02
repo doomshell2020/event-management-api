@@ -21,6 +21,10 @@ const Package = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    total_package: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
     discount_percentage: {
       type: DataTypes.INTEGER,
       allowNull: true,

@@ -26,6 +26,12 @@ router.post(
             .withMessage('Package limit is required')
             .isInt({ min: 1 })
             .withMessage('Package limit must be a number'),
+            
+        body('total_package')
+            .notEmpty()
+            .withMessage('Package Total is required')
+            .isInt({ min: 1 })
+            .withMessage('Package Total must be a number'),
 
         body('discount_percentage')
             .optional()
@@ -108,6 +114,11 @@ router.put(
             .optional({ nullable: true })
             .isInt({ min: 1 })
             .withMessage('Package limit must be a positive integer'),
+
+        body('total_package')
+            .optional({ nullable: true })
+            .isInt({ min: 1 })
+            .withMessage('Package Total must be a positive integer'),
     ],
     validate,
     packageController.updatePackage

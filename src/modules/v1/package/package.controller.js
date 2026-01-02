@@ -69,7 +69,7 @@ module.exports.createPackage = async (req, res) => {
 module.exports.updatePackage = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, hidden, package_limit } = req.body;
+        const { name, hidden, package_limit,total_package } = req.body;
 
         const packageData = await Package.findByPk(id);
         if (!packageData) {
@@ -80,6 +80,7 @@ module.exports.updatePackage = async (req, res) => {
         if (name !== undefined) packageData.name = name;
         if (hidden !== undefined) packageData.hidden = hidden;
         if (package_limit !== undefined) packageData.package_limit = package_limit;
+        if (total_package !== undefined) packageData.total_package = total_package;
 
         await packageData.save();
 
