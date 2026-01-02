@@ -2,6 +2,7 @@ const { AddonTypes, Event } = require('../../../models');
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
+const { fn, col, literal } = require("sequelize");
 
 module.exports.createAddons = async (req) => {
     try {
@@ -122,7 +123,7 @@ module.exports.updateAddons = async (req) => {
                     id: { [Op.ne]: parseInt(addonId) } // 🟢 Force integer comparison
                 }
             });
-            
+
 
             if (duplicate) {
                 return {
@@ -195,15 +196,35 @@ module.exports.listAddonsByEvent = async (event_id) => {
         }
 
         // ✅ Fetch all tickets for this event
-        const tickets = await AddonTypes.findAll({
+        // const tickets = await AddonTypes.findAll({
+        //     where: { event_id },
+        //     order: [['createdAt', 'DESC']]
+        // });
+
+        // ✅ Fetch addons with sold count
+        const addons = await AddonTypes.findAll({
             where: { event_id },
-            order: [['createdAt', 'DESC']]
+            attributes: {
+                include: [
+                    [
+                        literal(`(
+                        SELECT COALESCE(SUM(oi.count), 0)
+                        FROM tbl_order_items AS oi
+                        WHERE oi.addon_id = AddonTypes.id
+                        AND oi.event_id = ${event_id}
+                        AND oi.type = 'addon'
+                        )`),
+                        "sold_count",
+                    ],
+                ],
+            },
+            order: [["createdAt", "DESC"]],
         });
 
         return {
             success: true,
             message: 'Addons fetched successfully',
-            data: tickets
+            data: addons
         };
 
     } catch (error) {

@@ -84,8 +84,9 @@ exports.createPaymentIntent = async (req, res) => {
         where: { id: itemId },
         attributes: ["id", limitField, nameField]
       });
-
+      
       const totalLimit = Number(masterItem?.[limitField] || 0);
+      console.log('totalLimit :', totalLimit);
 
       // If no limit defined → allow
       if (!totalLimit) continue;

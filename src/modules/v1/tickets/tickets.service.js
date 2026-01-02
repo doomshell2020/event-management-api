@@ -1,6 +1,6 @@
 
-const { TicketType, Event } = require('../../../models/index');
-
+const { TicketType, Event, OrderItems } = require('../../../models/index');
+const { fn, col, literal } = require("sequelize");
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
@@ -287,11 +287,35 @@ module.exports.listTicketsByEvent = async (event_id) => {
             };
         }
 
+        // const await OrderItems
+
         // ✅ Fetch all tickets for this event
+        // const tickets = await TicketType.findAll({
+        //     where: { eventid: event_id },
+        //     order: [['createdAt', 'DESC']]
+        // });
+
+        // ✅ Fetch tickets with sold count
         const tickets = await TicketType.findAll({
             where: { eventid: event_id },
-            order: [['createdAt', 'DESC']]
+            attributes: {
+                include: [
+                    [
+                        // 🔥 Subquery to calculate sold count
+                        literal(`(
+                        SELECT COALESCE(SUM(oi.count), 0)
+                        FROM tbl_order_items AS oi
+                        WHERE oi.ticket_id = TicketType.id
+                        AND oi.event_id = ${event_id}
+                        AND oi.type IN ('ticket', 'committesale')
+                        )`),
+                        "sold_count",
+                    ]
+                ],
+            },
+            order: [["createdAt", "DESC"]],
         });
+
 
         return {
             success: true,

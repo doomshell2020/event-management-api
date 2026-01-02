@@ -7,8 +7,7 @@ const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
 
 // 🎟️ Create Addon Route
-router.post(
-    '/create',
+router.post('/create',
     authenticate,
     uploadFiles({ folder: 'uploads/addons', type: 'single', fieldName: 'addon_image' }),
     [

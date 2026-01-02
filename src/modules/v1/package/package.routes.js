@@ -6,8 +6,7 @@ const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 
 // ✅ Create Package with Ticket & Addon selections
-router.post(
-    '/create',
+router.post('/create',
     authenticate,
     [
         body('event_id')
@@ -84,8 +83,7 @@ router.post(
 );
 
 // ✅ Update Package (name, hidden, limit — any or all)
-router.put(
-    '/update/:id',
+router.put('/update/:id',
     authenticate,
     [
         param('id')
@@ -124,10 +122,8 @@ router.put(
     packageController.updatePackage
 );
 
-
 // ✅ Get Package List or Single Package (event_id required, id optional)
-router.get(
-    '/list',
+router.get('/list',
     authenticate,
     [
         query('event_id')
