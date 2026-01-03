@@ -6,6 +6,24 @@ const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
 
+router.post('/generate',
+    authenticate,
+    [
+        body('quantity')
+            .notEmpty().withMessage('Quantity is required')
+            .isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
+
+        body('ticket_id')
+            .notEmpty().withMessage('Ticket ID is required')
+            .isInt().withMessage('Ticket ID must be a number'),
+
+        body('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number'),
+    ],
+    validate,
+    ticketController.generateTicket
+);
 
 // 🎟️ Create Ticket Route
 router.post('/create',
@@ -89,10 +107,17 @@ router.delete('/delete/:id',
 );
 
 // ✅ 1. List all tickets for a given event
-router.get("/list/:event_id", ticketController.listTicketsByEvent);
+router.get("/list/:event_id", authenticate, ticketController.listTicketsByEvent);
+
+/* ✅ 2. Print / fetch generated complimentary tickets (by ticket + event) */
+router.get("/print/:ticket_id",
+    authenticate,
+    ticketController.printCompsTickets
+);
+
 
 // ✅ 2. Get single ticket detail by ID
-router.get("/detail/:ticket_id", ticketController.getTicketDetail);
+router.get("/detail/:ticket_id", authenticate, ticketController.getTicketDetail);
 
 module.exports = router;
 

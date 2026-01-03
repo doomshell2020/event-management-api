@@ -30,7 +30,10 @@ const CommitteeAssignTickets = require('./committee_assigntickets');
 const CartQuestionsDetails = require('./cart_questions_details');
 const CommitteeGroup = require('./committee_group.model');
 const CommitteeGroupMember = require('./committee_group_member.model');
-
+const Static= require('./static.model');
+const ContactUs= require('./contact_us.model');
+const Seo= require('./seo.model');
+const Templates= require('./templates.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -117,5 +120,5 @@ PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageT
 module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
   User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,
-  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember
+  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember,ContactUs,Seo,Templates,Static
 };

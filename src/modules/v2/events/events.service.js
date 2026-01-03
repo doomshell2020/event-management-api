@@ -386,7 +386,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             approve_timer,
             allow_register,
             event_timezone,
-            access_type
+            entry_type
         } = updateData;
 
         if (
@@ -460,7 +460,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (country_id) existingEvent.country_id = country_id;
         if (ticket_limit != undefined) existingEvent.ticket_limit = ticket_limit;
         if (video_url) existingEvent.video_url = video_url;
-        if (access_type) existingEvent.access_type = access_type.trim();
+        if (entry_type) existingEvent.entry_type = entry_type.trim();
         if (payment_currency) existingEvent.payment_currency = payment_currency;
         if (slug) existingEvent.slug = slug.trim();
         if (sale_start) existingEvent.sale_start = new Date(sale_start);
@@ -473,7 +473,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
         if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
         
-        // console.log('access_type :', access_type);
+        // console.log('entry_type :', entry_type);
         // Handle optional image update
         if (feat_image) {
             const allowedExt = ['png', 'jpg', 'jpeg'];

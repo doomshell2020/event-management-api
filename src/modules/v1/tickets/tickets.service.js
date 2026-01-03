@@ -1,9 +1,251 @@
 
-const { TicketType, Event, OrderItems } = require('../../../models/index');
+const { TicketType, Event, OrderItems, Orders, Payment, User } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
+const { generateQRCode } = require('../../../common/utils/qrGenerator');
+const { generateUniqueOrderId } = require('../../../common/utils/helpers');
+
+
+module.exports.getCompsTicketsForPrint = async (req) => {
+    try {
+        const user_id = req.user.id;
+        const { ticket_id } = req.params;
+        const { event_id } = req.query;
+
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const qrPath = "uploads/qr_codes";
+        const eventImagePath = "uploads/events";
+
+        if (!ticket_id || !event_id) {
+            return {
+                success: false,
+                message: 'ticket_id and event_id are required'
+            };
+        }
+
+        /* 🔍 VERIFY COMPLIMENTARY TICKET */
+        const ticket = await TicketType.findOne({
+            where: {
+                id: ticket_id,
+                eventid: event_id,
+                userid: user_id,
+                type: 'comps'
+            },
+            attributes: ['id', 'title']
+        });
+
+        if (!ticket) {
+            return {
+                success: false,
+                code: 'NOT_FOUND',
+                message: 'Complimentary ticket not found'
+            };
+        }
+
+        /* 🎉 FETCH EVENT DETAILS */
+        const event = await Event.findOne({
+            where: {
+                id: event_id,
+                // event_org_id: user_id
+            },
+            attributes: ['id', 'name', 'feat_image', 'date_from', 'date_to']
+        });
+
+        if (!event) {
+            return {
+                success: false,
+                code: 'NOT_FOUND',
+                message: 'Event not found'
+            };
+        }
+
+        /* 🎟️ FETCH GENERATED COMPS */
+        const tickets = await OrderItems.findAll({
+            where: {
+                ticket_id,
+                event_id,
+                user_id,
+                type: 'comps',
+                status: 'Y'
+            },
+            attributes: [
+                "id",
+                "type",
+                "ticket_id",
+                "price",
+                "qr_image",
+                "secure_hash",
+                "cancel_status",
+                "cancel_date",
+                "createdAt"
+            ],
+            include: [
+                {
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["id", "title"]
+                },
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["first_name", "last_name", "email"]
+                }
+            ],
+            order: [['id', 'DESC']],
+        });
+
+        return {
+            success: true,
+            data: {
+                qr_base_path: `${baseUrl}${qrPath}/`,
+                event_image_base_path: `${baseUrl}${eventImagePath}/`,
+                event: {
+                    id: event.id,
+                    name: event.name,
+                    image: event.feat_image,
+                    image_url: event.feat_image
+                        ? `${baseUrl}/${eventImagePath}/${event.feat_image}`
+                        : null,
+                    date_from: event.date_from,
+                    date_to: event.date_to
+                },
+                ticket_title: ticket.title,
+                total_generated: tickets.length,
+                tickets
+            }
+        };
+
+    } catch (error) {
+        console.error('Service Print Comps Error:', error);
+        return {
+            success: false,
+            code: 'DB_ERROR',
+            message: 'Failed to fetch complimentary tickets'
+        };
+    }
+};
+
+module.exports.generateComplementary = async (req) => {
+    const transaction = await OrderItems.sequelize.transaction();
+
+    try {
+        const user_id = req.user.id;
+        const { ticket_id, event_id, quantity } = req.body;
+
+        /* 🔍 FIND TICKET */
+        const ticket = await TicketType.findOne({
+            where: { id: ticket_id },
+            transaction
+        });
+
+        // console.log('ticket.type :', ticket.type);
+
+
+        if (!ticket) {
+            return {
+                success: false,
+                code: 'NOT_FOUND',
+                message: 'Ticket not found'
+            };
+        }
+
+        /* 🎟️ CREATE FREE PAYMENT */
+        const payment = await Payment.create({
+            user_id,
+            event_id,
+            amount: 0,
+            payment_intent: null,
+            payment_status: "paid",
+        }, { transaction });
+
+        /* 🧾 CREATE ORDER */
+        const order = await Orders.create({
+            order_uid: generateUniqueOrderId(),
+            user_id,
+            event_id,
+            grand_total: 0,
+            sub_total: 0,
+            tax_total: 0,
+            discount_amount: 0,
+            discount_code: null,
+            paymenttype: 'free',
+            paymentgateway: "comps",
+            payment_id: payment.id,
+            status: "Y"
+        }, { transaction });
+
+        /* 🔁 CREATE ORDER ITEMS */
+        const itemsData = Array.from({ length: quantity }).map(() => ({
+            order_id: order.id,
+            event_id: event_id,
+            user_id: user_id,
+            title: ticket.title || 'Complimentary',
+            price: 0,
+            type: ticket.type,
+            ticket_id: ticket_id,
+            access_type: ticket.access_type || 'event',
+            status: 'Y'
+        }));
+
+        const orderItems = await OrderItems.bulkCreate(
+            itemsData,
+            { transaction, returning: true }
+        );
+
+        /* 📸 GENERATE QR FOR EACH ITEM */
+        const qrResults = [];
+        const attachments = [];
+
+        for (const orderItem of orderItems) {
+            const qr = await generateQRCode(orderItem);
+
+            if (qr) {
+                await orderItem.update({
+                    qr_image: qr.qrImageName,
+                    qr_data: JSON.stringify(qr.qrData),
+                    secure_hash: qr.secureHash
+                }, { transaction });
+
+                qrResults.push({
+                    order_item_id: orderItem.id,
+                    qr_image: qr.qrImageName
+                });
+
+                attachments.push({
+                    filename: qr.qrImageName,
+                    path: path.join(
+                        __dirname,
+                        "../../../uploads/qr_codes/",
+                        qr.qrImageName
+                    )
+                });
+            }
+        }
+
+        await transaction.commit();
+
+        return {
+            success: true,
+            data: {
+                order_id: order.id,
+                generated: quantity,
+                qr: qrResults
+            }
+        };
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error('generateComplementary Error:', error);
+
+        return {
+            success: false,
+            code: 'DB_ERROR',
+            message: 'Failed to generate complimentary tickets'
+        };
+    }
+};
 
 module.exports.createTicket = async (req) => {
     try {
@@ -307,7 +549,7 @@ module.exports.listTicketsByEvent = async (event_id) => {
                         FROM tbl_order_items AS oi
                         WHERE oi.ticket_id = TicketType.id
                         AND oi.event_id = ${event_id}
-                        AND oi.type IN ('ticket', 'committesale')
+                        AND oi.type IN ('ticket', 'committesale','comps')
                         )`),
                         "sold_count",
                     ]

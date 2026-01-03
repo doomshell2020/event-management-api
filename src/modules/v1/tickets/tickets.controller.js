@@ -3,6 +3,54 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const path = require('path');
 const fs = require('fs');
 
+module.exports.generateTicket = async (req, res) => {
+    try {
+        const { ticket_id, quantity, event_id } = req.body;
+
+        if (!ticket_id || !quantity || !event_id) {
+            return apiResponse.validation(res, [], 'Required fields are missing');
+        }
+
+        const result = await ticketService.generateComplementary(req);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'NOT_FOUND':
+                    return apiResponse.error(res, result.message, 404);
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                case 'DB_ERROR':
+                    return apiResponse.error(res, 'Database error occurred');
+                default:
+                    return apiResponse.error(res, result.message || 'Something went wrong');
+            }
+        }
+
+        return apiResponse.success(res, 'Ticket generated successfully', result.data);
+
+    } catch (error) {
+        console.error('Generate Ticket Error:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
+
+/* 🎟️ PRINT COMPLIMENTARY TICKETS */
+module.exports.printCompsTickets = async (req, res) => {
+    try {
+        const result = await ticketService.getCompsTicketsForPrint(req);
+
+        if (!result.success) {
+            return apiResponse.error(res, result.message, result.code === 'NOT_FOUND' ? 404 : 400);
+        }
+
+        return apiResponse.success(res, 'Complimentary tickets fetched', result.data);
+
+    } catch (error) {
+        console.error('Print Comps Tickets Error:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
+
 module.exports.createTicket = async (req, res) => {
     try {
         // ✅ Handle optional file safely

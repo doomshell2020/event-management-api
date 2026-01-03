@@ -140,6 +140,11 @@ router.put('/update/:id',
             .if(body('is_free').not().equals('Y'))
             .optional()
             .isISO8601({ strict: false }).withMessage('Sale end must be valid ISO date'),
+
+        body('entry_type')
+            .optional()
+            .isIn(['single', 'multi', 'slot', 'event'])
+            .withMessage('Event type must be one of: single, multi, slot,event'),
     ],
     validate,
     eventController.updateEvent

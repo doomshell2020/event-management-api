@@ -37,7 +37,8 @@ const OrderItems = sequelize.define(
                 "appointment",
                 "committesale",
                 "opensale",
-                "ticket_price"
+                "ticket_price",
+                "comps"
             ),
             allowNull: false
         },
