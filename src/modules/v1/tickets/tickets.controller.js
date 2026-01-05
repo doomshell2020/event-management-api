@@ -2,6 +2,117 @@ const ticketService = require('./tickets.service');
 const apiResponse = require('../../../common/utils/apiResponse');
 const path = require('path');
 const fs = require('fs');
+const XLSX = require('xlsx');
+const config = require('../../../config/app');
+
+exports.getGeneratedUsers = async (req, res) => {
+    try {
+        const eventId = req.params.event_id;
+
+        // Get page and limit from query parameters, fallback to defaults
+        const page = parseInt(req.query.page, 10) || config.perPageDataLimitPage || 1;
+        const limit = parseInt(req.query.limit, 10) || config.perPageDataLimit || 10;
+
+        // Fetch paginated users
+        const users = await ticketService.getGeneratedUsers(eventId, page, limit);
+
+        return res.status(200).json({
+            success: true,
+            code: 200,
+            message: `Users with complimentary tickets for event ${eventId}`,
+            data: users.data, // array of users
+            pagination: users.pagination, // pagination info
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('getGeneratedUsers Error:', error);
+        return res.status(500).json({
+            success: false,
+            error: {
+                code: 500,
+                error_code: 'SERVER_ERROR',
+                message: error.message || 'Internal Server Error',
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+};
+
+module.exports.importCompsTickets = async (req, res) => {
+    try {
+        const { event_id } = req.body;
+        // console.log('req.body :', req.user);
+
+        if (!event_id) {
+            return apiResponse.validation(res, [], 'event_id are required');
+        }
+
+        if (!req.file) {
+            return apiResponse.validation(res, [], 'Excel file is required');
+        }
+
+        // 📂 Read Excel
+        const workbook = XLSX.readFile(req.file.path);
+        const sheetName = workbook.SheetNames[0];
+        const sheetData = XLSX.utils.sheet_to_json(
+            workbook.Sheets[sheetName],
+            { defval: '' }
+        );
+
+        if (sheetData.length == 0) {
+            return apiResponse.validation(res, [], 'Excel file is empty');
+        }
+
+        // 🧾 Validate headers
+        const normalize = (str) =>
+            str.toLowerCase().replace(/\s+/g, ' ').trim();
+
+        // Excel headers
+        const headers = Object.keys(sheetData[0]).map(normalize);
+
+        // Required headers (same normalization)
+        const REQUIRED_HEADERS = [
+            'Sr.No',
+            'First Name',
+            'Last Name',
+            'Email',
+            'Mobile'
+        ].map(normalize);
+
+        const invalidHeaders = REQUIRED_HEADERS.filter(
+            h => !headers.includes(h)
+        );
+
+        if (invalidHeaders.length) {
+            return apiResponse.validation(
+                res,
+                [],
+                `Invalid Excel format. Missing columns: ${invalidHeaders.join(', ')}`
+            );
+        }
+
+        // 🚀 Process users
+        const result = await ticketService.importCompsTickets({
+            rows: sheetData,
+            event_id,
+            createdBy: req.user.id
+        });
+
+        if (!result.success) {
+            return apiResponse.error(res, result.message || 'Import failed');
+        }
+
+        return apiResponse.success(
+            res,
+            'Users imported and complimentary tickets generated',
+            result.data
+        );
+
+    } catch (error) {
+        console.error('Import Comps Ticket Error:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
 
 module.exports.generateTicket = async (req, res) => {
     try {

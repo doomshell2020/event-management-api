@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ticketController = require('./tickets.controller');
-const { body, param } = require('express-validator');
+const { body, param, check } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
@@ -115,6 +115,36 @@ router.get("/print/:ticket_id",
     ticketController.printCompsTickets
 );
 
+router.post(
+    "/import-comps",
+    authenticate,
+    uploadFiles({
+        folder: 'uploads/temp',
+        type: 'single',
+        fieldName: 'uploadFiles'
+    }),
+    [
+        check('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number')
+            .toInt()
+    ],
+    validate,
+    ticketController.importCompsTickets
+);
+
+router.get(
+    "/generated-users/:event_id",
+    authenticate,
+    [
+        check('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number')
+            .toInt()
+    ],
+    validate,
+    ticketController.getGeneratedUsers
+);
 
 // ✅ 2. Get single ticket detail by ID
 router.get("/detail/:ticket_id", authenticate, ticketController.getTicketDetail);

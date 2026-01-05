@@ -479,6 +479,12 @@ module.exports = {
                         uniqueId = item.TicketType?.id || null;
                         break;
 
+                    case "committee_sales":
+                        displayName = item.TicketType?.title || "";
+                        ticketPrice = item.TicketType?.price || 0;
+                        uniqueId = item.TicketType?.id || null;
+                        break;
+
                     case "addon":
                         displayName = item.AddonType?.name || "";
                         ticketPrice = item.AddonType?.price || 0;
