@@ -1,6 +1,9 @@
 const { User, Orders } = require('../../../../models');
 const { Sequelize } = require('sequelize');
-
+const config = require('../../../../config/app');
+const sendEmail = require('../../../../common/utils/sendEmail');
+const { generateVerificationToken } = require('../../../../common/utils/generateToken');
+const verifyEmailTemplate = require('../../../../common/utils/emailTemplates/verifyEmailTemplate');
 // Get event organizer List..
 module.exports.getCustomersList = async (req, res) => {
     try {
@@ -21,12 +24,14 @@ module.exports.getCustomersList = async (req, res) => {
                 'email',
                 'mobile',
                 'status',
+                'createdAt',
+                'is_email_verified',
                 [
-                Sequelize.fn('COALESCE',
-                    Sequelize.fn('SUM', Sequelize.col('orders.grand_total')),
-                    0
-                ),
-                'total_spent'
+                    Sequelize.fn('COALESCE',
+                        Sequelize.fn('SUM', Sequelize.col('orders.grand_total')),
+                        0
+                    ),
+                    'total_spent'
                 ]
             ],
             include: [
@@ -83,5 +88,52 @@ module.exports.updateStatusCustomer = async (req) => {
             code: 'DB_ERROR'
         };
     }
+};
+
+
+// Resend Verification Email 
+module.exports.resendVerificationEmail = async ({ userId }) => {
+    // 1️⃣ Validate input
+    if (!userId) {
+        throw new Error("User ID is required");
+    }
+
+    // 2️⃣ Find user
+    const user = await User.findOne({
+        where: { id: userId },
+        attributes: [
+            "id",
+            "email",
+            "first_name",
+            "full_name",
+            "is_email_verified"
+        ]
+    });
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    // 3️⃣ Check already verified
+    if (user.is_email_verified === "Y") {
+        throw new Error("Email already verified");
+    }
+
+    // 4️⃣ Generate verification token
+    const token = generateVerificationToken(user.email);
+    const verifyLink = `${config.clientUrl}/verify-email?token=${token}`;
+
+    // 5️⃣ Send email
+    const html = verifyEmailTemplate(user.first_name, verifyLink);
+    await sendEmail(
+        user.email,
+        "Verify your email address",
+        html
+    );
+
+    return {
+        success: true,
+        message: "Verification email sent successfully"
+    };
 };
 

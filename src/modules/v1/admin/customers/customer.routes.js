@@ -26,4 +26,12 @@ router.put(
     customerController.updateStatusCustomer
 );
 
+router.post(
+  "/resend-verification-email",
+  customerController.resendVerificationEmail
+);
+
+
+
+
 module.exports = router;

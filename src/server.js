@@ -52,6 +52,7 @@ const contactUsAdminRoutesV1 = require('./modules/v1/admin/contact-us/contact.ro
 const seoAdminRoutesV1 = require('./modules/v1/admin/seo/seo.routes');
 const templateAdminRoutesV1 = require('./modules/v1/admin/email-templates/email.routes');
 const customerAdminRoutesV1 = require('./modules/v1/admin/customers/customer.routes');
+const dashboardAdminRoutesV1 = require('./modules/v1/admin/dashboard/dashboard.routes');
 
 
 // Initialize Express
@@ -116,6 +117,7 @@ app.use('/api/v1/admin/contact-us',contactUsAdminRoutesV1)
 app.use('/api/v1/admin/seo',seoAdminRoutesV1)
 app.use('/api/v1/admin/email-templates',templateAdminRoutesV1)
 app.use('/api/v1/admin/customers',customerAdminRoutesV1)
+app.use('/api/v1/admin/dashboard',dashboardAdminRoutesV1)
 
 
 
