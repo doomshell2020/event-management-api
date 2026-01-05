@@ -36,11 +36,15 @@ const Seo= require('./seo.model');
 const Templates= require('./templates.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
-CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
-Event.hasMany(CommitteeAssignTickets, { foreignKey: 'event_id', as: 'assignedTickets' });
 CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
+
+
+CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeAssignTickets.belongsTo(CommitteeMembers, { foreignKey: 'user_id', targetKey: 'user_id', as: 'committeeMember' });
+CommitteeAssignTickets.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticket' });
+
 User.hasMany(CommitteeMembers, { foreignKey: 'user_id', as: 'committeeMembers' });
+User.hasMany(Orders, { foreignKey: 'user_id',  as: 'orders'});
 
 PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
 PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
@@ -49,12 +53,10 @@ PackageDetails.belongsTo(TicketType, { foreignKey: 'ticket_type_id', as: 'ticket
 TicketType.hasMany(PackageDetails, { foreignKey: 'ticket_type_id', as: 'packageDetails' });
 TicketType.hasMany(CommitteeAssignTickets, { foreignKey: 'ticket_id', as: 'committeeAssignedTickets' });
 
-CommitteeAssignTickets.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticket' });
 AddonTypes.hasMany(PackageDetails, { foreignKey: 'addon_id', as: 'packageDetails' });
 
 Package.hasMany(PackageDetails, { foreignKey: 'package_id', as: 'details' });
 Package.belongsTo(Event, { foreignKey: 'event_id', as: 'event' });
-Event.hasMany(Package, { foreignKey: 'event_id', as: 'packages' });
 
 Cart.belongsTo(TicketType, { foreignKey: 'ticket_id' });
 Cart.belongsTo(AddonTypes, { foreignKey: 'addons_id' });
@@ -73,6 +75,10 @@ Orders.hasMany(OrderItems, { foreignKey: "order_id", as: "orderItems", onDelete:
 Orders.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 Orders.belongsTo(User, { foreignKey: "user_id", as: "user" });
 
+Event.hasMany(CommitteeAssignTickets, { foreignKey: 'event_id', as: 'assignedTickets' });
+Event.belongsTo(User, {  foreignKey: 'event_org_id',  as: 'Organizer'})
+Event.hasMany(Orders, {  foreignKey: "event_id",  as: "orders"});
+Event.hasMany(Package, { foreignKey: 'event_id', as: 'packages' });
 Event.hasMany(OrderItems, { foreignKey: "event_id", as: "orderItems" });
 Event.belongsTo(Company, { foreignKey: "company_id", as: "companyInfo" });
 Event.hasMany(AddonTypes, { foreignKey: 'event_id', as: 'addons', onDelete: 'CASCADE' });
