@@ -115,8 +115,7 @@ router.get("/print/:ticket_id",
     ticketController.printCompsTickets
 );
 
-router.post(
-    "/import-comps",
+router.post("/import-comps",
     authenticate,
     uploadFiles({
         folder: 'uploads/temp',
@@ -133,8 +132,7 @@ router.post(
     ticketController.importCompsTickets
 );
 
-router.get(
-    "/generated-users/:event_id",
+router.get("/generated-users/:event_id",
     authenticate,
     [
         check('event_id')
@@ -146,7 +144,29 @@ router.get(
     ticketController.getGeneratedUsers
 );
 
-// ✅ 2. Get single ticket detail by ID
+router.post("/generate-single-comps",
+    authenticate,
+    [
+        check("event_id").isInt(),
+        check("user_id").isInt()
+    ],
+    validate,
+    ticketController.generateSingleCompsTicket
+);
+
+router.delete("/delete-generated-comps/:order_item_id",
+    authenticate,
+    [
+        check("order_item_id")
+            .notEmpty().withMessage("Order item ID is required")
+            .isInt().withMessage("Order item ID must be a number")
+            .toInt()
+    ],
+    validate,
+    ticketController.deleteGeneratedCompsTicket
+);
+
+//Get single ticket detail by ID
 router.get("/detail/:ticket_id", authenticate, ticketController.getTicketDetail);
 
 module.exports = router;

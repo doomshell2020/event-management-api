@@ -11,72 +11,124 @@ const bcrypt = require('bcryptjs');
 const sendEmail = require('../../../common/utils/sendEmail');
 const complimentaryConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/complimentaryConfirmationTemplateWithQR');
 
-
 const REQUIRED_HEADERS = ['Sr.No', 'First Name', 'Last Name', 'Email', 'Mobile'];
 const baseUrl = process.env.BASE_URL || "http://localhost:5000";
 const eventImagePath = "uploads/events";
 const qrImagePath = "uploads/qr_codes";
 
+exports.pushFromCommitteeCompsTicket = async ({ event_id, user_id, ticket_id }) => {
 
-exports.getGeneratedUsers = async (eventId, page = 1, limit = 10) => {
-    const pageNumber = parseInt(page, 10) || 1; // default page 1
-    const pageLimit = parseInt(limit, 10) || 10; // default limit 10
-    const offset = (pageNumber - 1) * pageLimit;
-
-    // Get total count first for pagination
-    const totalCount = await OrderItems.count({
+    /* 🔍 Check if ticket already generated */
+    const alreadyGenerated = await OrderItems.findOne({
         where: {
-            event_id: eventId,
-            type: 'comps',
-            status: 'Y',
-        },
+            event_id,
+            user_id,
+            ticket_id,
+            type: "comps",
+            status: "Y"
+        }
     });
 
-    // Fetch paginated data
-    const generatedUsers = await OrderItems.findAll({
+    if (alreadyGenerated) {
+        return {
+            success: false,
+            message: "Complimentary ticket already generated for this user"
+        };
+    }
+
+    /* 🎟️ Get complimentary ticket type */
+    const ticket = await TicketType.findOne({
         where: {
-            event_id: eventId,
-            type: 'comps',
-            status: 'Y'
-        },
-        include: [
-            {
-                model: User,
-                as: 'user',
-                attributes: [] // We'll select needed fields via literal
-            },
-            {
-                model: TicketType,
-                as: 'ticketType',
-                attributes: [] // Ticket title via literal
-            }
-        ],
-        attributes: [
-            ['id', 'order_item_id'],
-            ['order_id', 'order_id'],
-            ['ticket_id', 'ticket_id'],
-            ['status', 'status'],
-            ['createdAt', 'generated_at'],
-            [col('user.id'), 'user_id'],
-            [col('user.first_name'), 'first_name'],
-            [col('user.last_name'), 'last_name'],
-            [col('user.email'), 'email'],
-            [col('user.mobile'), 'mobile'],
-            [literal(`COALESCE(ticketType.title, 'Complimentary')`), 'ticket_title']
-        ],
-        order: [['createdAt', 'DESC']],
-        limit: pageLimit,
-        offset: offset,
-        raw: true
+            eventid: event_id,
+            id: ticket_id
+        }
     });
+
+    if (!ticket) {
+        return {
+            success: false,
+            message: "Complimentary ticket type not found"
+        };
+    }
+
+    /* 🚀 Reuse your existing logic */
+    const result = await generateComplementaryFromExcel({
+        user_id,
+        event_id,
+        ticket,
+        quantity: 1
+    });
+
+    if (!result.success) {
+        return {
+            success: false,
+            message: "Failed to generate complimentary ticket"
+        };
+    }
 
     return {
-        data: generatedUsers,
-        pagination: {
-            total: totalCount,
-            page: pageNumber,
-            limit: pageLimit,
-            totalPages: Math.ceil(totalCount / pageLimit)
+        success: true,
+        data: {
+            order_id: result.order_id,
+            generated: result.generated
+        }
+    };
+};
+
+exports.generateSingleCompsTicket = async ({ event_id, user_id }) => {
+
+    /* 🔍 Check if ticket already generated */
+    const alreadyGenerated = await OrderItems.findOne({
+        where: {
+            event_id,
+            user_id,
+            type: "comps",
+            status: "Y"
+        }
+    });
+
+    if (alreadyGenerated) {
+        return {
+            success: false,
+            message: "Complimentary ticket already generated for this user"
+        };
+    }
+
+    /* 🎟️ Get complimentary ticket type */
+    const ticket = await TicketType.findOne({
+        where: {
+            eventid: event_id,
+            type: "comps"
+        }
+    });
+
+    if (!ticket) {
+        return {
+            success: false,
+            message: "Complimentary ticket type not found"
+        };
+    }
+
+    /* 🚀 Reuse your existing logic */
+    const result = await generateComplementaryFromExcel({
+        user_id,
+        event_id,
+        ticket,
+        quantity: 1
+    });
+
+    if (!result.success) {
+        return {
+            success: false,
+            message: "Failed to generate complimentary ticket"
+        };
+    }
+
+    return {
+        success: true,
+        data: {
+            order_id: result.order_id,
+            generated: result.generated
         }
     };
 };
@@ -98,7 +150,6 @@ const formatDateReadable = (dateStr, timezone) => {
         hour12: true
     });
 };
-
 
 module.exports.importCompsTickets = async ({ rows = [], event_id, createdBy }) => {
     if (!rows.length) {
@@ -208,7 +259,6 @@ module.exports.importCompsTickets = async ({ rows = [], event_id, createdBy }) =
 
     return { success: true, data: report };
 };
-
 
 const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quantity = 1 }) => {
     const transaction = await OrderItems.sequelize.transaction();
@@ -320,8 +370,6 @@ const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quant
         return { success: false, message: 'Failed to generate complimentary tickets' };
     }
 };
-
-
 
 module.exports.generateComplementary = async (req) => {
     const transaction = await OrderItems.sequelize.transaction();
@@ -441,6 +489,69 @@ module.exports.generateComplementary = async (req) => {
             message: 'Failed to generate complimentary tickets'
         };
     }
+};
+
+exports.getGeneratedUsers = async (eventId, page = 1, limit = 10) => {
+    const pageNumber = parseInt(page, 10) || 1; // default page 1
+    const pageLimit = parseInt(limit, 10) || 10; // default limit 10
+    const offset = (pageNumber - 1) * pageLimit;
+
+    // Get total count first for pagination
+    const totalCount = await OrderItems.count({
+        where: {
+            event_id: eventId,
+            type: 'comps',
+            status: 'Y',
+        },
+    });
+
+    // Fetch paginated data
+    const generatedUsers = await OrderItems.findAll({
+        where: {
+            event_id: eventId,
+            type: 'comps',
+            status: 'Y'
+        },
+        include: [
+            {
+                model: User,
+                as: 'user',
+                attributes: [] // We'll select needed fields via literal
+            },
+            {
+                model: TicketType,
+                as: 'ticketType',
+                attributes: [] // Ticket title via literal
+            }
+        ],
+        attributes: [
+            ['id', 'order_item_id'],
+            ['order_id', 'order_id'],
+            ['ticket_id', 'ticket_id'],
+            ['status', 'status'],
+            ['createdAt', 'generated_at'],
+            [col('user.id'), 'user_id'],
+            [col('user.first_name'), 'first_name'],
+            [col('user.last_name'), 'last_name'],
+            [col('user.email'), 'email'],
+            [col('user.mobile'), 'mobile'],
+            [literal(`COALESCE(ticketType.title, 'Complimentary')`), 'ticket_title']
+        ],
+        order: [['createdAt', 'DESC']],
+        limit: pageLimit,
+        offset: offset,
+        raw: true
+    });
+
+    return {
+        data: generatedUsers,
+        pagination: {
+            total: totalCount,
+            page: pageNumber,
+            limit: pageLimit,
+            totalPages: Math.ceil(totalCount / pageLimit)
+        }
+    };
 };
 
 module.exports.getCompsTicketsForPrint = async (req) => {

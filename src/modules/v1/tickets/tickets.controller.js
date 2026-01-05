@@ -4,6 +4,155 @@ const path = require('path');
 const fs = require('fs');
 const XLSX = require('xlsx');
 const config = require('../../../config/app');
+const { sequelize, Orders, OrderItems, CommitteeAssignTickets } = require('../../../models');
+const { fn, col, literal } = require("sequelize");
+const { Op } = require('sequelize');
+
+exports.deleteGeneratedCompsTicket = async (req, res) => {
+    const transaction = await sequelize.transaction();
+
+    try {
+        const committee_user_id = req.user.id;
+        const { order_item_id } = req.params;
+
+        /* ================= FIND ORDER ITEM ================= */
+        const orderItem = await OrderItems.findOne({
+            where: {
+                id: order_item_id,
+                type: "comps"
+            },
+            transaction
+        });
+
+        if (!orderItem) {
+            return apiResponse.error(res, "Complimentary ticket not found", 404);
+        }
+
+        /* ================= FIND ORDER ================= */
+        const order = await Orders.findOne({
+            where: { id: orderItem.order_id },
+            transaction
+        });
+
+        if (!order) {
+            return apiResponse.error(res, "Order not found", 404);
+        }
+
+        /* ================= FIND COMMITTEE ASSIGN ================= */
+        // const committeeAssign = await CommitteeAssignTickets.findOne({
+        //     where: {
+        //         ticket_id: orderItem.ticket_id,
+        //         user_id: committee_user_id,
+        //         event_id: orderItem.event_id
+        //     },
+        //     transaction
+        // });
+        // console.log('committeeAssign :', committeeAssign);
+        
+        // if (!committeeAssign) {
+        //     return apiResponse.error(
+        //         res,
+        //         "Committee assignment not found for this ticket",
+        //         403
+        //     );
+        // }
+
+        /* ================= COUNT COMPS ITEMS ================= */
+        const compsCount = await OrderItems.count({
+            where: {
+                order_id: order.id,
+                type: "comps"
+            },
+            transaction
+        });
+
+        /* ================= DELETE ORDER ITEMS ================= */
+        await OrderItems.destroy({
+            where: {
+                order_id: order.id,
+                type: "comps"
+            },
+            transaction
+        });
+
+        /* ================= DELETE ORDER ================= */
+        await Orders.destroy({
+            where: { id: order.id },
+            transaction
+        });
+
+        /* ================= UPDATE COMMITTEE USED COUNT ================= */
+        // await CommitteeAssignTickets.update(
+        //     {
+        //         usedticket: sequelize.literal(
+        //             `GREATEST(usedticket - ${compsCount}, 0)`
+        //         )
+        //     },
+        //     {
+        //         where: { id: committeeAssign.id },
+        //         transaction
+        //     }
+        // );
+
+        await transaction.commit();
+
+        return apiResponse.success(
+            res,
+            "Complimentary ticket deleted successfully",
+            {
+                deleted_tickets: compsCount
+            }
+        );
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error("deleteGeneratedCompsTicket error:", error);
+
+        return apiResponse.error(
+            res,
+            error.message || "Failed to delete complimentary ticket",
+            400
+        );
+    }
+};
+
+exports.generateSingleCompsTicket = async (req, res) => {
+    try {
+        const { event_id, user_id } = req.body;
+
+        const result = await ticketService.generateSingleCompsTicket({
+            event_id,
+            user_id
+        });
+
+        if (!result.success) {
+            return res.status(200).json({
+                success: false,
+                message: result.message,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Complimentary ticket generated successfully",
+            data: result.data,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error("generateSingleCompsTicket Controller Error:", error);
+        return res.status(500).json({
+            success: false,
+            error: {
+                code: 500,
+                error_code: "SERVER_ERROR",
+                message: error.message || "Internal Server Error"
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+};
 
 exports.getGeneratedUsers = async (req, res) => {
     try {

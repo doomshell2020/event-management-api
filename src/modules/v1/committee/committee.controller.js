@@ -7,6 +7,8 @@ const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { sequelize } = require("../../../models");
 const config = require('../../../config/app');
 const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
+const { pushFromCommitteeCompsTicket } = require('../tickets/tickets.service');
+
 
 exports.importCommitteeMembers = async (req, res) => {
     try {
@@ -299,39 +301,72 @@ exports.handleCommitteePushTicket = async (req, res) => {
                 throw new Error("Invalid ticket type");
             }
 
-            /* ===== DUPLICATE CART CHECK ===== */
-            const exists = await Cart.findOne({
-                where: {
-                    user_id: user.id,
-                    event_id,
-                    ticket_id,
-                    ticket_type: ticketType.type,
-                    status: "Y"
-                },
-                transaction
-            });
-
-            if (exists) {
-                throw new Error(`Ticket "${ticketType.title}" already assigned`);
-            }
-
             const available = assigned.count - assigned.usedticket;
             if (qty > available) {
                 throw new Error(`Only ${available} tickets available`);
             }
 
-            /* ===== CREATE CART ===== */
-            await Cart.create({
-                user_id: user.id,
-                event_id,
-                ticket_id,
-                no_tickets: qty,
-                ticket_type: ticketType.type,
-                commitee_user_id: committee_user_id,
-                status: "Y",
-            }, { transaction });
+            /* ================= COMPS TICKETS ================= */
+            if (ticketType.type == "comps") {
 
-            /* ===== ATOMIC UPDATE ===== */
+                /* 🔍 DUPLICATE COMPS CHECK */
+                const existingComps = await OrderItems.findOne({
+                    where: {
+                        event_id,
+                        user_id: user.id,
+                        ticket_id
+                    }
+                });
+
+                if (existingComps) {
+                    throw new Error(
+                        `Complimentary ticket already generated for "${ticketType.title}"`
+                    );
+                }
+
+                /* 🎟 GENERATE COMPS TICKETS (QTY TIMES) */
+                for (let i = 0; i < qty; i++) {
+                    const result = await pushFromCommitteeCompsTicket({
+                        event_id,
+                        user_id: user.id,
+                        ticket_id
+                    });
+
+                    if (!result || !result.success) {
+                        throw new Error("Failed to generate complimentary ticket");
+                    }
+                }
+
+            } else {
+                /* ================= PAID / NORMAL TICKETS ================= */
+
+                const exists = await Cart.findOne({
+                    where: {
+                        user_id: user.id,
+                        event_id,
+                        ticket_id,
+                        ticket_type: ticketType.type,
+                        status: "Y"
+                    },
+                    transaction
+                });
+
+                if (exists) {
+                    throw new Error(`Ticket "${ticketType.title}" already assigned`);
+                }
+
+                await Cart.create({
+                    user_id: user.id,
+                    event_id,
+                    ticket_id,
+                    no_tickets: qty,
+                    ticket_type: "committesale",
+                    commitee_user_id: committee_user_id,
+                    status: "Y"
+                }, { transaction });
+            }
+
+            /* ================= UPDATE COMMITTEE COUNT ================= */
             await CommitteeAssignTickets.update(
                 {
                     usedticket: sequelize.literal(`usedticket + ${qty}`)
@@ -345,7 +380,7 @@ exports.handleCommitteePushTicket = async (req, res) => {
 
         await transaction.commit();
 
-        /* ================= EMAIL ================= */
+        /* ================= SUMMARY EMAIL ================= */
         const emailTickets = tickets.map(t => ({
             title: ticketMap[String(t.ticket_id)].title,
             qty: t.qty
