@@ -16,7 +16,7 @@ const baseUrl = process.env.BASE_URL || "http://localhost:5000";
 const eventImagePath = "uploads/events";
 const qrImagePath = "uploads/qr_codes";
 
-exports.pushFromCommitteeCompsTicket = async ({ event_id, user_id, ticket_id }) => {
+exports.pushFromCommitteeCompsTicket = async ({ event_id, user_id, ticket_id, createdBy = 0 }) => {
 
     /* 🔍 Check if ticket already generated */
     const alreadyGenerated = await OrderItems.findOne({
@@ -56,7 +56,8 @@ exports.pushFromCommitteeCompsTicket = async ({ event_id, user_id, ticket_id }) 
         user_id,
         event_id,
         ticket,
-        quantity: 1
+        quantity: 1,
+        createdBy
     });
 
     if (!result.success) {
@@ -75,7 +76,7 @@ exports.pushFromCommitteeCompsTicket = async ({ event_id, user_id, ticket_id }) 
     };
 };
 
-exports.generateSingleCompsTicket = async ({ event_id, user_id }) => {
+exports.generateSingleCompsTicket = async ({ event_id, user_id, createdBy }) => {
 
     /* 🔍 Check if ticket already generated */
     const alreadyGenerated = await OrderItems.findOne({
@@ -114,7 +115,8 @@ exports.generateSingleCompsTicket = async ({ event_id, user_id }) => {
         user_id,
         event_id,
         ticket,
-        quantity: 1
+        quantity: 1,
+        createdBy
     });
 
     if (!result.success) {
@@ -242,7 +244,7 @@ module.exports.importCompsTickets = async ({ rows = [], event_id, createdBy }) =
                 continue; // skip to next row
             }
 
-            const result = await generateComplementaryFromExcel({ user_id: user.id, event_id, ticket, quantity: 1 });
+            const result = await generateComplementaryFromExcel({ user_id: user.id, event_id, ticket, quantity: 1, createdBy });
 
             if (!result.success) throw new Error(result.message);
 
@@ -260,7 +262,7 @@ module.exports.importCompsTickets = async ({ rows = [], event_id, createdBy }) =
     return { success: true, data: report };
 };
 
-const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quantity = 1 }) => {
+const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quantity = 1, createdBy = 0 }) => {
     const transaction = await OrderItems.sequelize.transaction();
     let order;
 
@@ -298,7 +300,8 @@ const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quant
             type: 'comps',
             ticket_id: ticket.id,
             access_type: ticket.access_type || 'event',
-            status: 'Y'
+            status: 'Y',
+            createdBy
         }));
 
         const orderItems = await OrderItems.bulkCreate(itemsData, {

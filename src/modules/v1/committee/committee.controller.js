@@ -329,7 +329,8 @@ exports.handleCommitteePushTicket = async (req, res) => {
                     const result = await pushFromCommitteeCompsTicket({
                         event_id,
                         user_id: user.id,
-                        ticket_id
+                        ticket_id,
+                        createdBy:committee_user_id
                     });
 
                     if (!result || !result.success) {

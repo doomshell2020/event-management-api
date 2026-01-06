@@ -1430,8 +1430,8 @@ exports.getOrderDetails = async (req, res) => {
         const { order_id } = req.params;
 
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
-        const qrPath = "uploads/qr_codes";
         const eventImagePath = "uploads/events";
+        const qrPath = "uploads/qr_codes";
 
         const order = await Orders.findOne({
             where: { id: order_id },
@@ -1464,54 +1464,53 @@ exports.getOrderDetails = async (req, res) => {
                         "count",
                         "price",
                         "qr_image",
-                        // "qr_data",
                         "secure_hash",
                         "cancel_status",
                         "cancel_date"
                     ],
                     include: [
-                        {
-                            model: TicketType,
-                            as: "ticketType",
-                            attributes: ["id", "title"]
-                        },
-                        {
-                            model: AddonTypes,
-                            as: "addonType",
-                            attributes: ["id", "name"]
-                        },
-                        {
-                            model: Package,
-                            as: "package",
-                            attributes: ["id", "name"]
-                        },
-                        {
-                            model: TicketPricing,
-                            as: "ticketPricing",
-                            attributes: ["id", "price"]
-                        },
+                        { model: TicketType, as: "ticketType", attributes: ["id", "title"] },
+                        { model: AddonTypes, as: "addonType", attributes: ["id", "name"] },
+                        { model: Package, as: "package", attributes: ["id", "name"] },
+                        { model: TicketPricing, as: "ticketPricing", attributes: ["id", "price"] },
                         {
                             model: EventSlots,
                             as: "slot",
                             attributes: ["id", "slot_date", "slot_name", "start_time", "end_time"]
                         },
                         {
-                            model: WellnessSlots, as: "appointment", include: {
-                                model: Wellness, as: "wellnessList",
+                            model: WellnessSlots,
+                            as: "appointment",
+                            include: {
+                                model: Wellness,
+                                as: "wellnessList",
                                 include: {
                                     model: Currency,
-                                    as: 'currencyName',
-                                    attributes: ['Currency_symbol', 'Currency']
+                                    as: "currencyName",
+                                    attributes: ["Currency_symbol", "Currency"]
                                 }
                             }
                         }
                     ]
                 },
                 {
-                    model: Event, as: "event", attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_org_id'],
+                    model: Event,
+                    as: "event",
+                    attributes: [
+                        "name",
+                        "date_from",
+                        "date_to",
+                        "feat_image",
+                        "location",
+                        "event_org_id"
+                    ],
                     include: [
-                        { model: Company, as: "companyInfo", attributes: ['name'] },
-                        { model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }
+                        { model: Company, as: "companyInfo", attributes: ["name"] },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
                     ]
                 }
             ]
@@ -1521,43 +1520,16 @@ exports.getOrderDetails = async (req, res) => {
             return apiResponse.error(res, "Order not found", 404);
         }
 
-        // const orderJSON = order.toJSON();
-
-        // // ---- FORMAT ORDER ITEMS ----
-        // orderJSON.orderItems = orderJSON.orderItems.map(item => {
-        //     const newItem = {
-        //         ...item,
-        //         qr_image_url: item.qr_image
-        //             ? `${baseUrl.replace(/\/$/, "")}/${qrPath}/${item.qr_image}`
-        //             : null
-        //     };
-        //     delete newItem.qr_data;
-        //     return newItem;
-        // });
-
-
-        // // ---- FORMAT EVENT OBJECT ----
-        // if (orderJSON.event) {
-        //     const event = { ...orderJSON.event };
-        //     event.feat_image_url = event.feat_image
-        //         ? `${baseUrl.replace(/\/$/, "")}/uploads/events/${event.feat_image}`
-        //         : null;
-        //     delete event.feat_image; // remove old key
-        //     orderJSON.event = event;
-        // }
-
-
         return res.json({
             success: true,
             message: "Order details fetched",
+            base_urls: {
+                base_url: baseUrl,
+                event_image_url: `${baseUrl}${eventImagePath}/`,
+                qr_image_url: `${baseUrl}${qrPath}/`
+            },
             data: order
         });
-
-
-        // return apiResponse.success(res, "Order details fetched", {
-        //     order
-        // });
-
 
     } catch (error) {
         console.log("Order Details Error:", error);
@@ -1567,6 +1539,7 @@ exports.getOrderDetails = async (req, res) => {
         });
     }
 };
+
 
 //..cancel appointment..kamal
 exports.cancelAppointment = async (req, res) => {

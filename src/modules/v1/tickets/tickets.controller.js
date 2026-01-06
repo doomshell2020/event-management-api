@@ -48,7 +48,7 @@ exports.deleteGeneratedCompsTicket = async (req, res) => {
         //     transaction
         // });
         // console.log('committeeAssign :', committeeAssign);
-        
+
         // if (!committeeAssign) {
         //     return apiResponse.error(
         //         res,
@@ -119,10 +119,12 @@ exports.deleteGeneratedCompsTicket = async (req, res) => {
 exports.generateSingleCompsTicket = async (req, res) => {
     try {
         const { event_id, user_id } = req.body;
+        const loginId = req.user.id;
 
         const result = await ticketService.generateSingleCompsTicket({
             event_id,
-            user_id
+            user_id,
+            createdBy: loginId
         });
 
         if (!result.success) {
