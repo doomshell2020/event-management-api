@@ -32,6 +32,7 @@ const config = {
 
   // Email verification / client URL
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5000',
+  baseUrl: process.env.BASE_URL || 'http://localhost:5000',
 
   // SMTP / email config
   email: {

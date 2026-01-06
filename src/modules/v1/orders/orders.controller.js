@@ -1429,7 +1429,7 @@ exports.getOrderDetails = async (req, res) => {
     try {
         const { order_id } = req.params;
 
-        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const baseUrl = config.baseUrl || "http://localhost:5000";
         const eventImagePath = "uploads/events";
         const qrPath = "uploads/qr_codes";
 
