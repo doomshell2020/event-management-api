@@ -34,6 +34,7 @@ const Static= require('./static.model');
 const ContactUs= require('./contact_us.model');
 const Seo= require('./seo.model');
 const Templates= require('./templates.model');
+const Payouts = require('./payouts.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
@@ -126,5 +127,5 @@ PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageT
 module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
   User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,
-  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember,ContactUs,Seo,Templates,Static
+  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember,ContactUs,Seo,Templates,Static,Payouts
 };

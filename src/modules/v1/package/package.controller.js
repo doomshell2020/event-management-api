@@ -16,7 +16,8 @@ module.exports.createPackage = async (req, res) => {
             discount_amt,
             grandtotal,
             hidden,
-            ticketType
+            ticketType,
+            total_package
         } = req.body;
 
         // ✅ Basic validation
@@ -32,6 +33,7 @@ module.exports.createPackage = async (req, res) => {
                 package_limit,
                 discount_percentage: discount_percentage || 0,
                 total,
+                total_package,
                 discount_amt: discount_amt || 0,
                 grandtotal,
                 hidden,
@@ -89,7 +91,6 @@ module.exports.updatePackage = async (req, res) => {
         return apiResponse.error(res, 'Internal Server Error', 500);
     }
 };
-
 
 module.exports.getAllPackages = async (req, res) => {
     try {
