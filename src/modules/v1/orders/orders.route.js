@@ -36,8 +36,7 @@ router.get('/details/:order_id',
 );
 
 // // LIST ALL ORDERS FOR LOGGED-IN USER
-router.get('/',
-    authenticate,
+router.get('/',authenticate,
     [
         query('page').optional().isInt().withMessage('page must be number'),
         query('limit').optional().isInt().withMessage('limit must be number'),

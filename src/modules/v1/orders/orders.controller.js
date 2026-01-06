@@ -30,7 +30,7 @@ const formatDateReadable = (dateStr, timezone) => {
 
 exports.organizerTicketExports = async (req, res) => {
     try {
-        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const baseUrl = config.baseUrl || "http://localhost:5000";
 
         const qrPath = "uploads/qr_codes";
         const eventImagePath = "uploads/events";
@@ -126,7 +126,7 @@ exports.organizerTicketExports = async (req, res) => {
                 {
                     model: Event,
                     as: "event",
-                    attributes: ["name", "feat_image", "date_from", "date_to"],
+                    attributes: ["name", "feat_image", "date_from", "date_to",'event_timezone'],
                     include: [
                         {
                             model: Company,
@@ -680,7 +680,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
     if (!event) throw new Error("Event not found");
 
-    const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+    const baseUrl = config.baseUrl || "http://localhost:5000";
     const imagePath = "uploads/events";
     const timezone = event.event_timezone || "UTC";
     const formattedEvent = {
@@ -823,7 +823,7 @@ exports.createOrder = async (req, res) => {
             return apiResponse.error(res, "Event ID is required", 400);
 
         // Base URL for images
-        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const baseUrl = config.baseUrl || "http://localhost:5000";
         const imagePath = "uploads/events";
 
         // Fetch Event Details
@@ -1019,7 +1019,7 @@ exports.createAppointmentOrder = async (req, res) => {
             return apiResponse.error(res, "Event ID is required", 400);
 
         // Base URL for images
-        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const baseUrl = config.baseUrl || "http://localhost:5000";
         const imagePath = "uploads/events";
 
         // Fetch Event Details
@@ -1198,10 +1198,9 @@ exports.createAppointmentOrder = async (req, res) => {
 exports.listOrders = async (req, res) => {
     try {
         const user_id = req.user.id;
-        console.log('user_id :', user_id);
         const { event_id } = req.query;
 
-        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const baseUrl = config.baseUrl || "http://localhost:5000";
         const qrPath = "uploads/qr_codes";
         const eventImagePath = "uploads/events";
 
@@ -1263,7 +1262,7 @@ exports.listOrders = async (req, res) => {
                 {
                     model: Event,
                     as: "event",
-                    attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location'],
+                    attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location','event_timezone'],
                     include: [{ model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }]
                 },
                 { model: User, as: "user", attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile', "gender"] },
@@ -1300,7 +1299,7 @@ exports.listOrders = async (req, res) => {
 
 exports.organizerOrderList = async (req, res) => {
     try {
-        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const baseUrl = config.baseUrl || "http://localhost:5000";
         const qrPath = "uploads/qr_codes";
         const eventImagePath = "uploads/events";
 
@@ -1356,7 +1355,7 @@ exports.organizerOrderList = async (req, res) => {
             include: [
                 { model: User, as: "user", attributes: ["id", "first_name", "last_name", "email"] },
                 {
-                    model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to"],
+                    model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to",'event_timezone'],
                     include: [
                         {
                             model: Company,
@@ -1502,7 +1501,8 @@ exports.getOrderDetails = async (req, res) => {
                         "date_to",
                         "feat_image",
                         "location",
-                        "event_org_id"
+                        "event_org_id",
+                        'event_timezone'
                     ],
                     include: [
                         { model: Company, as: "companyInfo", attributes: ["name"] },
