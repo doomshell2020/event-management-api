@@ -24,7 +24,11 @@ const PaymentSnapshotItems = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: false
         },
-        
+        committee_user_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
+
         cart_id: {
             type: DataTypes.INTEGER,
             allowNull: true

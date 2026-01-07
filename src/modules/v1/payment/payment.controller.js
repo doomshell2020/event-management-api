@@ -86,7 +86,6 @@ exports.createPaymentIntent = async (req, res) => {
       });
       
       const totalLimit = Number(masterItem?.[limitField] || 0);
-      // console.log('totalLimit :', totalLimit);
 
       // If no limit defined → allow
       if (!totalLimit) continue;
@@ -125,6 +124,7 @@ exports.createPaymentIntent = async (req, res) => {
         cart_id: item.id || null,
         addon_id: item.addonId || null,
         appointment_id: item.appointmentId || null,
+        committee_user_id: item.committee_user_id || null,
         item_type: item.ticketType,
         quantity: item.quantity || 1,
         price: item.price || 0,

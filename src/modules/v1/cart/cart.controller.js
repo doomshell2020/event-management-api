@@ -468,6 +468,7 @@ module.exports = {
                 let displayName = "";
                 let ticketPrice = 0;
                 let uniqueId = null;
+                let committee_member_id = null;
 
                 switch (item.ticket_type) {
                     case "ticket":
@@ -480,6 +481,7 @@ module.exports = {
                         displayName = item.TicketType?.title || "";
                         ticketPrice = item.TicketType?.price || 0;
                         uniqueId = item.TicketType?.id || null;
+                        committee_member_id = item.commitee_user_id || null;
                         break;
 
                     case "addon":
@@ -515,7 +517,8 @@ module.exports = {
                     item_type: item.ticket_type,
                     display_name: displayName,
                     count: item.no_tickets,
-                    ticket_price: ticketPrice
+                    ticket_price: ticketPrice,
+                    committee_member_id
                 };
             });
 

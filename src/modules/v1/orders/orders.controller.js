@@ -126,7 +126,7 @@ exports.organizerTicketExports = async (req, res) => {
                 {
                     model: Event,
                     as: "event",
-                    attributes: ["name", "feat_image", "date_from", "date_to",'event_timezone'],
+                    attributes: ["name", "feat_image", "date_from", "date_to", 'event_timezone'],
                     include: [
                         {
                             model: Company,
@@ -739,7 +739,10 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 ticket_pricing_id: item.item_type == "ticket_price" ? item.ticket_id : null,
                 appointment_id: item.item_type == "appointment" ? item.ticket_id : null,
                 price: item.price,
-                slot_id: item.slot_id || null,
+                committee_user_id: item.item_type == "committesale" && item.committee_user_id
+                    ? item.committee_user_id
+                    : null,
+                slot_id: item.slot_id || null
             });
 
             // here question find in the cartQuestion modal and then insert 
@@ -1262,7 +1265,7 @@ exports.listOrders = async (req, res) => {
                 {
                     model: Event,
                     as: "event",
-                    attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location','event_timezone'],
+                    attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_timezone'],
                     include: [{ model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }]
                 },
                 { model: User, as: "user", attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile', "gender"] },
@@ -1355,7 +1358,7 @@ exports.organizerOrderList = async (req, res) => {
             include: [
                 { model: User, as: "user", attributes: ["id", "first_name", "last_name", "email"] },
                 {
-                    model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to",'event_timezone'],
+                    model: Event, as: "event", attributes: ["name", "feat_image", "date_from", "date_to", 'event_timezone'],
                     include: [
                         {
                             model: Company,
