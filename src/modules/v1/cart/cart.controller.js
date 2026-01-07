@@ -239,10 +239,10 @@ module.exports = {
                 ticket_type: { [Op.ne]: "appointment" },
                 status: "Y"
             };
-            
+
             if (event_id) where.event_id = Number(event_id);
             if (item_type) where.ticket_type = item_type;
-            
+
             // console.log('where :', where);
             const cartList = await Cart.findAll({
                 order: [["id", "DESC"]],
@@ -332,6 +332,9 @@ module.exports = {
                                             as: "committeeMember",
                                             required: false,
                                             attributes: ['status'],
+                                            where: {
+                                                event_id: ev
+                                            },
                                             include: [
                                                 {
                                                     model: User,
@@ -478,7 +481,7 @@ module.exports = {
                         ticketPrice = item.TicketType?.price || 0;
                         uniqueId = item.TicketType?.id || null;
                         break;
-                        
+
                     case "addon":
                         displayName = item.AddonType?.name || "";
                         ticketPrice = item.AddonType?.price || 0;

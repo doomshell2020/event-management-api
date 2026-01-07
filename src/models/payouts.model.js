@@ -9,18 +9,6 @@ const Payouts = sequelize.define(
             autoIncrement: true,
             primaryKey: true
         },
-
-        user_id: {
-            type: DataTypes.INTEGER,
-            allowNull: false,
-            references: {
-                model: 'users',
-                key: 'id'
-            },
-            onDelete: 'RESTRICT',
-            onUpdate: 'CASCADE'
-        },
-
         event_id: {
             type: DataTypes.INTEGER,
             allowNull: false,

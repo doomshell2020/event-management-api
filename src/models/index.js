@@ -30,10 +30,10 @@ const CommitteeAssignTickets = require('./committee_assigntickets');
 const CartQuestionsDetails = require('./cart_questions_details');
 const CommitteeGroup = require('./committee_group.model');
 const CommitteeGroupMember = require('./committee_group_member.model');
-const Static= require('./static.model');
-const ContactUs= require('./contact_us.model');
-const Seo= require('./seo.model');
-const Templates= require('./templates.model');
+const Static = require('./static.model');
+const ContactUs = require('./contact_us.model');
+const Seo = require('./seo.model');
+const Templates = require('./templates.model');
 const Payouts = require('./payouts.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -45,7 +45,7 @@ CommitteeAssignTickets.belongsTo(CommitteeMembers, { foreignKey: 'user_id', targ
 CommitteeAssignTickets.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticket' });
 
 User.hasMany(CommitteeMembers, { foreignKey: 'user_id', as: 'committeeMembers' });
-User.hasMany(Orders, { foreignKey: 'user_id',  as: 'orders'});
+User.hasMany(Orders, { foreignKey: 'user_id', as: 'orders' });
 
 PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
 PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
@@ -77,8 +77,8 @@ Orders.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 Orders.belongsTo(User, { foreignKey: "user_id", as: "user" });
 
 Event.hasMany(CommitteeAssignTickets, { foreignKey: 'event_id', as: 'assignedTickets' });
-Event.belongsTo(User, {  foreignKey: 'event_org_id',  as: 'Organizer'})
-Event.hasMany(Orders, {  foreignKey: "event_id",  as: "orders"});
+Event.belongsTo(User, { foreignKey: 'event_org_id', as: 'Organizer' })
+Event.hasMany(Orders, { foreignKey: "event_id", as: "orders" });
 Event.hasMany(Package, { foreignKey: 'event_id', as: 'packages' });
 Event.hasMany(OrderItems, { foreignKey: "event_id", as: "orderItems" });
 Event.belongsTo(Company, { foreignKey: "company_id", as: "companyInfo" });
@@ -98,8 +98,8 @@ OrderItems.belongsTo(TicketPricing, { foreignKey: "ticket_pricing_id", as: "tick
 OrderItems.belongsTo(EventSlots, { foreignKey: "slot_id", as: "slot" });
 OrderItems.belongsTo(WellnessSlots, { foreignKey: "appointment_id", as: "appointment" });
 OrderItems.belongsTo(User, { foreignKey: "user_id", as: "user" });
-
 OrderItems.hasMany(QuestionsBook, { foreignKey: "ticketdetail_id", sourceKey: "id", as: "questionsBook" });
+
 Questions.hasMany(QuestionItems, { foreignKey: 'question_id', as: 'questionItems', onDelete: 'CASCADE' });
 QuestionItems.belongsTo(Questions, { foreignKey: 'question_id', as: 'question' });
 QuestionsBook.belongsTo(OrderItems, { foreignKey: "ticketdetail_id", targetKey: "id", as: "orderItem" });
@@ -124,8 +124,10 @@ PaymentSnapshotItems.belongsTo(AddonTypes, { foreignKey: 'ticket_id', as: 'addon
 PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
 // PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
 
+Payouts.belongsTo(Event, { foreignKey: "event_id", as: "event" });
+
 module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
   User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,
-  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember,ContactUs,Seo,Templates,Static,Payouts
+  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts
 };

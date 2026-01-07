@@ -106,7 +106,7 @@ module.exports.eventList = async (req, res) => {
             date_from,
             date_to,
             sale_start,
-            sale_end 
+            sale_end
         } = req.body || {};
 
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
@@ -161,7 +161,7 @@ module.exports.eventList = async (req, res) => {
             where: whereCondition,
             include: [
                 { model: Company, as: "companyInfo", attributes: ["name"] },
-                { model: Currency, as: "currencyName", attributes: ["Currency_symbol","Currency"] }
+                { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] }
             ],
             order: [["created", "DESC"]],
         });
@@ -293,8 +293,10 @@ module.exports.publicEventList = async (req, res) => {
             date_from,
             date_to,
             sale_start,
-            sale_end
+            sale_end,
+            is_details_page
         } = req.body || {};
+        // console.log('is_details_page :', is_details_page);
 
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
         const imagePath = "uploads/events";
@@ -339,13 +341,15 @@ module.exports.publicEventList = async (req, res) => {
         }
 
         // ✅ EXCLUDE expired events (date_to < today)
-        const today = new Date();
-        whereCondition.date_to = {
-            ...(whereCondition.date_to || {}),
-            [Op.gte]: today, // only events whose end date >= today
-        };
 
-        // console.log("Applied Filters:", whereCondition);
+        const today = new Date();
+        if (!is_details_page) {
+            whereCondition.date_to = {
+                ...(whereCondition.date_to || {}),
+                [Op.gte]: today, // only events whose end date >= today
+            };
+        }
+
 
         // ✅ Fetch Events
         const events = await Event.findAll({
@@ -381,6 +385,10 @@ module.exports.publicEventList = async (req, res) => {
                 date_to: formatDate(data.date_to),
                 sale_start: formatDate(data.sale_start),
                 sale_end: formatDate(data.sale_end),
+                date_from_in_db: (data.date_from),
+                date_to_in_db: (data.date_to),
+                sale_start_in_db: (data.sale_start),
+                sale_end_in_db: (data.sale_end),
             };
         });
 
@@ -603,7 +611,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             allow_register,
             request_rsvp,
             feat_image,
-            status,event_timezone
+            status, event_timezone
         } = updateData;
 
         if (

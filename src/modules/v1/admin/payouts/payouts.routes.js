@@ -7,14 +7,9 @@ const authenticate = require('../../../../middlewares/auth.middleware');
 
 
 /* ==============   CREATE PAYOUT (Admin → Organizer)   =================== */
-router.post('/create',
+router.post('/create-pay',
     authenticate,
     [
-        body('user_id')
-            .notEmpty()
-            .isInt()
-            .withMessage('User ID is required'),
-
         body('event_id')
             .notEmpty()
             .isInt()
@@ -32,26 +27,39 @@ router.post('/create',
 
         body('remarks')
             .optional()
-            .trim(),
-
-        body('created_by')
-            .notEmpty()
-            .withMessage('Created by is required')
+            .trim()
     ],
     validate,
     payoutsController.createPayout
 );
 
 /* ==========   LIST PAYOUTS (Admin)   ================ */
-router.get('/list',authenticate,
+router.get('/list', authenticate,
     [
         query('event_id').optional().isInt(),
-        query('user_id').optional().isInt(),
         query('from').optional().isISO8601(),
         query('to').optional().isISO8601()
     ],
     validate,
     payoutsController.listPayouts
 );
+
+/* ==========   ALL EVENTS SALES SUMMARY   ========== */
+router.get('/events/sales-summary',
+    authenticate,
+    payoutsController.allEventsSalesSummary
+);
+
+/* ==========   EVENT SALES & ORDER LIST   ========== */
+router.get('/event/:event_id/sales',
+    authenticate,
+    [
+        query('from').optional().isISO8601(),
+        query('to').optional().isISO8601()
+    ],
+    validate,
+    payoutsController.eventSalesWithOrders
+);
+
 
 module.exports = router;
