@@ -37,7 +37,7 @@ module.exports.getStaticList = async (req, res) => {
 // Create static page
 module.exports.createStaticPage = async (req) => {
     try {
-        const { title, descr } = req.body;
+        const { title, descr,url } = req.body;
         const adminId = req.user?.id;
 
         // 🔐 Auth check
@@ -50,7 +50,7 @@ module.exports.createStaticPage = async (req) => {
         }
 
         // 🛑 Validation
-        if (!title?.trim() || !descr?.trim()) {
+        if (!title?.trim() || !descr?.trim()|| !url?.trim()) {
             return {
                 success: false,
                 message: 'Title and description are required.',
@@ -62,6 +62,7 @@ module.exports.createStaticPage = async (req) => {
         const staticPageData = {
             title: title.trim(),
             descr: descr.trim(),
+            url: url.trim(),
         };
 
         // 💾 Save to DB
@@ -80,7 +81,8 @@ module.exports.createStaticPage = async (req) => {
             data: {
                 id: newPage.id,
                 title: newPage.title,
-                descr: newPage.descr
+                descr: newPage.descr,
+                url: newPage.url,
             }
         };
 
@@ -98,7 +100,7 @@ module.exports.createStaticPage = async (req) => {
 // update static page
 module.exports.updateStaticPage = async (pageId, data) => {
     try {
-        const { title, descr } = data;
+        const { title, descr,url } = data;
         // 🔍 Find Static Page
         const existingPage = await Static.findOne({
             where: { id: pageId }
@@ -132,6 +134,7 @@ module.exports.updateStaticPage = async (pageId, data) => {
         // ✏️ Update only provided fields
         if (title !== undefined) existingPage.title = title.trim();
         if (descr !== undefined) existingPage.descr = descr.trim();
+        if (url !== undefined) existingPage.url = url.trim();
         await existingPage.save();
         // ✅ Success response
         return {
@@ -210,7 +213,7 @@ module.exports.getStaticPageById = async (pageId) => {
         // 🔍 Fetch static page
         const pageData = await Static.findOne({
             where: { id: pageId },
-            attributes:['title','descr']
+            attributes:['title','descr','url']
         });
 
         if (!pageData) {
@@ -238,3 +241,73 @@ module.exports.getStaticPageById = async (pageId) => {
 };
 
 
+// Status update Api..
+module.exports.updateStatusStatic = async (req) => {
+    try {
+        const staticId = req.params.id;
+        const { status } = req.body;
+        // Find record
+        const existingPage = await Static.findByPk(staticId);
+        if (!existingPage) {
+            return {
+                success: false,
+                message: 'Seo  not found',
+                code: 'SEO_NOT_FOUND'
+            };
+        }
+        // Update ONLY status
+        await existingPage.update({ status });
+        return {
+            success: true,
+            message: 'Static page updated successfully',
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error.message,
+            code: 'DB_ERROR'
+        };
+    }
+};
+
+
+
+// Searching Static Pages
+module.exports.searchStatic = async (req) => {
+    try {
+        const { title, status } = req.query;
+
+        const whereCondition = {};
+
+        // 🔹 Title filter (partial match)
+        if (title) {
+            whereCondition.title = {
+                [Op.like]: `%${title}%`
+            };
+        }
+
+        // 🔹 Status filter (exact match: Y / N)
+        if (status) {
+            whereCondition.status = status;
+        }
+
+        const statics = await Static.findAll({
+            where: whereCondition,
+            order: [['id', 'DESC']],
+        });
+
+        return {
+            success: true,
+            message: "Static pages fetched successfully.",
+            data: statics
+        };
+
+    } catch (error) {
+        console.error("Error searching static pages:", error);
+        return {
+            success: false,
+            message: "An unexpected error occurred while searching static pages.",
+            code: "INTERNAL_SERVER_ERROR"
+        };
+    }
+};

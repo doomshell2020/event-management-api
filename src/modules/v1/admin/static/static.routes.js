@@ -4,6 +4,12 @@ const staticController = require('./static.controller');
 const { body, param } = require('express-validator');
 const validate = require('../../../../middlewares/validation.middleware');
 const authenticate = require('../../../../middlewares/auth.middleware');
+const util = require('util');
+
+
+const uploadFiles = require('../../../../middlewares/upload.middleware');
+const imageUpload = uploadFiles({ folder: 'uploads/static',type: 'single',fieldName: 'image'});
+const uploadAsync = util.promisify(imageUpload);
 
 
 // ✅ Get Event Organizer Route
@@ -65,6 +71,60 @@ router.get(
     // authenticate,        // optional but recommended
     staticController.getStaticPageById
 );
+
+
+router.put(
+    '/update-status/:id',
+    [
+        param('id')
+            .isInt({ min: 1 })
+            .withMessage('Valid Wellness ID is required'),
+        body('status')
+            .notEmpty()
+            .withMessage('Status is required')
+            .isIn(['Y', 'N'])
+            .withMessage('Status must be Y or N'),
+    ],
+    validate,
+    staticController.updateStatusStatic
+);
+
+
+router.post('/upload-image', async (req, res) => {
+    try {
+        await uploadAsync(req, res);
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Image not uploaded'
+            });
+        }
+        const filename = req.file.filename;
+        const imageUrl = `/uploads/static/${filename}`;
+        return res.status(200).json({
+            success: true,
+            filename,
+            imageUrl
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Upload failed'
+        });
+    }
+});
+
+router.get(
+    '/search',
+    [
+        param('title').optional().isString().trim(),
+        param('status').optional().isIn(['Y', 'N']),
+    ],
+    validate,
+    staticController.searchStatic
+);
+
 
 
 

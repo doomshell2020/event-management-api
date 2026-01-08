@@ -542,8 +542,21 @@ module.exports = {
         try {
             const user_id = req.user.id;
             const { event_id } = req.query;
-            const item_type = "appointment"
+            // 🔹 Fetch Event Currency
+            const eventData = await Event.findOne({
+                where: { id: event_id },
+                attributes: ['id', 'payment_currency'],
+                include: {
+                    model: Currency,
+                    as: "currencyName",
+                    attributes: ["Currency_symbol", "Currency"]
+                }
+            });
 
+            // 🔹 Event currency (SAFE)
+            const currencySymbol = eventData?.currencyName?.Currency_symbol || "₹";
+            const currencyName = eventData?.currencyName?.Currency || "INR";
+            const item_type = "appointment"
             let where = { user_id };
             if (event_id) where.event_id = event_id;
             if (item_type) where.ticket_type = item_type;
@@ -573,14 +586,9 @@ module.exports = {
             // ---------------------------------------------
             const formatted = cartList.map((item) => {
                 let displayName = "";
-                let currencySymbol = '';
-                let currencyName = '';
-                // console.log("item.ticket_type",item.appointments?.price)
                 switch (item.ticket_type) {
                     case "appointment":
                         displayName = item.appointments?.wellnessList?.name || "";
-                        currencySymbol = item.appointments?.wellnessList?.currencyName?.Currency_symbol || "";
-                        currencyName = item.appointments?.wellnessList?.currencyName?.Currency || "";
                         break;
                     default:
                         displayName = "Unknown Item";
@@ -592,8 +600,11 @@ module.exports = {
                     item_type: item.ticket_type,
                     display_name: displayName,
                     count: item.no_tickets,
+                    // ✅ EVENT BASED CURRENCY
                     currency_symbol: currencySymbol,
                     currencyName: currencyName,
+                    // currency_symbol: currencySymbol,
+                    // currencyName: currencyName,
                     ticket_price: item.appointments?.price || null,
                     raw: item
                 };

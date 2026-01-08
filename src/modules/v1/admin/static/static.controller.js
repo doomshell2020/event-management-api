@@ -200,3 +200,78 @@ module.exports.getStaticPageById = async (req, res) => {
         return apiResponse.error(res, 'Internal server error', 500);
     }
 };
+
+
+
+
+module.exports.updateStatusStatic = async (req, res) => {
+    try {
+        const result = await staticService.updateStatusStatic(req);
+        if (!result.success) {
+            switch (result.code) {
+                case 'SEO_NOT_FOUND':
+                    return apiResponse.notFound(res, 'Seo not found');
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+        return apiResponse.success(
+            res,'Static page status updated successfully!',
+            result.data
+        );
+    } catch (error) {
+        console.error('Error updating seo:', error);
+        return apiResponse.error(res, 'Internal Server Error');
+    }
+};
+
+
+// Search Static Controller
+module.exports.searchStatic = async (req, res) => {
+    try {
+        const result = await staticService.searchStatic(req);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'UNAUTHORIZED':
+                    return apiResponse.unauthorized(
+                        res,
+                        result.message || 'Unauthorized access'
+                    );
+
+                case 'VALIDATION_ERROR':
+                    return apiResponse.validation(
+                        res,
+                        [],
+                        result.message
+                    );
+
+                case 'INTERNAL_SERVER_ERROR':
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Internal server error'
+                    );
+
+                default:
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Failed to fetch static pages'
+                    );
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Static pages fetched successfully',
+            { statics: result.data }
+        );
+
+    } catch (error) {
+        console.error('Error in search static controller:', error);
+        return apiResponse.error(
+            res,
+            'An unexpected error occurred while fetching static pages',
+            500
+        );
+    }
+};

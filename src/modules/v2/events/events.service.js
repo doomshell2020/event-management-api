@@ -467,12 +467,12 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (sale_end) existingEvent.sale_end = new Date(sale_end);
         if (status != undefined && status !== null) existingEvent.status = status;
         if (event_timezone != undefined && event_timezone !== null) existingEvent.event_timezone = event_timezone;
-        
+
         if (approve_timer !== undefined) existingEvent.approve_timer = approve_timer;
         if (allow_register !== undefined) existingEvent.allow_register = allow_register == 'Y' ? 'Y' : 'N';
         if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
         if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
-        
+
         // console.log('entry_type :', entry_type);
         // Handle optional image update
         if (feat_image) {
@@ -1057,18 +1057,10 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
             attributes: ["id", "event_org_id", "name", "desp", "location", "feat_image"],
             include: [
                 {
-                    model: Wellness,
-                    as: "wellness",
-                    where: { status: "Y" },
-                    include: [
-                        { model: WellnessSlots, as: "wellnessSlots" },
-                        {
-                            model: Currency,
-                            as: "currencyName",
-                            attributes: ["Currency_symbol", "Currency"],
-                        },
-                    ],
+                    model: Wellness, as: "wellness", where: { status: "Y" },
+                    include: [{ model: WellnessSlots, as: "wellnessSlots" }],
                 },
+                { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] }
             ],
         });
 
@@ -1201,13 +1193,12 @@ module.exports.getSelectedWellnessSlots = async (req, res) => {
                             model: WellnessSlots,
                             as: 'wellnessSlots',
                             where: { id: slotIds }, // 👉 ONLY selected slot IDs
-                        },
-                        {
-                            model: Currency,
-                            as: 'currencyName',
-                            attributes: ['Currency_symbol', 'Currency']
-                        }
-                    ]
+                        }]
+                },
+                {
+                    model: Currency,
+                    as: 'currencyName',
+                    attributes: ['Currency_symbol', 'Currency']
                 }
             ],
             attributes: ['id', 'event_org_id', 'name', 'desp', 'location', 'feat_image']

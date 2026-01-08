@@ -99,4 +99,10 @@ router.get(
     eventController.getEventDetailsWithOrderDetails
 );
 
+router.get(
+    '/search/search',
+    eventController.getEventByName
+);
+
+
 module.exports = router;

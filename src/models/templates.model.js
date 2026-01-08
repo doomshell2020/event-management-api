@@ -13,6 +13,10 @@ const Templates = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true
         },
+        eventId: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
         subject: {
             type: DataTypes.STRING,
             allowNull: true

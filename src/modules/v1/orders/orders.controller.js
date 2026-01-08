@@ -1253,11 +1253,11 @@ exports.listOrders = async (req, res) => {
                         {
                             model: WellnessSlots, as: "appointment", include: {
                                 model: Wellness, as: "wellnessList",
-                                include: {
-                                    model: Currency,
-                                    as: 'currencyName',
-                                    attributes: ['Currency_symbol', 'Currency']
-                                }
+                                // include: {
+                                //     model: Currency,
+                                //     as: 'currencyName',
+                                //     attributes: ['Currency_symbol', 'Currency']
+                                // }
                             }
                         }
                     ]

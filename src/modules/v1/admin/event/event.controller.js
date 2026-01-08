@@ -312,3 +312,34 @@ module.exports.getEventDetailsWithOrderDetails = async (req, res) => {
         );
     }
 };
+
+// controller....
+module.exports.getEventByName = async (req, res) => {
+    try {
+        const { search } = req.query; // 👈 ?search=ond
+
+        const result = await eventService.getEventByName(search);
+
+        if (!result.success) {
+            switch (result.code) {
+                case "VALIDATION_FAILED":
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message,
+            { events: result.data }
+        );
+    } catch (error) {
+        console.error("Error in getEventByName controller:", error);
+        return apiResponse.error(
+            res,
+            "An unexpected error occurred while fetching event. " + error.message,
+            500
+        );
+    }
+};

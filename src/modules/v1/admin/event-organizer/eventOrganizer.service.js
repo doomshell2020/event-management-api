@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
-const { User } = require('../../../../models');
+const { User,Event } = require('../../../../models');
 
 
 
@@ -18,6 +18,7 @@ module.exports.getEventOrganizerList = async (req, res) => {
         }
         const eventOrganizers = await User.findAll({
             where: { role_id: 2 }, // Event Organiser role
+            include:{model:Event,as:"events",attributes:['id','name']},
             attributes: [
                 'id',
                 'first_name',

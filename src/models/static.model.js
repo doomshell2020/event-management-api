@@ -13,6 +13,10 @@ const Static = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true
         },
+        url: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
         descr: {
             type: DataTypes.TEXT,
             allowNull: true
