@@ -1124,8 +1124,11 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
                         if (booked >= slot.count) return false;
 
                         /** ❌ 2. Expired slots (NEW LOGIC) */
+                        // const slotEndTime = new Date(
+                        //     `${slot.date} ${slot.slot_end_time}`
+                        // );
                         const slotEndTime = new Date(
-                            `${slot.date} ${slot.slot_end_time}`
+                            `${slot.date}T${slot.slot_end_time}+05:30`
                         );
                         if (now > slotEndTime) return false;
 
