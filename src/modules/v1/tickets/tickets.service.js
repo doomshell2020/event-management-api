@@ -10,9 +10,11 @@ const XLSX = require('xlsx');
 const bcrypt = require('bcryptjs');
 const sendEmail = require('../../../common/utils/sendEmail');
 const complimentaryConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/complimentaryConfirmationTemplateWithQR');
+const config = require('../../../config/app');
 
 const REQUIRED_HEADERS = ['Sr.No', 'First Name', 'Last Name', 'Email', 'Mobile'];
-const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+
+const baseUrl = config.baseUrl || "http://localhost:5000";
 const eventImagePath = "uploads/events";
 const qrImagePath = "uploads/qr_codes";
 

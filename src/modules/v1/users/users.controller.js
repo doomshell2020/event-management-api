@@ -9,6 +9,7 @@ const DEFAULT_PASSWORD = "Staff@123";
 exports.searchUsers = async (req, res) => {
     try {
         let { q } = req.query;
+        const authId = req.user.id;
 
         // Prevent unnecessary DB hits
         if (!q || q.trim().length < 2) {
@@ -17,24 +18,21 @@ exports.searchUsers = async (req, res) => {
 
         q = q.trim();
 
-        /* 🔥 SINGLE QUERY – MULTI FIELD SEARCH */
         const users = await User.findAll({
             where: {
+                id: { [Op.ne]: authId }, // ✅ EXCLUDE logged-in user
                 [Op.or]: [
                     { first_name: { [Op.like]: `%${q}%` } },
                     { last_name: { [Op.like]: `%${q}%` } },
-                    {
-                        // full name search: first_name + last_name
-                        [Op.and]: Sequelize.where(
-                            Sequelize.fn(
-                                'concat',
-                                Sequelize.col('first_name'),
-                                ' ',
-                                Sequelize.col('last_name')
-                            ),
-                            { [Op.like]: `%${q}%` }
-                        )
-                    },
+                    Sequelize.where(
+                        Sequelize.fn(
+                            'concat',
+                            Sequelize.col('first_name'),
+                            ' ',
+                            Sequelize.col('last_name')
+                        ),
+                        { [Op.like]: `%${q}%` }
+                    ),
                     { email: { [Op.like]: `%${q}%` } },
                     { mobile: { [Op.like]: `%${q}%` } }
                 ]
@@ -57,6 +55,7 @@ exports.searchUsers = async (req, res) => {
         return apiResponse.error(res, "Failed to search users", 500);
     }
 };
+
 
 exports.addStaff = async (req, res) => {
     try {
@@ -232,7 +231,7 @@ exports.editStaff = async (req, res) => {
             }
             updateData.status = status;
         }
-        
+
         console.log('updateData :', updateData);
         // 🔁 EVENT IDS UPDATE (store in user table directly)
         if (eventId && Array.isArray(eventId)) {

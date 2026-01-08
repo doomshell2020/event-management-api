@@ -463,6 +463,9 @@ module.exports.listTicketsByEvent = async (req, res) => {
     try {
         const { event_id } = req.params;
 
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const imagePath = "uploads/events";
+
         // ✅ Validate event_id
         if (!event_id) {
             return apiResponse.validation(res, [], 'Event ID is required');
