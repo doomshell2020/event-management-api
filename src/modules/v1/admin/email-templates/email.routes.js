@@ -71,6 +71,34 @@ router.get(
     templateController.getTemplatesPageById
 );
 
+router.put(
+    '/update-status/:id',
+    [
+        param('id')
+            .isInt({ min: 1 })
+            .withMessage('Valid Wellness ID is required'),
+        body('status')
+            .notEmpty()
+            .withMessage('Status is required')
+            .isIn(['Y', 'N'])
+            .withMessage('Status must be Y or N'),
+    ],
+    validate,
+    templateController.updateStatusTemplates
+);
+router.get('/events', templateController.getEventList)
 
+router.get(
+    '/search',
+    [
+        param('title').optional().isString().trim()
+    ],
+    validate,
+    templateController.searchTemplate
+);
+router.post(
+    "/send-test-email",
+    templateController.sendTestEmail
+);
 
 module.exports = router;

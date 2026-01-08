@@ -39,7 +39,7 @@ module.exports.updateStatusCustomer = async (req, res) => {
             }
         }
         return apiResponse.success(
-            res,'Customer Status updated successfully',
+            res, 'Customer Status updated successfully',
             result.data
         );
     } catch (error) {
@@ -60,5 +60,89 @@ module.exports.resendVerificationEmail = async (req, res) => {
             success: false,
             message: error.message || "Failed to resend verification email"
         });
+    }
+};
+
+
+
+// Search Customer Controller
+module.exports.searchCustomers = async (req, res) => {
+    try {
+        const result = await customerService.searchCustomers(req);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'UNAUTHORIZED':
+                    return apiResponse.unauthorized(
+                        res,
+                        result.message || 'Unauthorized access'
+                    );
+
+                case 'VALIDATION_ERROR':
+                    return apiResponse.validation(
+                        res,
+                        [],
+                        result.message
+                    );
+
+                case 'INTERNAL_SERVER_ERROR':
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Internal server error'
+                    );
+
+                default:
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Failed to fetch customers'
+                    );
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'customer search successfully...',
+            { customers: result.data }
+        );
+
+    } catch (error) {
+        console.error('Error in search customer controller:', error);
+        return apiResponse.error(
+            res,
+            'An unexpected error occurred while fetching customers',
+            500
+        );
+    }
+};
+
+
+// controller
+module.exports.getCustomersFirstName = async (req, res) => {
+    try {
+        const { search } = req.query; // 👈 ?search=ka
+
+        const result = await customerService.getCustomersFirstName(search);
+
+        if (!result.success) {
+            switch (result.code) {
+                case "VALIDATION_FAILED":
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message,
+            { customers: result.data }
+        );
+    } catch (error) {
+        console.error("Error in getCustomersFirstName controller:", error);
+        return apiResponse.error(
+            res,
+            "An unexpected error occurred while fetching Customers. " + error.message,
+            500
+        );
     }
 };

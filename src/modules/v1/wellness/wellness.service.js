@@ -10,15 +10,15 @@ module.exports.createWellness = async (req) => {
         const {
             event_id,
             name,
-            currency,
             location,
             description,
+            currency,
         } = req.body;
 
 
         const ticketImage = req.file?.filename;
         // ✅ Validate required fields
-        if (!event_id || !name || !currency) {
+        if (!event_id || !name) {
             return {
                 success: false,
                 message: 'Please fill all required fields',
@@ -70,7 +70,7 @@ module.exports.createWellness = async (req) => {
             Image: ticketImage || null,
             description: description?.trim() || '',
             location,
-            currency
+            // currency
         });
         return {
             success: true,
@@ -550,7 +550,7 @@ module.exports.createWellnessWithSlots = async (req) => {
         const ticketImage = req.file?.filename;
 
         // ✅ Basic validations
-        if (!event_id || !name || !currency) {
+        if (!event_id || !name) {
             return {
                 success: false,
                 message: "Please fill all required fields",
@@ -588,7 +588,7 @@ module.exports.createWellnessWithSlots = async (req) => {
             Image: ticketImage || null,
             description: description || "",
             location,
-            currency,
+            // currency,
             tax_applied
         });
 
@@ -600,7 +600,7 @@ module.exports.createWellnessWithSlots = async (req) => {
                 slot_start_time: s.slot_start_time,
                 slot_end_time: s.slot_end_time,
                 price: s.price,
-                slot_location: s.slot_location,
+                // slot_location: s.slot_location,
                 count: s.count
             }));
 
@@ -710,7 +710,7 @@ module.exports.updateWellnessWithSlots = async (req) => {
         await existing.update({
             event_id,
             name: name.trim(),
-            currency,
+            // currency,
             location,
             description,
             tax_applied,
@@ -735,7 +735,7 @@ module.exports.updateWellnessWithSlots = async (req) => {
                         slot_start_time: s.slot_start_time,
                         slot_end_time: s.slot_end_time,
                         price: s.price,
-                        slot_location: s.slot_location,
+                        // slot_location: s.slot_location,
                         count: s.count
                     },
                     { where: { id: s.id, wellness_id: wellnessId } }
@@ -748,7 +748,7 @@ module.exports.updateWellnessWithSlots = async (req) => {
                     slot_start_time: s.slot_start_time,
                     slot_end_time: s.slot_end_time,
                     price: s.price,
-                    slot_location: s.slot_location,
+                    // slot_location: s.slot_location,
                     count: s.count
                 });
             }

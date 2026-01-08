@@ -45,6 +45,7 @@ CommitteeAssignTickets.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'tic
 
 User.hasMany(CommitteeMembers, { foreignKey: 'user_id', as: 'committeeMembers' });
 User.hasMany(Orders, { foreignKey: 'user_id',  as: 'orders'});
+User.hasMany(Event, { foreignKey: 'event_org_id',  as: 'events'});
 
 PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
 PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
@@ -121,7 +122,8 @@ Wellness.belongsTo(Currency, { foreignKey: 'currency', as: 'currencyName' });
 PaymentSnapshotItems.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticketType' });
 PaymentSnapshotItems.belongsTo(AddonTypes, { foreignKey: 'ticket_id', as: 'addonType' });
 PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
-// PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
+
+Templates.belongsTo(Event, { foreignKey: 'eventId', as: 'events' });
 
 module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,

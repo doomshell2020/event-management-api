@@ -1198,7 +1198,6 @@ exports.createAppointmentOrder = async (req, res) => {
 exports.listOrders = async (req, res) => {
     try {
         const user_id = req.user.id;
-        console.log('user_id :', user_id);
         const { event_id } = req.query;
 
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
@@ -1251,11 +1250,11 @@ exports.listOrders = async (req, res) => {
                         {
                             model: WellnessSlots, as: "appointment", include: {
                                 model: Wellness, as: "wellnessList",
-                                include: {
-                                    model: Currency,
-                                    as: 'currencyName',
-                                    attributes: ['Currency_symbol', 'Currency']
-                                }
+                                // include: {
+                                //     model: Currency,
+                                //     as: 'currencyName',
+                                //     attributes: ['Currency_symbol', 'Currency']
+                                // }
                             }
                         }
                     ]
@@ -1498,11 +1497,11 @@ exports.getOrderDetails = async (req, res) => {
                         {
                             model: WellnessSlots, as: "appointment", include: {
                                 model: Wellness, as: "wellnessList",
-                                include: {
-                                    model: Currency,
-                                    as: 'currencyName',
-                                    attributes: ['Currency_symbol', 'Currency']
-                                }
+                                // include: {
+                                //     model: Currency,
+                                //     as: 'currencyName',
+                                //     attributes: ['Currency_symbol', 'Currency']
+                                // }
                             }
                         }
                     ]

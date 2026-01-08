@@ -31,7 +31,22 @@ router.post(
   customerController.resendVerificationEmail
 );
 
+router.get(
+    '/search',
+    [
+        param('firstName').optional().isString(),
+        param('email').optional().isString(),
+        param('fromDate').optional().isDate(),
+        param('toDate').optional().isDate(),
+    ],
+    validate,
+    customerController.searchCustomers
+);
 
-
+// search first-name
+router.get(
+    '/first-name/search',
+    customerController.getCustomersFirstName
+);
 
 module.exports = router;

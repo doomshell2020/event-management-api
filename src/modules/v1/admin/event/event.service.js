@@ -527,3 +527,41 @@ module.exports.getEventDetailsWithOrderDetails = async (req) => {
     }
 };
 
+
+
+
+
+// service...
+module.exports.getEventByName = async (search = "") => {
+    try {
+        const whereCondition = {};
+
+        // 👇 name based search
+        if (search) {
+            whereCondition.name = {
+                [Op.like]: `%${search}%`,   // MySQL
+                // [Op.iLike]: `%${search}%` // PostgreSQL
+            };
+        }
+
+        const events = await Event.findAll({
+            where: whereCondition,
+            attributes: ["id", "name"],
+            order: [["id", "DESC"]],
+            limit: 20, // 👈 autocomplete friendly
+        });
+
+        return {
+            success: true,
+            message: "Events fetched successfully.",
+            data: events,
+        };
+    } catch (error) {
+        console.error("Error fetching events:", error);
+        return {
+            success: false,
+            message: "An unexpected error occurred while fetching events.",
+            code: "INTERNAL_SERVER_ERROR",
+        };
+    }
+};

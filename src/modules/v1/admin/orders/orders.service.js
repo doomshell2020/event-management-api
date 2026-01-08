@@ -31,7 +31,8 @@ module.exports.getOrdersList = async (req, res) => {
                 'event_id',
                 'sub_total',
                 'tax_total',
-                'created'
+                'created',
+                'paymenttype'
             ],
 
             order: [['id', 'DESC']]
@@ -138,7 +139,8 @@ module.exports.searchOrdersList = async (req) => {
                 'sub_total',
                 'tax_total',
                 'grand_total',
-                'created'
+                'created',
+                'paymenttype'
             ],
             order: [['id', 'DESC']]
         });
