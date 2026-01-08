@@ -330,7 +330,7 @@ exports.handleCommitteePushTicket = async (req, res) => {
                         event_id,
                         user_id: user.id,
                         ticket_id,
-                        createdBy:committee_user_id
+                        createdBy: committee_user_id
                     });
 
                     if (!result || !result.success) {
@@ -718,6 +718,7 @@ exports.requestList = async (req, res) => {
             });
 
             const eventIds = committeeEvents.map(item => item.event_id);
+            // console.log('eventIds :', eventIds);
 
             events = await Event.findAll({
                 where: {
@@ -743,6 +744,21 @@ exports.requestList = async (req, res) => {
             attributes: ["order_id"],
             include: [
                 {
+                    model: Event, as: "event",
+                    attributes: [
+                        'id',
+                        'name',
+                        'location',
+                        'date_from',
+                        'date_to',
+                        'feat_image'
+                    ],
+                    include: [
+                        { model: Company, as: "companyInfo", attributes: ["name"] },
+                        { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] }
+                    ]
+                },
+                {
                     model: User,
                     as: 'user',
                     attributes: ['first_name', 'last_name', 'email', 'mobile', 'profile_image']
@@ -755,6 +771,7 @@ exports.requestList = async (req, res) => {
             ],
             raw: true
         });
+        // console.log('completedData :', completedData);
 
         return apiResponse.success(res, 'Committee requests fetched', {
             count: cartList.length,
