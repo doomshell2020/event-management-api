@@ -1,7 +1,6 @@
 const eventOrganizerService = require('./eventOrganizer.service');
 const apiResponse = require('../../../../common/utils/apiResponse');
-const path = require('path');
-const fs = require('fs');
+
 
 module.exports.getEventOrganizerList = async (req, res) => {
     try {
@@ -143,5 +142,57 @@ module.exports.getEventOrganizerById = async (req, res) => {
     } catch (error) {
         console.error('Error in getEventOrganizerById controller:', error);
         return apiResponse.error(res, 'Internal server error', 500);
+    }
+};
+
+
+
+// Search Event Organizer 
+module.exports.searchEventOrganizer = async (req, res) => {
+    try {
+        const result = await eventOrganizerService.searchEventOrganizer(req);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'UNAUTHORIZED':
+                    return apiResponse.unauthorized(
+                        res,
+                        result.message || 'Unauthorized access'
+                    );
+
+                case 'VALIDATION_ERROR':
+                    return apiResponse.validation(
+                        res,
+                        [],
+                        result.message
+                    );
+
+                case 'INTERNAL_SERVER_ERROR':
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Internal server error'
+                    );
+
+                default:
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Failed to fetch customers'
+                    );
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'customer search successfully...',
+            { eventOrganizers: result.data }
+        );
+
+    } catch (error) {
+        console.error('Error in search customer controller:', error);
+        return apiResponse.error(
+            res,
+            'An unexpected error occurred while fetching customers',
+            500
+        );
     }
 };

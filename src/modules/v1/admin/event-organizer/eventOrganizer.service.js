@@ -262,3 +262,61 @@ module.exports.getEventOrganizerById = async (userId) => {
         };
     }
 };
+
+
+// searching api
+module.exports.searchEventOrganizer = async (req) => {
+    try {
+        const { first_name, email,mobile} = req.query;
+        const whereCondition = { role_id: 2 };
+        // 🔹 First Name filter
+        if (first_name) {
+            whereCondition.first_name = {
+                [Op.like]: `%${first_name}%`
+            };
+        }
+        // 🔹 Email filter
+        if (email) {
+            whereCondition.email = {
+                [Op.like]: `%${email}%`
+            };
+        }
+         // 🔹 mobile filter
+        if (mobile) {
+            whereCondition.mobile = {
+                [Op.like]: `%${mobile}%`
+            };
+        }
+           const users = await User.findAll({
+            where: whereCondition,
+            include:{model:Event,as:"events",attributes:['id','name']},
+            attributes: [
+                'id',
+                'first_name',
+                'last_name',
+                'email',
+                'mobile',
+                'profile_image',
+                'status',
+                'is_email_verified',
+                'is_suspend',
+            ],
+            order: [['id', 'DESC']]
+        });
+
+        return {
+            success: true,
+            message: "Users fetched successfully.",
+            data: users
+        };
+
+    } catch (error) {
+        console.error("Error searching users:", error);
+        return {
+            success: false,
+            message: "An unexpected error occurred while searching users.",
+            code: "INTERNAL_SERVER_ERROR"
+        };
+    }
+};
+

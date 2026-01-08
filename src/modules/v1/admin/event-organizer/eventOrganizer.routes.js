@@ -72,6 +72,14 @@ router.put(
 // get Event Organizer..
 router.get('/:id',eventOrganizerController.getEventOrganizerById);
 
-
+router.get(
+    '/search',
+    [
+        param('firstName').optional().isString(),
+        param('email').optional().isString(),
+    ],
+    validate,
+    eventOrganizerController.searchEventOrganizer
+);
 
 module.exports = router;
