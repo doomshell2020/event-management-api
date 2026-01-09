@@ -55,6 +55,7 @@ const templateAdminRoutesV1 = require('./modules/v1/admin/email-templates/email.
 const customerAdminRoutesV1 = require('./modules/v1/admin/customers/customer.routes');
 const dashboardAdminRoutesV1 = require('./modules/v1/admin/dashboard/dashboard.routes');
 const payoutsAdminRoutesV1 = require('./modules/v1/admin/payouts/payouts.routes');
+const financeAdminRoutesV1 = require('./modules/v1/admin/finance/finance.routes');
 
 
 // Initialize Express
@@ -110,20 +111,19 @@ app.use('/api/v2/events', eventsRoutesV2);
 app.use('/api/v2/tickets', ticketsRoutesV2);
 
 // API V1 Admin Routes
-app.use('/api/v1/admin/auth',authAdminRoutesV1)
-app.use('/api/v1/admin/event-organizer',eventOrganizerAdminRoutesV1)
-app.use('/api/v1/admin/events',eventAdminRoutesV1)
-app.use('/api/v1/admin/orders',ordersAdminRoutesV1)
-app.use('/api/v1/admin/tickets',ticketsAdminRoutesV1)
-app.use('/api/v1/admin/static',staticAdminRoutesV1)
-app.use('/api/v1/admin/contact-us',contactUsAdminRoutesV1)
-app.use('/api/v1/admin/seo',seoAdminRoutesV1)
-app.use('/api/v1/admin/email-templates',templateAdminRoutesV1)
-app.use('/api/v1/admin/customers',customerAdminRoutesV1)
-app.use('/api/v1/admin/dashboard',dashboardAdminRoutesV1)
-app.use('/api/v1/admin/payouts',payoutsAdminRoutesV1)
-
-
+app.use('/api/v1/admin/auth',authAdminRoutesV1);
+app.use('/api/v1/admin/event-organizer',eventOrganizerAdminRoutesV1);
+app.use('/api/v1/admin/events',eventAdminRoutesV1);
+app.use('/api/v1/admin/orders',ordersAdminRoutesV1);
+app.use('/api/v1/admin/tickets',ticketsAdminRoutesV1);
+app.use('/api/v1/admin/static',staticAdminRoutesV1);
+app.use('/api/v1/admin/contact-us',contactUsAdminRoutesV1);
+app.use('/api/v1/admin/seo',seoAdminRoutesV1);
+app.use('/api/v1/admin/email-templates',templateAdminRoutesV1);
+app.use('/api/v1/admin/customers',customerAdminRoutesV1);
+app.use('/api/v1/admin/dashboard',dashboardAdminRoutesV1);
+app.use('/api/v1/admin/payouts',payoutsAdminRoutesV1);
+app.use('/api/v1/admin/finance',financeAdminRoutesV1);
 
 
 // Handle 404 errors

@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
-const { Op } = require('sequelize');
-const { User,Event } = require('../../../../models');
+const { Op, Sequelize } = require('sequelize');
+const { User, Event, Orders, Currency } = require('../../../../models');
 
 
 
@@ -18,7 +18,6 @@ module.exports.getEventOrganizerList = async (req, res) => {
         }
         const eventOrganizers = await User.findAll({
             where: { role_id: 2 }, // Event Organiser role
-            include:{model:Event,as:"events",attributes:['id','name']},
             attributes: [
                 'id',
                 'first_name',
@@ -29,8 +28,43 @@ module.exports.getEventOrganizerList = async (req, res) => {
                 'status',
                 'is_email_verified',
                 'is_suspend',
+                'createdAt'
             ],
-            order: [['id', 'DESC']]
+            include: [
+                {
+                    model: Event,
+                    as: "events",
+                    attributes: [
+                        "id",
+                        "name",
+
+                        // 🔥 Per Event Totals
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.sub_total")), "total_sales"],
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.tax_total")), "total_tax"],
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.grand_total")), "grand_total"]
+                    ],
+                    include: [
+                        {
+                            model: Orders,
+                            as: "orders",
+                            attributes: [],
+                            required: false
+                        },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ['Currency_symbol']
+                        }
+                    ],
+                    required: false
+                }
+            ],
+            group: [
+                "User.id",
+                "events.id"
+            ],
+            order: [['id', 'DESC']],
+            subQuery: false
         });
         return {
             success: true,
@@ -186,7 +220,7 @@ module.exports.updateEventOrganizer = async (userId, data) => {
 };
 
 // Status update Api..
- module.exports.updateStatusEventOrganizer = async (req) => {
+module.exports.updateStatusEventOrganizer = async (req) => {
     try {
         const userId = req.params.id;
         const { status } = req.body;
@@ -267,41 +301,54 @@ module.exports.getEventOrganizerById = async (userId) => {
 // searching api
 module.exports.searchEventOrganizer = async (req) => {
     try {
-        const { first_name, email,mobile} = req.query;
-        const whereCondition = { role_id: 2 };
+        const { first_name, email, mobile } = req.query;
+        const whereCondition = {
+            role_id: 2
+        };
+
         // 🔹 First Name filter
         if (first_name) {
             whereCondition.first_name = {
-                [Op.like]: `%${first_name}%`
+                [Op.like]: `%${first_name.trim()}%`
             };
         }
+
         // 🔹 Email filter
         if (email) {
             whereCondition.email = {
-                [Op.like]: `%${email}%`
+                [Op.like]: `%${email.trim()}%`
             };
         }
-         // 🔹 mobile filter
+
+        // 🔹 Mobile filter
         if (mobile) {
             whereCondition.mobile = {
-                [Op.like]: `%${mobile}%`
+                [Op.like]: `%${mobile.trim()}%`
             };
         }
-           const users = await User.findAll({
+
+        const users = await User.findAll({
             where: whereCondition,
-            include:{model:Event,as:"events",attributes:['id','name']},
             attributes: [
-                'id',
-                'first_name',
-                'last_name',
-                'email',
-                'mobile',
-                'profile_image',
-                'status',
-                'is_email_verified',
-                'is_suspend',
+                "id",
+                "first_name",
+                "last_name",
+                "email",
+                "mobile",
+                "profile_image",
+                "status",
+                "is_email_verified",
+                "is_suspend"
             ],
-            order: [['id', 'DESC']]
+            include: [
+                {
+                    model: Event,
+                    as: "events",
+                    attributes: ["id", "name"],
+                    required: false
+                }
+            ],
+            order: [["id", "DESC"]]
         });
 
         return {
