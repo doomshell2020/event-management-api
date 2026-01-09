@@ -701,7 +701,6 @@ exports.requestList = async (req, res) => {
             ]
         });
 
-
         let events = [];
         let completedData;
 

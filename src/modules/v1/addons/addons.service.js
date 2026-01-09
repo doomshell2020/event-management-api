@@ -1,4 +1,4 @@
-const { AddonTypes, Event } = require('../../../models');
+const { AddonTypes, Event, OrderItems } = require('../../../models');
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
@@ -233,6 +233,64 @@ module.exports.listAddonsByEvent = async (event_id) => {
             success: false,
             message: 'Internal server error: ' + error.message,
             code: 'DB_ERROR'
+        };
+    }
+};
+
+module.exports.deleteAddon = async (req) => {
+    try {
+        const addonId = req.params.id;
+
+        // ✅ Check addon exists
+        const addon = await AddonTypes.findByPk(addonId);
+        if (!addon) {
+            return {
+                success: false,
+                code: 'ADDON_NOT_FOUND',
+                message: 'Addon not found'
+            };
+        }
+
+        // ✅ Check if addon already booked
+        const bookedCount = await OrderItems.count({
+            where: {
+                addon_id: addonId
+            }
+        });
+
+        if (bookedCount > 0) {
+            return {
+                success: false,
+                code: 'ADDON_ALREADY_BOOKED',
+                message: 'This addon has already been booked and cannot be deleted'
+            };
+        }
+
+        // ✅ Remove addon image
+        if (addon.image) {
+            const uploadFolder = path.join(process.cwd(), 'uploads/addons');
+            const imagePath = path.join(uploadFolder, addon.image);
+
+            if (fs.existsSync(imagePath)) {
+                fs.unlinkSync(imagePath);
+                console.log('🧹 Addon image deleted:', imagePath);
+            }
+        }
+
+        // ✅ Delete addon
+        await addon.destroy();
+
+        return {
+            success: true,
+            message: 'Addon deleted successfully'
+        };
+
+    } catch (error) {
+        console.error('Delete addon error:', error);
+        return {
+            success: false,
+            code: 'DB_ERROR',
+            message: 'Database error while deleting addon'
         };
     }
 };

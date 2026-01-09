@@ -232,7 +232,24 @@ module.exports = {
         try {
             const user_id = req.user.id;
             const { event_id, item_type } = req.query;
-            // console.log('req.query :', req.query);
+
+            /* ------------------ COMMITTEE CHECK ------------------ */
+            const isCommitteeAssigned = await CommitteeAssignTickets.findOne({
+                where: { user_id: user_id },
+                attributes: ["id"]
+            });
+
+            let committeePendingCount = 0;
+
+            if (isCommitteeAssigned) {
+                committeePendingCount = await Cart.count({
+                    where: {
+                        commitee_user_id: user_id,
+                        ticket_type: "committesale",
+                        status: "N" // Pending
+                    }
+                });
+            }
 
             let where = {
                 user_id,
@@ -298,6 +315,7 @@ module.exports = {
                             "event_org_id",
                             "name",
                             // "desp",
+                            "entry_type",
                             "ticket_limit",
                             "location",
                             "feat_image",
@@ -308,6 +326,26 @@ module.exports = {
                             "event_timezone"
                         ],
                     include: [
+                        {
+                            model: TicketPricing,
+                            as: "ticketPrices",
+                            required: false,
+                            attributes: [ "id","price", "date"],
+                            include: [
+                                {
+                                    model: TicketType,
+                                    as: "ticket",
+                                    required: false,
+                                    attributes: ["id", "count", "title", "access_type"],
+                                },
+                                {
+                                    model: EventSlots,
+                                    as: "slot",
+                                    required: false,
+                                    attributes: ["id", "slot_name", "slot_date", "start_time", "end_time", "description"],
+                                }
+                            ]
+                        },
                         {
                             model: TicketType,
                             as: "tickets",
@@ -355,7 +393,21 @@ module.exports = {
                         {
                             model: AddonTypes,
                             as: "addons",
-                            attributes: { exclude: ["createdAt", "updatedAt"] }
+                            attributes: {
+                                exclude: ["createdAt", "updatedAt"],
+                                include: [
+                                    [
+                                        Sequelize.literal(`(
+                                        SELECT COALESCE(SUM(oi.count), 0)
+                                        FROM tbl_order_items AS oi
+                                        WHERE 
+                                            oi.addon_id = addons.id
+                                            AND oi.event_id = ${ev}
+                                        )`),
+                                        "sales_count"
+                                    ]
+                                ]
+                            }
                         },
                         {
                             model: Package,
@@ -528,7 +580,11 @@ module.exports = {
             return apiResponse.success(res, "Cart fetched", {
                 user_id,
                 event: formattedEvent,   // may be null if no event id found
-                cart: formatted
+                cart: formatted,
+                committee: {
+                    assigned: !!isCommitteeAssigned,
+                    pending_count: committeePendingCount
+                },
             });
 
         } catch (error) {

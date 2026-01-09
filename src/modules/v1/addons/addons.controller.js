@@ -2,6 +2,7 @@ const addonService = require('./addons.service');
 const apiResponse = require('../../../common/utils/apiResponse');
 const path = require('path');
 const fs = require('fs');
+const { AddonTypes, OrderItems } = require('../../../models');
 
 
 module.exports.createAddons = async (req, res) => {
@@ -104,5 +105,43 @@ module.exports.listAddonsByEvent = async (req, res) => {
     } catch (error) {
         console.error('Error in listAddonsByEvent:', error);
         return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
+
+module.exports.deleteAddon = async (req, res) => {
+    try {
+        const result = await addonService.deleteAddon(req);
+
+        if (!result.success) {
+            switch (result.code) {
+
+                case 'ADDON_NOT_FOUND':
+                    return apiResponse.notFound(res, result.message);
+
+                case 'ADDON_ALREADY_BOOKED':
+                    return apiResponse.error(
+                        res,
+                        'This addon is already booked and cannot be deleted.'
+                    );
+
+                case 'DB_ERROR':
+                    return apiResponse.error(
+                        res,
+                        'Database error occurred while deleting addon'
+                    );
+
+                default:
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Unknown error occurred'
+                    );
+            }
+        }
+
+        return apiResponse.success(res, result.message);
+
+    } catch (error) {
+        console.error('Error in deleteAddon:', error);
+        return apiResponse.error(res, 'Internal Server Error');
     }
 };

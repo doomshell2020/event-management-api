@@ -111,28 +111,6 @@ module.exports.loginUser = async ({ email, password }) => {
         throw new Error('Invalid email or password');
     }
 
-    // Total committee sale tickets in cart
-    const committeeCartCount = await Cart.count({
-        where: {
-            commitee_user_id: user.id,
-            ticket_type: 'committesale',
-        },
-    });
-
-    const committeeAssigned = committeeCartCount > 0;
-
-    // Pending committee requests (status = N)
-    const committeePendingCount = await Cart.count({
-        where: {
-            commitee_user_id: user.id,
-            ticket_type: 'committesale',
-            status: 'N', // Pending
-        },
-    });
-
-    // console.log('committeeCartCount :', committeeCartCount);
-    // console.log('committeePendingCount :', committeePendingCount);
-
     // Generate JWT token
     const token = jwt.sign(
         { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name },
@@ -149,9 +127,7 @@ module.exports.loginUser = async ({ email, password }) => {
             firstName: user.first_name,
             lastName: user.last_name,
             gender: user.gender,
-            dob: user.dob,
-            committeeAssigned: committeeAssigned,
-            committeePendingCount: committeePendingCount, // ✅ FIXED
+            dob: user.dob
         },
     };
 
@@ -160,25 +136,6 @@ module.exports.loginUser = async ({ email, password }) => {
 module.exports.getUserInfo = async (userId) => {
     const imagePath = 'uploads/profile';
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000/'; // ✅ fallback base URL
-
-    // Total committee sale tickets in cart
-    const committeeCartCount = await Cart.count({
-        where: {
-            commitee_user_id: userId,
-            ticket_type: 'committesale',
-        },
-    });
-
-    const committeeAssigned = committeeCartCount > 0;
-
-    // Pending committee requests (status = N)
-    const committeePendingCount = await Cart.count({
-        where: {
-            commitee_user_id: userId,
-            ticket_type: 'committesale',
-            status: 'N', // Pending
-        },
-    });
 
     const user = await User.findByPk(userId, {
         attributes: [
@@ -206,9 +163,7 @@ module.exports.getUserInfo = async (userId) => {
     // ✅ Return merged data
     return {
         ...user.toJSON(),
-        profile_image: profileImage,
-        committeeAssigned: committeeAssigned,
-        committeePendingCount: committeePendingCount,
+        profile_image: profileImage
     };
 };
 

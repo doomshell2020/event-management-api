@@ -910,6 +910,23 @@ module.exports.deleteTicket = async (req) => {
             };
         }
 
+        /* ---------- CHECK IF TICKET IS BOOKED ---------- */
+        const isBooked = await OrderItems.findOne({
+            where: {
+                ticket_id: ticketId
+            }
+        });
+
+        if (isBooked) {
+            return {
+                success: false,
+                message: "This ticket has already been booked and cannot be deleted.",
+                code: "TICKET_ALREADY_BOOKED"
+            };
+        }
+
+
+
         // ✅ Optional: Check if the user is the ticket owner (if applicable)
         // if (user_id && existingTicket.userid && existingTicket.userid !== user_id) {
         //     return {

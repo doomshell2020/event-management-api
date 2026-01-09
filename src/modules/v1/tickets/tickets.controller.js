@@ -441,6 +441,8 @@ module.exports.deleteTicket = async (req, res) => {
             switch (result.code) {
                 case 'TICKET_NOT_FOUND':
                     return apiResponse.notFound(res, 'Ticket not found');
+                case 'TICKET_ALREADY_BOOKED':
+                    return apiResponse.conflict(res,'This ticket has already been booked and cannot be deleted.');
                 case 'FORBIDDEN':
                     return apiResponse.error(res, 'You are not authorized to delete this ticket');
                 case 'DB_ERROR':

@@ -45,8 +45,8 @@ CommitteeAssignTickets.belongsTo(CommitteeMembers, { foreignKey: 'user_id', targ
 CommitteeAssignTickets.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticket' });
 
 User.hasMany(CommitteeMembers, { foreignKey: 'user_id', as: 'committeeMembers' });
-User.hasMany(Orders, { foreignKey: 'user_id',  as: 'orders'});
-User.hasMany(Event, { foreignKey: 'event_org_id',  as: 'events'});
+User.hasMany(Orders, { foreignKey: 'user_id', as: 'orders' });
+User.hasMany(Event, { foreignKey: 'event_org_id', as: 'events' });
 
 PackageDetails.belongsTo(Package, { foreignKey: 'package_id', as: 'package' });
 PackageDetails.belongsTo(AddonTypes, { foreignKey: 'addon_id', as: 'addonType' });
@@ -56,6 +56,7 @@ TicketType.hasMany(PackageDetails, { foreignKey: 'ticket_type_id', as: 'packageD
 TicketType.hasMany(CommitteeAssignTickets, { foreignKey: 'ticket_id', as: 'committeeAssignedTickets' });
 
 AddonTypes.hasMany(PackageDetails, { foreignKey: 'addon_id', as: 'packageDetails' });
+AddonTypes.hasMany(OrderItems, { foreignKey: "addon_id", as: "orderItems" });
 
 Package.hasMany(PackageDetails, { foreignKey: 'package_id', as: 'details' });
 Package.belongsTo(Event, { foreignKey: 'event_id', as: 'event' });
@@ -89,6 +90,7 @@ Event.hasMany(EventSlots, { foreignKey: 'event_id', as: 'slots', onDelete: 'CASC
 Event.belongsTo(Currency, { foreignKey: 'payment_currency', as: 'currencyName', });
 Event.hasMany(Wellness, { foreignKey: 'event_id', as: 'wellness', });
 Event.hasMany(TicketType, { foreignKey: 'eventid', as: 'tickets', onDelete: 'CASCADE' });
+Event.hasMany(TicketPricing, { foreignKey: 'event_id', as: 'ticketPrices', onDelete: 'CASCADE' });
 
 OrderItems.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 OrderItems.belongsTo(Orders, { foreignKey: "order_id", as: "order" });
