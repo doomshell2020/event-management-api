@@ -1,11 +1,12 @@
 // const User = require('../../../models/user.model');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User, Cart } = require('../../../models');
+const { User, Cart, Templates } = require('../../../models');
 const config = require('../../../config/app');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+
 
 const sendEmail = require('../../../common/utils/sendEmail');
 const { generateVerificationToken, verifyVerificationToken } = require('../../../common/utils/generateToken');
@@ -13,7 +14,73 @@ const verifyEmailTemplate = require('../../../common/utils/emailTemplates/verify
 const emailVerifiedTemplate = require('../../../common/utils/emailTemplates/emailVerifiedTemplate');
 const resetPasswordTemplate = require('../../../common/utils/emailTemplates/resetPasswordTemplate');
 const passwordChangedTemplate = require('../../../common/utils/emailTemplates/passwordChangedTemplate');
+const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 
+module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, password }) => {
+    // 1️⃣ Check if user already exists
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+        throw new Error('Email already registered');
+    }
+
+    // 2️⃣ Get email template ID
+    const registerEmailTemplateId = config.emailTemplates.register;
+
+    // 3️⃣ Fetch template from DB
+    const templateRecord = await Templates.findOne({
+        where: { id: registerEmailTemplateId }
+    });
+
+    if (!templateRecord) {
+        throw new Error('Registration email template not found');
+    }
+
+    const { subject, description, fromemail } = templateRecord;
+
+    // 4️⃣ Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const fullName = `${firstName} ${lastName}`;
+
+    // 5️⃣ Create user
+    const user = await User.create({
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullName,
+        gender,
+        dob,
+        email,
+        password: hashedPassword,
+        confirm_pass: password,
+        is_email_verified: 'N',
+    });
+
+    // 6️⃣ Generate verification token & link
+    const token = generateVerificationToken(email);
+    const verifyLink = `${config.clientUrl}/verify-email?token=${token}`;
+
+    // 7️⃣ Replace template variables
+    const html = replaceTemplateVariables(description, {
+        NAME: fullName,
+        SITE_URL: config.clientUrl,
+        VERIFY_LINK: verifyLink,
+        CONTACT_EMAIL: fromemail || config.email.user
+    });
+    
+    // 8️⃣ Send email
+    await sendEmail(
+        email,
+        subject, // ✅ subject from DB
+        html // ✅ processed template
+    );
+
+    // 9️⃣ Return response
+    return {
+        name: user.full_name,
+        email: user.email,
+        role: user.role,
+    };
+};
 
 module.exports.verifyEmailToken = async (token) => {
     try {
@@ -51,45 +118,6 @@ module.exports.verifyEmailToken = async (token) => {
         console.error('Error verifying email token:', error);
         return { success: false, message: error.message || 'Email verification failed' };
     }
-};
-
-module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, password }) => {
-    // Check if user already exists
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-        throw new Error('Email already registered');
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const fullName = `${firstName} ${lastName}`;
-
-    // Create user with email not verified
-    const user = await User.create({
-        first_name: firstName,
-        last_name: lastName,
-        full_name: fullName,
-        gender,
-        dob,
-        email,
-        password: hashedPassword,
-        confirm_pass: password,
-        is_email_verified: 'N', // email verification field
-    });
-
-    // Generate email verification token (JWT)
-    const token = generateVerificationToken(email);
-    const verifyLink = `${config.clientUrl}/verify-email?token=${token}`;
-    // Send verification email
-    const html = verifyEmailTemplate(fullName, verifyLink);
-    await sendEmail(email, 'Verify your email address', html);
-    return fullName;
-    return {
-        name: user.full_name,
-        email: user.email,
-        role: user.role,
-    };
 };
 
 module.exports.loginUser = async ({ email, password }) => {

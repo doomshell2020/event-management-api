@@ -1,8 +1,6 @@
-
-
 // 1️⃣ Generate Unique Order ID
 function generateUniqueOrderId() {
-    const prefix = "EXT"; 
+    const prefix = "EXT";
     const date = new Date();
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -21,13 +19,23 @@ function formatDate(date) {
     return d.toISOString().split("T")[0];
 }
 
-// Add more functions here as needed...
+const replaceTemplateVariables = (template, variables = {}) => {
+    let output = template;
+    // console.log('variables :', variables);
 
-// -------------------
-// EXPORT ALL FUNCTIONS
-// -------------------
+    Object.keys(variables).forEach((key) => {
+        const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+        output = output.replace(regex, variables[key]);
+    });
+
+    return output;
+};
+
+
+// -------------------// EXPORT ALL FUNCTIONS //-------------------
 module.exports = {
     generateUniqueOrderId,
     randomString,
     formatDate,
+    replaceTemplateVariables
 };

@@ -1,5 +1,5 @@
 const Stripe = require("stripe");
-const { Payment, PaymentSnapshotItems, OrderItems, TicketType, AddonTypes, Package } = require("../../../models");
+const { Payment, PaymentSnapshotItems, OrderItems, TicketType, AddonTypes, Package, TicketPricing } = require("../../../models");
 const apiResponse = require("../../../common/utils/apiResponse");
 const config = require("../../../config/app");
 const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
@@ -75,6 +75,14 @@ exports.createPaymentIntent = async (req, res) => {
         limitField = "total_package";
         nameField = "name";
       }
+      else if (item.ticketType == "ticket_price") {
+        Model = TicketPricing;
+        whereClause.package_id = item.ticketId;
+        itemId = item.ticketId;
+        typeLabel = "TicketPrice";
+        limitField = "total_package";
+        nameField = "name";
+      }
       else {
         continue;
       }
@@ -84,7 +92,7 @@ exports.createPaymentIntent = async (req, res) => {
         where: { id: itemId },
         attributes: ["id", limitField, nameField]
       });
-      
+
       const totalLimit = Number(masterItem?.[limitField] || 0);
 
       // If no limit defined → allow

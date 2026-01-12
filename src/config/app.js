@@ -42,6 +42,12 @@ const config = {
     pass: process.env.SMTP_PASS || '',
   },
 
+  // Email Template IDs
+  emailTemplates: {
+    register: process.env.REGISTER_EMAIL_TEMPLATE_ID || '13',
+    forgotPassword: process.env.FORGOT_PASSWORD_EMAIL_TEMPLATE_ID || '14',
+  },
+
   // -------------------------
   // 🔐 SECURITY CONFIG
   // -------------------------
