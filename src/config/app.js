@@ -46,6 +46,9 @@ const config = {
   emailTemplates: {
     register: process.env.REGISTER_EMAIL_TEMPLATE_ID || '13',
     forgotPassword: process.env.FORGOT_PASSWORD_EMAIL_TEMPLATE_ID || '14',
+    forgotPasswordChanged: process.env.FORGOT_PASSWORD_CHANGED_EMAIL_TEMPLATE_ID || '15',
+    verifyEmail: process.env.VERIFY_EMAIL_TEMPLATE_ID || '41',
+    changedPassword: process.env.CHANGED_PASSWORD_EMAIL_TEMPLATE_ID || '42',
   },
 
   // -------------------------
