@@ -1247,7 +1247,24 @@ exports.listOrders = async (req, res) => {
                         { model: TicketType, as: "ticketType" },
                         { model: AddonTypes, as: "addonType" },
                         { model: Package, as: "package" },
-                        { model: TicketPricing, as: "ticketPricing" },
+                        {
+                            model: TicketPricing, as: "ticketPricing",
+                            attributes: ["id", "price", "date"],
+                            include: [
+                                {
+                                    model: TicketType,
+                                    as: "ticket",
+                                    required: false,
+                                    attributes: ["id", "count", "title", "access_type"],
+                                },
+                                {
+                                    model: EventSlots,
+                                    as: "slot",
+                                    required: false,
+                                    attributes: ["id", "slot_name", "slot_date", "start_time", "end_time", "description"],
+                                }
+                            ]
+                        },
                         { model: EventSlots, as: "slot" },
                         {
                             model: WellnessSlots, as: "appointment", include: {
@@ -1473,7 +1490,24 @@ exports.getOrderDetails = async (req, res) => {
                         { model: TicketType, as: "ticketType", attributes: ["id", "title"] },
                         { model: AddonTypes, as: "addonType", attributes: ["id", "name"] },
                         { model: Package, as: "package", attributes: ["id", "name"] },
-                        { model: TicketPricing, as: "ticketPricing", attributes: ["id", "price"] },
+                        {
+                            model: TicketPricing, as: "ticketPricing",
+                            attributes: ["id", "price", "date"],
+                            include: [
+                                {
+                                    model: TicketType,
+                                    as: "ticket",
+                                    required: false,
+                                    attributes: ["id", "count", "title", "access_type"],
+                                },
+                                {
+                                    model: EventSlots,
+                                    as: "slot",
+                                    required: false,
+                                    attributes: ["id", "slot_name", "slot_date", "start_time", "end_time", "description"],
+                                }
+                            ]
+                        },
                         {
                             model: EventSlots,
                             as: "slot",
