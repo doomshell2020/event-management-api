@@ -700,7 +700,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
         currency_symbol: event["currencyName.Currency_symbol"] || "₹",
         currency_name: event["currencyName.Currency"] || "INR"
     };
-    // console.log('formattedEvent :', formattedEvent);
 
     // CREATE ORDER
     // ----------------------------

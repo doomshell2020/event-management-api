@@ -66,7 +66,7 @@ module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, 
         VERIFY_LINK: verifyLink,
         CONTACT_EMAIL: fromemail || config.email.user
     });
-    
+
     // 8️⃣ Send email
     await sendEmail(
         email,
@@ -84,30 +84,69 @@ module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, 
 
 module.exports.verifyEmailToken = async (token) => {
     try {
+        // 1️⃣ Verify token
         const decoded = verifyVerificationToken(token);
         if (!decoded) {
-            return { success: false, message: 'Invalid or expired verification link' };
+            return {
+                success: false,
+                message: 'Invalid or expired verification link'
+            };
         }
 
-        // Find user by email
-        const user = await User.findOne({ where: { email: decoded.email } });
+        // 2️⃣ Find user
+        const user = await User.findOne({
+            where: { email: decoded.email }
+        });
+
         if (!user) {
-            return { success: false, message: 'User not found' };
+            return {
+                success: false,
+                message: 'User not found'
+            };
         }
 
         if (user.is_email_verified == 'Y') {
-            return { success: false, message: 'Email already verified. You can log in.' };
+            return {
+                success: false,
+                message: 'Email already verified. You can log in.'
+            };
         }
 
-        // Update user's email verification status
+        // 3️⃣ Mark email verified
         user.is_email_verified = 'Y';
         await user.save();
 
-        const loginUrl = `${config.clientUrl}/login`;
+        /* ================= EMAIL TEMPLATE ================= */
 
-        // Send email notification for successful verification
-        const html = emailVerifiedTemplate(user.first_name, loginUrl);
-        await sendEmail(user.email, 'Your email has been verified!', html);
+        // 4️⃣ Get VERIFY EMAIL template ID
+        const verifyEmailTemplateId = config.emailTemplates.verifyEmail;
+
+        // 5️⃣ Fetch template from DB
+        const templateRecord = await Templates.findOne({
+            where: { id: verifyEmailTemplateId }
+        });
+
+        if (!templateRecord) {
+            throw new Error('Verify email template not found');
+        }
+
+        const { subject, description } = templateRecord;
+
+        // 6️⃣ Build verify/login link
+        const verifyLink = `${config.clientUrl}/login`;
+
+        // 7️⃣ Replace ONLY required variables
+        const html = replaceTemplateVariables(description, {
+            NAME: user.full_name || user.first_name,
+            VERIFY_LINK: verifyLink
+        });
+
+        // 8️⃣ Send email
+        await sendEmail(
+            user.email,
+            subject,
+            html
+        );
 
         return {
             success: true,
@@ -116,7 +155,10 @@ module.exports.verifyEmailToken = async (token) => {
 
     } catch (error) {
         console.error('Error verifying email token:', error);
-        return { success: false, message: error.message || 'Email verification failed' };
+        return {
+            success: false,
+            message: error.message || 'Email verification failed'
+        };
     }
 };
 

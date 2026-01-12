@@ -9,6 +9,11 @@ const TicketPricing = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
+    total_count: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 100,
+    },
     ticket_type_id: {
       type: DataTypes.INTEGER,
       allowNull: false,

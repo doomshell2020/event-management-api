@@ -80,13 +80,13 @@ exports.createPaymentIntent = async (req, res) => {
         whereClause.package_id = item.ticketId;
         itemId = item.ticketId;
         typeLabel = "TicketPrice";
-        limitField = "total_package";
-        nameField = "name";
+        limitField = "total_count";
+        nameField = "price";
       }
       else {
         continue;
       }
-
+      
       // 🔹 Fetch limit + display name
       const masterItem = await Model.findOne({
         where: { id: itemId },
