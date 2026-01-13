@@ -886,8 +886,8 @@ module.exports.fulfilOrderFromSnapshot = async ({
             name: event.name,
             location: event.location,
             feat_image: event.feat_image
-                ? `${baseUrl}/uploads/events/${event.feat_image}`
-                : `${baseUrl}/uploads/events/default.jpg`,
+                ? `${baseUrl}uploads/events/${event.feat_image}`
+                : `${baseUrl}uploads/events/default.jpg`,
             date_from: formatDateReadable(event.date_from, timezone),
             date_to: formatDateReadable(event.date_to, timezone),
             timezone,
