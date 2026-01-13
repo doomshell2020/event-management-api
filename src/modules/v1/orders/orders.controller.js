@@ -5,7 +5,7 @@ const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemp
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
 const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
-const { generateUniqueOrderId, getItemTitle, replaceTemplateVariables } = require('../../../common/utils/helpers');
+const { generateUniqueOrderId, getItemTitle, replaceTemplateVariables,formatPrice } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { Op, fn, col, literal } = require("sequelize");
 const { sequelize } = require("../../../models");
@@ -1021,7 +1021,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                         <td>${getItemTitle(item)}</td>
                         <td align="center">${item.quantity}</td>
                         <td align="right">
-                        ${formattedEvent.currency_symbol}${Number(item.price).toFixed(2)}
+                        ${formattedEvent.currency_symbol}${formatPrice(item.price)}
                         </td>
                     </tr>
                     `).join("")}
@@ -1045,10 +1045,10 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     EventLocation: formattedEvent.location,
                     Currency: formattedEvent.currency_symbol,
                     OrderId: order.order_uid,
-                    SubTotal: order.sub_total,
-                    Discount: order.discount_amount || "0.00",
-                    Tax: order.tax_total,
-                    GrandTotal: order.grand_total,
+                    SubTotal: formatPrice(order.sub_total),
+                    Discount: formatPrice(order.discount_amount || 0),
+                    Tax: formatPrice(order.tax_total),
+                    GrandTotal: formatPrice(order.grand_total),
                     PaymentMethod: order.paymentgateway,
                     OrderItemsTable: orderItemsTable,
                     QRCodes: qrCodesHtml,

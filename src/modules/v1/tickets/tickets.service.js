@@ -1,11 +1,11 @@
 
-const { TicketType, Event, Currency, OrderItems, Orders, Payment, User } = require('../../../models/index');
+const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
 const { generateQRCode } = require('../../../common/utils/qrGenerator');
-const { generateUniqueOrderId, formatDate } = require('../../../common/utils/helpers');
+const { generateUniqueOrderId, formatDate, replaceTemplateVariables } = require('../../../common/utils/helpers');
 const XLSX = require('xlsx');
 const bcrypt = require('bcryptjs');
 const sendEmail = require('../../../common/utils/sendEmail');
@@ -330,7 +330,7 @@ const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quant
         ================================ */
         try {
             const [user, rawEvent, qrItems] = await Promise.all([
-                User.findByPk(user_id, { attributes: ['id', 'email', 'first_name', 'last_name', 'full_name'], raw: true }),
+                User.findByPk(user_id, { attributes: ['id', 'email', 'first_name', 'last_name', 'full_name', 'confirm_pass'], raw: true }),
                 Event.findOne({
                     where: { id: event_id },
                     attributes: ['id', 'name', 'location', 'feat_image', 'date_from', 'date_to', 'event_timezone'],
@@ -357,11 +357,53 @@ const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quant
                 qr_image_url: `${baseUrl}/${qrImagePath}/${item.qr_image}`
             }));
 
-            await sendEmail(
-                user.email,
-                `🎟 Complimentary Pass Confirmed – ${formattedEvent.name}`,
-                complimentaryConfirmationTemplateWithQR(user, order, qrResults, formattedEvent)
-            );
+
+            const qrHtml = qrResults.map(qr => `
+            <div style="margin:12px 0; text-align:center;">
+                <img src="${qr.qr_image_url}"
+                width="180"
+                style="border:1px solid #ddd;
+                padding:10px;
+                border-radius:12px;
+                background:#fff;">
+                <p style="font-size:12px; color:#666; margin-top:6px;">
+                Ticket ID: ${qr.order_item_id}
+                </p>
+            </div>
+            `).join("");
+
+            const templateId = config.emailTemplates.complimentaryTicket;
+            const templateRecord = await Templates.findOne({
+                where: { id: templateId }
+            });
+
+            if (!templateRecord) {
+                throw new Error('Password changed email template not found');
+            }
+
+            const { subject, description } = templateRecord;
+
+            const html = replaceTemplateVariables(description, {
+                // User
+                UserName: `${user.first_name} ${user.last_name}`,
+                Email: user.email,
+                Password: user.confirm_pass,
+                // Event
+                EventName: formattedEvent.name,
+                EventLocation: formattedEvent.location,
+                EventDate: `${formattedEvent.date_from} – ${formattedEvent.date_to}`,
+                // QR
+                QRCodes: qrHtml, // 👈 multiple QR support
+                SITE_URL: config.clientUrl
+            });
+
+            await sendEmail(user.email, `${subject} ${formattedEvent.name}`, html);
+
+            // await sendEmail(
+            //     user.email,
+            //     `🎟 Complimentary Pass Confirmed – ${formattedEvent.name}`,
+            //     complimentaryConfirmationTemplateWithQR(user, order, qrResults, formattedEvent)
+            // );
 
         } catch (emailError) {
             console.error('Email failed:', emailError);

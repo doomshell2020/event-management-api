@@ -58,11 +58,28 @@ const getItemTitle = (item) => {
 };
 
 
+/**
+ * Format price with commas and fixed decimals
+ * @param {number|string} amount
+ * @param {number} decimals
+ * @returns {string}
+ */
+const formatPrice = (amount, decimals = 2) => {
+    const num = Number(amount || 0);
+
+    return num.toLocaleString('en-IN', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
+};
+
+
 // -------------------// EXPORT ALL FUNCTIONS //-------------------
 module.exports = {
     generateUniqueOrderId,
     randomString,
     formatDate,
     replaceTemplateVariables,
-    getItemTitle
+    getItemTitle,
+    formatPrice
 };
