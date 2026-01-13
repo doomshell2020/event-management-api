@@ -125,6 +125,7 @@ Wellness.belongsTo(Currency, { foreignKey: 'currency', as: 'currencyName' });
 PaymentSnapshotItems.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticketType' });
 PaymentSnapshotItems.belongsTo(AddonTypes, { foreignKey: 'ticket_id', as: 'addonType' });
 PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
+PaymentSnapshotItems.belongsTo(TicketPricing, { foreignKey: 'ticket_id', as: 'ticketPricing' });
 
 Templates.belongsTo(Event, { foreignKey: 'eventId', as: 'events' });
 

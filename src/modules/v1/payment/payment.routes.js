@@ -67,4 +67,11 @@ router.post("/webhook",
 );
 
 
+router.post("/manual-webhook",
+    paymentController.manualWebhook
+);
+
+
+
+
 module.exports = router;

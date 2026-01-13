@@ -1,5 +1,5 @@
 const Stripe = require("stripe");
-const { Payment, PaymentSnapshotItems, OrderItems, TicketType, AddonTypes, Package, TicketPricing } = require("../../../models");
+const { Payment, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing } = require("../../../models");
 const apiResponse = require("../../../common/utils/apiResponse");
 const config = require("../../../config/app");
 const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
@@ -86,7 +86,7 @@ exports.createPaymentIntent = async (req, res) => {
       else {
         continue;
       }
-      
+
       // 🔹 Fetch limit + display name
       const masterItem = await Model.findOne({
         where: { id: itemId },
@@ -220,7 +220,43 @@ exports.stripeWebhook = async (req, res) => {
 
       const snapshotItems = await PaymentSnapshotItems.findAll({
         where: { id: snapshotIds },
-        raw: true,
+        include: [
+          {
+            model: TicketType,
+            as: 'ticketType',
+            required: false
+          },
+          {
+            model: AddonTypes,
+            as: 'addonType',
+            required: false
+          },
+          {
+            model: Package,
+            as: 'packageType',
+            required: false
+          },
+          {
+            model: TicketPricing,
+            as: 'ticketPricing',
+            required: false,
+            attributes: ["id", "price", "date"],
+            include: [
+              {
+                model: TicketType,
+                as: "ticket",
+                required: false,
+                attributes: ["id", "count", "title", "access_type"],
+              },
+              {
+                model: EventSlots,
+                as: "slot",
+                required: false,
+                attributes: ["id", "slot_name", "slot_date", "start_time", "end_time", "description"],
+              }
+            ]
+          }
+        ]
       });
 
       const payment = await Payment.create({
@@ -263,6 +299,78 @@ exports.stripeWebhook = async (req, res) => {
       console.log("❌ Payment failed");
     }
 
+    return res.json({ received: true });
+  } catch (error) {
+    console.error("Webhook processing error:", error);
+    return res.status(500).send("Webhook handler failed");
+  }
+};
+
+exports.manualWebhook = async (req, res) => {
+  try {
+    const snapshotIds = req.body.snapshot_ids
+      .split(",")
+      .map(Number);
+
+    const snapshotItems = await PaymentSnapshotItems.findAll({
+      where: { id: snapshotIds },
+      include: [
+        {
+          model: TicketType,
+          as: 'ticketType',
+          required: false
+        },
+        {
+          model: AddonTypes,
+          as: 'addonType',
+          required: false
+        },
+        {
+          model: Package,
+          as: 'packageType',
+          required: false
+        },
+        {
+          model: TicketPricing,
+          as: 'ticketPricing',
+          required: false,
+          attributes: ["id", "price", "date"],
+          include: [
+            {
+              model: TicketType,
+              as: "ticket",
+              required: false,
+              attributes: ["id", "count", "title", "access_type"],
+            },
+            {
+              model: EventSlots,
+              as: "slot",
+              required: false,
+              attributes: ["id", "slot_name", "slot_date", "start_time", "end_time", "description"],
+            }
+          ]
+        }
+      ]
+    });
+
+    const payment = await Payment.create({
+      user_id: 4870,
+      event_id: 298,
+      amount: 3037 || 0,
+      payment_intent: 'pi_3Sp3sWCwP2xM68Rm1wkQ3rRR',
+      payment_status: "paid",
+    });
+
+    const order = await fulfilOrderFromSnapshot({
+      meta_data: { discount_amount: 0, grand_total: 3037, snapshot_ids: req.body.snapshot_ids, sub_total: 2812, tax_total: 225 },
+      user_id: 4870,
+      event_id: 298,
+      payment,
+      snapshotItems,
+      payment_method: "stripe",
+    });
+
+    console.log("✅ Payment → Order → QR completed");
     return res.json({ received: true });
   } catch (error) {
     console.error("Webhook processing error:", error);

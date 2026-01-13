@@ -1,7 +1,7 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const committeeTicketIgnoredTemplate = require('../../../common/utils/emailTemplates/committeeIgnore');
-const committeeTicketApprovedTemplate = require('../../../common/utils/emailTemplates/committeeApprove');
-const committeeTicketAssignedTemplate = require('../../../common/utils/emailTemplates/committeeTicketAssignedTemplate ');
+// const committeeTicketIgnoredTemplate = require('../../../common/utils/emailTemplates/committeeIgnore');
+// const committeeTicketApprovedTemplate = require('../../../common/utils/emailTemplates/committeeApprove');
+// const committeeTicketAssignedTemplate = require('../../../common/utils/emailTemplates/committeeTicketAssignedTemplate ');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { sequelize } = require("../../../models");
@@ -383,21 +383,64 @@ exports.handleCommitteePushTicket = async (req, res) => {
         await transaction.commit();
 
         /* ================= SUMMARY EMAIL ================= */
-        const emailTickets = tickets.map(t => ({
-            title: ticketMap[String(t.ticket_id)].title,
-            qty: t.qty
-        }));
+        const ticketTableHtml = `
+            <table cellspacing="0" width="100%" style="border-collapse:collapse; background:#ffffff;">
+                <thead>
+                    <tr style="background:#f7f7f7;">
+                        <th align="left" style="padding:8px; border:1px solid #ddd;">
+                            Ticket Name
+                        </th>
+                        <th align="center" style="padding:8px; border:1px solid #ddd;">
+                            Quantity
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tickets.map(t => `
+                        <tr>
+                            <td style="padding:8px; border:1px solid #ddd;">
+                                ${ticketMap[String(t.ticket_id)]?.title || 'Unknown Ticket'}
+                            </td>
+                            <td align="center" style="padding:8px; border:1px solid #ddd;">
+                                ${t.qty}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            `;
 
-        await sendEmail(
-            user.email,
-            "Committee Ticket Assigned",
-            committeeTicketAssignedTemplate(
-                user,
-                event,
-                emailTickets,
-                `${config.clientUrl}`
-            )
-        );
+        const templateId = config.emailTemplates.committeePushTicketsToUser;
+        const templateRecord = await Templates.findOne({
+            where: { id: templateId }
+        });
+
+        if (!templateRecord) {
+            throw new Error('Email template not found');
+        }
+
+        const { subject, description } = templateRecord;
+
+        const html = replaceTemplateVariables(description, {
+            UserName: `${user.first_name} ${user.last_name}`,
+            EventName: event.name || 'Unknown Event',
+            TicketTable: ticketTableHtml,
+            CheckoutURL: `${config.clientUrl}/event/${event.id}/${event.slug}`,
+            SITE_URL: config.clientUrl,
+        });
+
+        await sendEmail(user.email, `${subject} | ${event.name}`, html);
+
+        // await sendEmail(
+        //     user.email,
+        //     "Committee Ticket Assigned",
+        //     committeeTicketAssignedTemplate(
+        //         user,
+        //         event,
+        //         emailTickets,
+        //         `${config.clientUrl}`
+        //     )
+        // );
 
         return apiResponse.success(
             res,
@@ -623,7 +666,7 @@ exports.handleAction = async (req, res) => {
             });
 
             if (!templateRecord) {
-                    throw new Error('Email template not found');
+                throw new Error('Email template not found');
             }
 
             const { subject, description } = templateRecord;

@@ -1,13 +1,14 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency, Questions, QuestionItems } = require('../../../models');
+const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency, Questions, QuestionItems, Templates } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
 const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
-const { generateUniqueOrderId } = require('../../../common/utils/helpers');
+const { generateUniqueOrderId, getItemTitle, replaceTemplateVariables } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { Op, fn, col, literal } = require("sequelize");
+const { sequelize } = require("../../../models");
 const config = require('../../../config/app');
 
 // Convert to user-friendly readable format
@@ -633,7 +634,7 @@ exports.userEventSalesAnalytics = async (req, res) => {
     }
 };
 
-module.exports.fulfilOrderFromSnapshot = async ({
+module.exports.fulfilOrderFromSnapshotOld = async ({
     meta_data,
     user_id,
     event_id,
@@ -798,6 +799,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
     // SEND EMAIL
     try {
+
         await sendEmail(
             userInfo.email,
             `Your Ticket Order – ${event.name}`,
@@ -813,6 +815,268 @@ module.exports.fulfilOrderFromSnapshot = async ({
         qrResults,
         grand_total,
     };
+};
+
+module.exports.fulfilOrderFromSnapshot = async ({
+    meta_data,
+    user_id,
+    event_id,
+    payment,
+    snapshotItems,
+    payment_method = "stripe",
+}) => {
+
+    const transaction = await sequelize.transaction();
+
+    try {
+        const {
+            discount_amount,
+            grand_total,
+            snapshot_ids,
+            sub_total,
+            tax_total
+        } = meta_data;
+
+        // 🔁 IDEMPOTENCY CHECK
+        const existingOrder = await Orders.findOne({
+            where: { RRN: payment.payment_intent },
+            transaction
+        });
+
+        if (existingOrder) {
+            await transaction.rollback();
+            return { order: existingOrder, duplicated: true };
+        }
+
+        // 👤 USER
+        const userInfo = await User.findOne({
+            where: { id: user_id },
+            attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile'],
+            transaction
+        });
+
+        if (!userInfo) throw new Error("User not found");
+
+        // 🎉 EVENT
+        const event = await Event.findOne({
+            where: { id: event_id },
+            exclude: ["createdAt", "updatedAt", "desc"],
+            include: [
+                {
+                    model: Company,
+                    as: "companyInfo",
+                    attributes: ["name"]
+                },
+                {
+                    model: Currency,
+                    as: "currencyName",
+                    attributes: ["Currency_symbol", "Currency"]
+                }
+            ],
+            transaction
+        });
+
+        if (!event) throw new Error("Event not found");
+
+        const baseUrl = config.baseUrl || "http://localhost:5000";
+        const timezone = event.event_timezone || "UTC";
+
+        const formattedEvent = {
+            id: event.id,
+            name: event.name,
+            location: event.location,
+            feat_image: event.feat_image
+                ? `${baseUrl}/uploads/events/${event.feat_image}`
+                : `${baseUrl}/uploads/events/default.jpg`,
+            date_from: formatDateReadable(event.date_from, timezone),
+            date_to: formatDateReadable(event.date_to, timezone),
+            timezone,
+            currency_symbol: event.currencyName?.Currency_symbol || "₹",
+            currency_name: event.currencyName?.Currency || "INR"
+        };
+
+        // 🧾 CREATE ORDER
+        const order = await Orders.create({
+            order_uid: generateUniqueOrderId(),
+            user_id,
+            event_id,
+            grand_total: grand_total || 0,
+            sub_total: sub_total || 0,
+            tax_total: tax_total || 0,
+            discount_amount: discount_amount || 0,
+            paymenttype: payment_method,
+            RRN: payment.payment_intent,
+            paymentgateway: "Stripe",
+            status: "Y"
+        }, { transaction });
+
+        // 🧠 PREFETCH CART QUESTIONS (1 QUERY)
+        const cartIds = snapshotItems.map(i => i.cart_id).filter(Boolean);
+        const cartQuestionsMap = {};
+
+        if (cartIds.length) {
+            const cartQuestions = await CartQuestionsDetails.findAll({
+                where: { cart_id: cartIds, status: 'Y' },
+                transaction
+            });
+
+            for (const q of cartQuestions) {
+                if (!cartQuestionsMap[q.cart_id]) {
+                    cartQuestionsMap[q.cart_id] = [];
+                }
+                cartQuestionsMap[q.cart_id].push(q);
+            }
+        }
+
+        // 🎫 ORDER ITEMS + QR
+        const qrResults = [];
+        const attachments = [];
+
+        for (const item of snapshotItems) {
+            for (let i = 0; i < item.quantity; i++) {
+
+                const orderItem = await OrderItems.create({
+                    order_id: order.id,
+                    user_id,
+                    event_id,
+                    type: item.item_type,
+                    ticket_id: ['ticket', 'committesale'].includes(item.item_type) ? item.ticket_id : null,
+                    addon_id: item.item_type == "addon" ? item.ticket_id : null,
+                    package_id: item.item_type == "package" ? item.ticket_id : null,
+                    ticket_pricing_id: item.item_type == "ticket_price" ? item.ticket_id : null,
+                    appointment_id: item.item_type == "appointment" ? item.ticket_id : null,
+                    price: item.price,
+                    committee_user_id:
+                        item.item_type == "committesale" ? item.committee_user_id : null,
+                    slot_id: item.slot_id || null
+                }, { transaction });
+
+                // ❓ QUESTIONS
+                const questions = cartQuestionsMap[item.cart_id] || [];
+                if (questions.length) {
+                    await QuestionsBook.bulkCreate(
+                        questions.map(q => ({
+                            order_id: order.id,
+                            ticketdetail_id: orderItem.id,
+                            question_id: q.question_id,
+                            event_id: q.event_id,
+                            user_id: q.user_id,
+                            user_reply: q.user_reply
+                        })),
+                        { transaction }
+                    );
+                }
+
+                // 🔲 QR CODE
+                const qr = await generateQRCode(orderItem);
+                if (qr) {
+                    await orderItem.update({
+                        qr_image: qr.qrImageName,
+                        qr_data: JSON.stringify(qr.qrData),
+                        secure_hash: qr.secureHash
+                    }, { transaction });
+
+                    qrResults.push({
+                        order_item_id: orderItem.id,
+                        qr_image: qr.qrImageName,
+                        qr_data: qr.qrData
+                    });
+
+                    attachments.push({
+                        filename: qr.qrImageName,
+                        path: path.join(__dirname, "../../../uploads/qr_codes/", qr.qrImageName)
+                    });
+                }
+            }
+        }
+
+        // 🧹 CLEAN CART
+        await Cart.destroy({
+            where: { user_id, event_id },
+            transaction
+        });
+
+        // ✅ COMMIT
+        await transaction.commit();
+
+        // 📧 EMAIL
+        try {
+            const template = await Templates.findByPk(
+                config.emailTemplates.orderConfirmationWithQR
+            );
+
+            if (template) {
+                const orderItemsTable = `
+                <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#f0f2f6;">
+                    <th align="left">Item</th>
+                    <th align="center">Qty</th>
+                    <th align="right">Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${snapshotItems.map(item => `
+                    <tr>
+                        <td>${getItemTitle(item)}</td>
+                        <td align="center">${item.quantity}</td>
+                        <td align="right">
+                        ${formattedEvent.currency_symbol}${Number(item.price).toFixed(2)}
+                        </td>
+                    </tr>
+                    `).join("")}
+                </tbody>
+                </table>`;
+
+                const qrCodesHtml = qrResults.map(qr => `
+                <div style="text-align:center; margin:15px 0;">
+                    <img src="${config.baseUrl}uploads/qr_codes/${qr.qr_image}" width="160" />
+                    <p style="font-size:12px;">Ticket ID: ${qr.order_item_id}</p>
+                </div>
+                `).join("");
+
+                const html = replaceTemplateVariables(template.description, {
+                    UserName: `${userInfo.first_name} ${userInfo.last_name}`,
+                    EventName: formattedEvent.name,
+                    EventImage: formattedEvent.feat_image,
+                    EventDate: `${formattedEvent.date_from} – ${formattedEvent.date_to}`,
+                    EventStartDate:formattedEvent.date_from,
+                    EventEndDate: formattedEvent.date_to,
+                    EventLocation: formattedEvent.location,
+                    Currency: formattedEvent.currency_symbol,
+                    OrderId: order.order_uid,
+                    SubTotal: order.sub_total,
+                    Discount: order.discount_amount || "0.00",
+                    Tax: order.tax_total,
+                    GrandTotal: order.grand_total,
+                    PaymentMethod: order.paymentgateway,
+                    OrderItemsTable: orderItemsTable,
+                    QRCodes: qrCodesHtml,
+                    SITE_URL: config.clientUrl,
+                    AccountURL: `${config.clientUrl}/orders`
+                });
+
+                await sendEmail(
+                    userInfo.email,
+                    `${template.subject} – ${formattedEvent.name}`,
+                    html
+                );
+            }
+        } catch (emailErr) {
+            console.error("📧 Email failed:", emailErr);
+        }
+
+        return {
+            order,
+            qrResults,
+            grand_total
+        };
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error("❌ Order creation failed:", error);
+        throw error;
+    }
 };
 
 exports.createOrder = async (req, res) => {
@@ -1575,7 +1839,6 @@ exports.getOrderDetails = async (req, res) => {
         });
     }
 };
-
 
 //..cancel appointment..kamal
 exports.cancelAppointment = async (req, res) => {

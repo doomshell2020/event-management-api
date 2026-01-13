@@ -31,11 +31,38 @@ const replaceTemplateVariables = (template, variables = {}) => {
     return output;
 };
 
+const getItemTitle = (item) => {
+    switch (item.item_type) {
+
+        case 'ticket_price':
+            if (item.ticketPricing?.ticket?.title) {
+                const slotName = item.ticketPricing?.slot?.slot_name;
+                return slotName
+                    ? `${item.ticketPricing.ticket.title} (${slotName})`
+                    : item.ticketPricing.ticket.title;
+            }
+            return 'Ticket';
+
+        case 'addon':
+            return item.addonType?.name || 'Addon';
+
+        case 'package':
+            return item.packageType?.name || 'Package';
+
+        case 'ticket':
+            return item.ticketType?.title || 'Ticket';
+
+        default:
+            return 'Item';
+    }
+};
+
 
 // -------------------// EXPORT ALL FUNCTIONS //-------------------
 module.exports = {
     generateUniqueOrderId,
     randomString,
     formatDate,
-    replaceTemplateVariables
+    replaceTemplateVariables,
+    getItemTitle
 };
