@@ -344,7 +344,7 @@ const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quant
                 id: rawEvent.id,
                 name: rawEvent.name,
                 location: rawEvent.location,
-                feat_image: rawEvent.feat_image ? `${baseUrl}/${eventImagePath}/${rawEvent.feat_image}` : `${baseUrl}/${eventImagePath}/default.jpg`,
+                feat_image: rawEvent.feat_image ? `${baseUrl}${eventImagePath}/${rawEvent.feat_image}` : `${baseUrl}${eventImagePath}/default.jpg`,
                 date_from: formatDateReadable(rawEvent.date_from, rawEvent.event_timezone),
                 date_to: formatDateReadable(rawEvent.date_to, rawEvent.event_timezone),
                 timezone: rawEvent.event_timezone,
@@ -354,7 +354,7 @@ const generateComplementaryFromExcel = async ({ user_id, event_id, ticket, quant
 
             const qrResults = qrItems.map(item => ({
                 order_item_id: item.id,
-                qr_image_url: `${baseUrl}/${qrImagePath}/${item.qr_image}`
+                qr_image_url: `${baseUrl}${qrImagePath}/${item.qr_image}`
             }));
 
 
