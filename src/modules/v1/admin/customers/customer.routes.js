@@ -49,4 +49,9 @@ router.get(
     customerController.getCustomersFirstName
 );
 
+router.get(
+    '/email/search',
+    customerController.getCustomersEmail
+);
+
 module.exports = router;

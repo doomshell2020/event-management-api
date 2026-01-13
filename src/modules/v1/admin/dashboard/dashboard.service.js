@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness } = require('../../../../models');
+const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness,EventSlots,TicketPricing,Package } = require('../../../../models');
 
 
 
@@ -101,7 +101,19 @@ module.exports.getTicketList = async (req, res) => {
         }
         const tickets = await OrderItems.findAll({
             include: [
-                // { model: User, attributes: ['id', 'email', 'first_name', 'last_name'], as: "Organizer" },
+                { model: TicketType, as: "ticketType", attributes: ["title"] },
+                { model: AddonTypes, as: "addonType", attributes: ["name"] },
+                { model: Package, as: "package", attributes: ["name"] },
+                {
+                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
+                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
+                },
+                {
+                    model: TicketPricing, as: 'ticketPricing', required: false, attributes: ["id", "price"],
+                    include: [{ model: TicketType, as: "ticket", required: false, attributes: ["title"] },
+                    { model: EventSlots, as: "slot", required: false, attributes: ["id", "slot_name"] }
+                    ]
+                },
                 {
                     model: Orders,
                     as: "order",
@@ -116,15 +128,18 @@ module.exports.getTicketList = async (req, res) => {
             ],
             attributes: [
                 'id',
+                "type",
                 'order_id',
                 'user_id',
                 'event_id',
                 'ticket_id',
                 'addon_id',
                 'appointment_id',
+                'package_id',
+                "ticket_pricing_id",
                 'count'
             ],
-            limit:5,
+            limit: 5,
             order: [['id', 'DESC']]
         });
         return {
@@ -255,8 +270,8 @@ module.exports.getPaymentChartData = async (req, res) => {
             message: 'Payment chart data fetched successfully',
             data: {
                 months: [
-                    "Jan","Feb","March","April","May","June",
-                    "July","Aug","Sep","Oct","Nov","Dec"
+                    "Jan", "Feb", "March", "April", "May", "June",
+                    "July", "Aug", "Sep", "Oct", "Nov", "Dec"
                 ],
                 view_price: monthlyData,
                 purchased_price: monthlyData // agar future me logic alag ho

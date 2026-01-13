@@ -146,3 +146,34 @@ module.exports.getCustomersFirstName = async (req, res) => {
         );
     }
 };
+
+
+module.exports.getCustomersEmail = async (req, res) => {
+    try {
+        const { search } = req.query; // 👈 ?search=ka
+
+        const result = await customerService.getCustomersEmail(search);
+
+        if (!result.success) {
+            switch (result.code) {
+                case "VALIDATION_FAILED":
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message,
+            { customers: result.data }
+        );
+    } catch (error) {
+        console.error("Error in getCustomersFirstName controller:", error);
+        return apiResponse.error(
+            res,
+            "An unexpected error occurred while fetching Customers. " + error.message,
+            500
+        );
+    }
+};

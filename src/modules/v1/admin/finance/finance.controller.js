@@ -5,7 +5,6 @@ const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, Packa
 
 
 
-
 // find all event details with event_id and without event_id
 exports.getEventDetails = async (req, res) => {
     try {
@@ -121,18 +120,31 @@ exports.getEventDetails = async (req, res) => {
            6. STAFF COUNT (EVENT WISE)
            user.eventId = "1,3,5"
         ============================ */
-        const staffSummary = await User.findAll({
-            attributes: [
-                [col("eventId"), "event_id"],
-                [fn("COUNT", col("id")), "staff_count"],
-            ],
-            where: Sequelize.where(
-                fn("FIND_IN_SET", col("eventId"), literal(`'${eventIds.join(",")}'`)),
-                { [Op.gt]: 0 }
-            ),
-            group: ["eventId"],
+        const staffRaw = await User.findAll({
+            attributes: ["id", "eventId"],
+            where: {
+                [Op.or]: eventIds.map(eventId =>
+                    Sequelize.where(
+                        fn("FIND_IN_SET", eventId, col("eventId")),
+                        { [Op.gt]: 0 }
+                    )
+                )
+            },
             raw: true,
         });
+
+        // const staffSummary = await User.findAll({
+        //     attributes: [
+        //         [col("eventId"), "event_id"],
+        //         [fn("COUNT", col("id")), "staff_count"],
+        //     ],
+        //     where: Sequelize.where(
+        //         fn("FIND_IN_SET", col("eventId"), literal(`'${eventIds.join(",")}'`)),
+        //         { [Op.gt]: 0 }
+        //     ),
+        //     group: ["eventId"],
+        //     raw: true,
+        // });
 
         /* ============================
            7. Create Maps
@@ -149,8 +161,22 @@ exports.getEventDetails = async (req, res) => {
         const cancelAmountMap = {};
         cancelledAmountSummary.forEach(c => cancelAmountMap[c.event_id] = c);
 
+        // const staffMap = {};
+        // staffSummary.forEach(s => staffMap[s.event_id] = s.staff_count);
         const staffMap = {};
-        staffSummary.forEach(s => staffMap[s.event_id] = s.staff_count);
+
+        eventIds.forEach(id => staffMap[id] = 0);
+
+        staffRaw.forEach(user => {
+            const userEvents = user.eventId.split(",").map(Number);
+            userEvents.forEach(eid => {
+                if (staffMap[eid] !== undefined) {
+                    staffMap[eid] += 1;
+                }
+            });
+        });
+
+
 
         /* ============================
            8. Merge Final Response
@@ -195,6 +221,7 @@ exports.getEventDetails = async (req, res) => {
 
                 // 👤 STAFF
                 staff_count: Number(staffMap[event.id] || 0),
+
             };
         });
 
@@ -324,7 +351,6 @@ exports.eventSalesMonthlyReport = async (req, res) => {
 exports.getEventSalesTypes = async (req, res) => {
     try {
         const { event_id } = req.params;
-
         if (!event_id) {
             return apiResponse.error(res, "Event ID is required");
         }
@@ -343,96 +369,160 @@ exports.getEventSalesTypes = async (req, res) => {
         });
 
         if (!event) {
-            return apiResponse.success(res, "No event found.", { event: null });
+            return apiResponse.success(res, "No event found.", {
+                event: null,
+                ticketInfo: {
+                    tickets: [],
+                    packages: [],
+                    addons: [],
+                    appointments: [],
+                    summary: {},
+                }
+            });
         }
 
         /* ============================
            2. TICKETS / COMMITTEE / COMPS
         ============================ */
-        const tickets = await OrderItems.findAll({
+        const ticketsRaw = await OrderItems.findAll({
             attributes: [
-                "event_id",
-                "ticket_id",
                 "type",
-                "cancel_status"
-            ],
-            where: {
-                event_id,
-                // type: { [Op.in]: ["ticket", "committesale", "comps"] },
-                // cancel_status: { [Op.ne]: "cancel" },
-            },
-            // include: [{
-            //     model: TicketType,
-            //     as: "ticketType",
-            //     attributes: ["title"],
-            //     required: false,
-            // }],
-            raw: true,
-        });
-
-
-        console.log("tickets", tickets)
-        /* ============================
-           3. PACKAGES
-        ============================ */
-        const packages = await OrderItems.findAll({
-            attributes: [
-                "package_id",
+                "ticket_id",
                 [fn("COUNT", col("OrderItems.id")), "sold"],
                 [fn("SUM", col("OrderItems.price")), "face_value"],
             ],
             where: {
                 event_id,
-                type: "package",
-                cancel_status: { [Op.ne]: "cancel" },
+                type: { [Op.in]: ["ticket", "committesale", "comps"] },
             },
             include: [{
-                model: Package,
-                as: "package",
-                attributes: ["name"],
+                model: TicketType,
+                as: "ticketType",
+                attributes: ["id", "title", "price", 'count'],
             }],
             group: [
-                "package_id",
-                "package.id",
+                "OrderItems.ticket_id",
+                "OrderItems.type",
+                "ticketType.id",
             ],
             raw: true,
         });
+
+        const tickets = ticketsRaw.map(t => ({
+            id: t["ticketType.id"],
+            name: t["ticketType.title"],
+            type: t.type,
+            unit_price: Number(t["ticketType.price"] || 0),
+            sold: Number(t.sold || 0),
+            count: Number(t["ticketType.count"] || 0), // ✅
+            face_value: Number(t.face_value || 0),
+        }));
+
+        /* ============================
+           3. PACKAGES
+        ============================ */
+        const packagesRaw = await OrderItems.findAll({
+            attributes: [
+                "package_id",
+                [fn("COUNT", col("OrderItems.id")), "sold"],
+                [fn("SUM", col("OrderItems.price")), "face_value"],
+            ],
+            where: { event_id, type: "package" },
+            include: [{
+                model: Package,
+                as: "package",
+                attributes: ["id", "name", "grandtotal", "total_package"],
+            }],
+            group: ["package_id", "package.id"],
+            raw: true,
+        });
+
+        const packages = packagesRaw.map(p => ({
+            id: p["package.id"],
+            name: p["package.name"],
+            unit_price: Number(p["package.grandtotal"] || 0),
+            sold: Number(p.sold || 0),
+            count: Number(p["package.total_package"] || 0), // ✅
+            face_value: Number(p.face_value || 0),
+        }));
 
         /* ============================
            4. ADDONS
         ============================ */
-        const addons = await OrderItems.findAll({
+        const addonsRaw = await OrderItems.findAll({
             attributes: [
                 "addon_id",
                 [fn("COUNT", col("OrderItems.id")), "sold"],
                 [fn("SUM", col("OrderItems.price")), "face_value"],
             ],
-            where: {
-                event_id,
-                type: "addon",
-                cancel_status: { [Op.ne]: "cancel" },
-            },
+            where: { event_id, type: "addon" },
             include: [{
                 model: AddonTypes,
                 as: "addonType",
-                attributes: ["name"],
+                attributes: ["id", "name", "price", "count"],
             }],
-            group: [
-                "addon_id",
-                "addonType.id",
-            ],
+            group: ["addon_id", "addonType.id"],
             raw: true,
         });
 
+        const addons = addonsRaw.map(a => ({
+            id: a["addonType.id"],
+            name: a["addonType.name"],
+            unit_price: Number(a["addonType.price"] || 0),
+            sold: Number(a.sold || 0),
+            count: Number(a["addonType.count"] || 0), // ✅
+            face_value: Number(a.face_value || 0),
+        }));
+
         /* ============================
-           5. TOTAL ORDERS
+           5. APPOINTMENTS
         ============================ */
+        const appointmentsRaw = await OrderItems.findAll({
+            attributes: [
+                "appointment_id",
+                [fn("COUNT", col("OrderItems.id")), "sold"],
+                [fn("SUM", col("OrderItems.price")), "face_value"],
+            ],
+            where: { event_id, type: "appointment" },
+            include: [{
+                model: WellnessSlots,
+                as: "appointment",
+                attributes: ["id", "price", "count"],
+                include: {
+                    model: Wellness,
+                    as: "wellnessList",
+                    attributes: ["name"],
+                }
+            }],
+            group: ["appointment_id", "appointment.id"],
+            raw: true,
+        });
+
+        const appointments = appointmentsRaw.map(a => ({
+            id: a["appointment.id"],
+            name: a["appointment.wellnessList.name"],
+            unit_price: Number(a["appointment.price"] || 0),
+            sold: Number(a.sold || 0),
+            count: Number(a["appointment.count"] || 0), // ✅
+            face_value: Number(a.face_value || 0),
+        }));
+
+
+        // TOTAL ORDERS
         const totalOrdersCount = await Orders.count({
             where: { event_id },
         });
 
         /* ============================
-           6. PRICE SUMMARY
+           6. TOTAL HELPERS
+        ============================ */
+        const calcTotals = (arr) => ({
+            total_sold: arr.reduce((s, i) => s + i.sold, 0),
+            total_face_value: arr.reduce((s, i) => s + i.face_value, 0),
+        });
+
+        /* ============================
+           7. PRICE SUMMARY
         ============================ */
         const priceInfo = await Orders.findOne({
             attributes: [
@@ -445,62 +535,73 @@ exports.getEventSalesTypes = async (req, res) => {
         });
 
         /* ============================
-           7. CANCEL AMOUNT
+           8. CANCEL INFO
         ============================ */
         const cancelAmount = await OrderItems.findOne({
-            attributes: [
-                [fn("SUM", col("price")), "cancel_amount"],
-            ],
-            where: {
-                event_id,
-                cancel_status: "cancel",
-            },
+            attributes: [[fn("SUM", col("price")), "cancel_amount"]],
+            where: { event_id, cancel_status: "cancel" },
             raw: true,
         });
 
+        const cancelAmountValue = Number(cancelAmount?.cancel_amount || 0);
+        const cancelTax = +(cancelAmountValue * 0.08).toFixed(2);
+
         /* ============================
-           8. FINAL RESPONSE
+           9. FINAL RESPONSE
         ============================ */
+
+        const calcTotalCount = (arr) =>
+            arr.reduce((sum, item) => sum + Number(item.count || 0), 0);
+
+        const ticketsCountTotal = calcTotalCount(tickets);
+        const packagesCountTotal = calcTotalCount(packages);
+        const addonsCountTotal = calcTotalCount(addons);
+        const appointmentsCountTotal = calcTotalCount(appointments);
+
+        const grandTotalCount =
+            ticketsCountTotal +
+            packagesCountTotal +
+            addonsCountTotal +
+            appointmentsCountTotal;
+
         return apiResponse.success(res, "Event sales fetched successfully.", {
             event: {
                 id: event.id,
                 name: event.name,
                 currency_symbol: event.currencyName?.Currency_symbol || "",
             },
-
             ticketInfo: {
-                tickets: tickets.map(t => ({
-                    name: t["ticketType.title"],
-                    type: t.type,
-                    sold: Number(t.sold || 0),
-                    face_value: Number(t.face_value || 0),
-                })),
+                tickets,
+                packages,
+                addons,
+                appointments,
 
-                packages: packages.map(p => ({
-                    name: p["package.name"],
-                    sold: Number(p.sold || 0),
-                    face_value: Number(p.face_value || 0),
-                })),
+                count_summary: {
+                    tickets: ticketsCountTotal,
+                    packages: packagesCountTotal,
+                    addons: addonsCountTotal,
+                    appointments: appointmentsCountTotal,
+                    total: grandTotalCount // 🔥 FINAL
+                },
 
-                addons: addons.map(a => ({
-                    name: a["addonType.name"],
-                    sold: Number(a.sold || 0),
-                    face_value: Number(a.face_value || 0),
-                })),
+
+                summary: {
+                    tickets: calcTotals(tickets),
+                    packages: calcTotals(packages),
+                    addons: calcTotals(addons),
+                    appointments: calcTotals(appointments),
+                }
             },
-
             priceInfo: {
                 total_amount: Number(priceInfo?.total_amount || 0),
                 total_taxes: Number(priceInfo?.total_taxes || 0),
                 gross_total: Number(priceInfo?.gross_total || 0),
             },
-
-            totalOrdersCount,
-
             cancelAmount: {
-                cancel_amount: Number(cancelAmount?.cancel_amount || 0),
-                cancel_tax: Number(cancelAmount?.cancel_tax || 0),
+                cancel_amount: cancelAmountValue,
+                cancel_tax: cancelTax,
             },
+            totalOrdersCount
         });
 
     } catch (error) {
@@ -508,3 +609,120 @@ exports.getEventSalesTypes = async (req, res) => {
         return apiResponse.error(res, "Internal Server Error");
     }
 };
+
+
+// Get completed orders by event with item type count
+exports.getCompletedOrdersByEvent = async (req, res) => {
+    try {
+        const { event_id } = req.params;
+
+        if (!event_id) {
+            return apiResponse.error(res, "Event ID is required");
+        }
+
+        const orders = await Orders.findAll({
+            where: { event_id },
+            attributes: [
+                "id",
+                "order_uid",
+                "sub_total",
+                "tax_total",
+                "grand_total",
+                "created"
+            ],
+            include: [
+                {
+                    model: OrderItems,
+                    as: "orderItems",
+                    attributes: ["type"],
+                },
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["first_name", "last_name", "email", "mobile"],
+                },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ["name"],
+                    include: [
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol"],
+                        },
+                    ],
+                },
+            ],
+            order: [["created", "DESC"]],
+        });
+
+        if (!orders || orders.length === 0) {
+            return apiResponse.success(
+                res,
+                "No completed orders found for this event",
+                { orders: [] }
+            );
+        }
+
+        // 🔥 FORMAT RESPONSE WITH TYPE COUNTS
+        const formattedOrders = orders.map(order => {
+            const itemCount = {
+                ticket: 0,
+                appointment: 0,
+                addon: 0,
+                package: 0,
+                comps: 0,
+                committesale: 0,
+            };
+
+            order.orderItems.forEach(item => {
+                if (itemCount[item.type] !== undefined) {
+                    itemCount[item.type] += 1;
+                }
+            });
+
+            return {
+                order_id: order.id,
+                order_uid: order.order_uid,
+                created: order.created,
+
+                user: {
+                    first_name: order.user?.first_name || "",
+                    last_name: order.user?.last_name || "",
+                    email: order.user?.email || "",
+                    mobile: order.user?.mobile || "",
+                },
+
+                event: {
+                    name: order.event?.name || "",
+                    currency_symbol:
+                        order.event?.currencyName?.Currency_symbol || "",
+                },
+
+                amount: {
+                    sub_total: Number(order.sub_total || 0),
+                    tax_total: Number(order.tax_total || 0),
+                    grand_total: Number(order.grand_total || 0),
+                },
+
+                item_count: itemCount,       // ✅ MAIN REQUIREMENT
+                total_items: order.orderItems.length,
+            };
+        });
+
+        return apiResponse.success(
+            res,
+            "Completed orders fetched successfully",
+            {
+                total_orders: formattedOrders.length,
+                orders: formattedOrders
+            }
+        );
+
+    } catch (error) {
+        console.error("Completed Orders Error:", error);
+        return apiResponse.error(res, "Internal Server Error");
+    }
+};
+

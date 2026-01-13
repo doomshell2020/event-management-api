@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, TicketType, Orders, Currency, OrderItems } = require('../../../../models');
+const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, Package, WellnessSlots, Wellness,TicketPricing ,EventSlots} = require('../../../../models');
 
 
 
@@ -17,7 +17,19 @@ module.exports.getTicketList = async (req, res) => {
         }
         const tickets = await OrderItems.findAll({
             include: [
-                // { model: User, attributes: ['id', 'email', 'first_name', 'last_name'], as: "Organizer" },
+                { model: TicketType, as: "ticketType", attributes: ["title"] },
+                { model: AddonTypes, as: "addonType", attributes: ["name"] },
+                { model: Package, as: "package", attributes: ["name"] },
+                {
+                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
+                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
+                },
+                 {
+                    model: TicketPricing, as: 'ticketPricing', required: false, attributes: ["id", "price"],
+                    include: [{ model: TicketType, as: "ticket", required: false, attributes: ["title"] },
+                    { model: EventSlots, as: "slot", required: false, attributes: ["id", "slot_name"] }
+                    ]
+                },
                 {
                     model: Orders,
                     as: "order",
@@ -32,12 +44,15 @@ module.exports.getTicketList = async (req, res) => {
             ],
             attributes: [
                 'id',
+                "type",
                 'order_id',
                 'user_id',
                 'event_id',
                 'ticket_id',
                 'addon_id',
                 'appointment_id',
+                'package_id',
+                "ticket_pricing_id",
                 'count'
             ],
 
@@ -65,6 +80,7 @@ module.exports.searchTicketList = async (req) => {
         let {
             customer,
             mobile,
+            email,
             event,
             ticketNumber,
             purchaseFrom,
@@ -77,13 +93,10 @@ module.exports.searchTicketList = async (req) => {
         mobile = clean(mobile);
         event = clean(event);
         ticketNumber = clean(ticketNumber);
+        email = clean(email);
 
         const hasAnyFilter =
-            customer || mobile || event || ticketNumber || purchaseFrom || purchaseTo;
-
-        console.log("SEARCH PARAMS =>", {
-            customer, mobile, event, ticketNumber, purchaseFrom, purchaseTo
-        });
+            customer || mobile || event || ticketNumber || purchaseFrom || purchaseTo || email;
 
         /* ============================
            📅 PURCHASE DATE FILTER
@@ -133,6 +146,10 @@ module.exports.searchTicketList = async (req) => {
             userWhere.mobile = { [Op.like]: `%${mobile}%` };
         }
 
+        if (email) {
+            userWhere.email = { [Op.like]: `%${email}%` };
+        }
+
         /* ============================
            🎉 EVENT FILTER
         ============================ */
@@ -146,6 +163,19 @@ module.exports.searchTicketList = async (req) => {
         const tickets = await OrderItems.findAll({
             where: ticketWhere,
             include: [
+                { model: TicketType, as: "ticketType", attributes: ["title"] },
+                { model: AddonTypes, as: "addonType", attributes: ["name"] },
+                { model: Package, as: "package", attributes: ["name"] },
+                {
+                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
+                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
+                },
+                {
+                    model: TicketPricing, as: 'ticketPricing', required: false, attributes: ["id", "price"],
+                    include: [{ model: TicketType, as: "ticket", required: false, attributes: ["title"] },
+                    { model: EventSlots, as: "slot", required: false, attributes: ["id", "slot_name"] }
+                    ]
+                },
                 {
                     model: Orders,
                     as: "order",
@@ -194,5 +224,205 @@ module.exports.searchTicketList = async (req) => {
     }
 };
 
+
+
+// services/ticket.service.js
+module.exports.getTicketsWithEventIdAndType = async (req) => {
+    try {
+        const adminId = req.user?.id;
+        const { event_id, type } = req.params;
+        if (!adminId) {
+            return {
+                success: false,
+                message: 'Unauthorized access.',
+                code: 'UNAUTHORIZED',
+            };
+        }
+
+        if (!event_id || !type) {
+            return {
+                success: false,
+                message: 'Event ID and type are required.',
+                code: 'VALIDATION_ERROR',
+            };
+        }
+
+        // ✅ Allowed types (important)
+        const ALLOWED_TYPES = ['ticket', 'addon', 'appointment', 'package'];
+
+        if (!ALLOWED_TYPES.includes(type)) {
+            return {
+                success: false,
+                message: 'Invalid type provided.',
+                code: 'VALIDATION_ERROR',
+            };
+        }
+
+        // ✅ Dynamic condition based on type
+        const typeCondition = {
+            ticket: { ticket_id: { [Op.ne]: null } },
+            addon: { addon_id: { [Op.ne]: null } },
+            appointment: { appointment_id: { [Op.ne]: null } },
+            package: { package_id: { [Op.ne]: null } }, // ✅ FIX
+        };
+
+        const tickets = await OrderItems.findAll({
+            where: {
+                event_id,
+                ...typeCondition[type],
+            },
+            attributes: [
+                'id',
+                "type",
+                'order_id',
+                'user_id',
+                'event_id',
+                'ticket_id',
+                'addon_id',
+                'appointment_id',
+                "package_id",
+                'count',
+            ],
+            include: [
+                { model: TicketType, as: "ticketType", attributes: ["title"] },
+                { model: AddonTypes, as: "addonType", attributes: ["name"] },
+                { model: Package, as: "package", attributes: ["name"] },
+                {
+                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
+                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
+                },
+
+                {
+                    model: Orders,
+                    as: 'order',
+                    attributes: ['sub_total', 'tax_total', 'created'],
+                    include: [{
+                        model: User,
+                        as: 'user',
+                        attributes: [
+                            'id',
+                            'email',
+                            'first_name',
+                            'last_name',
+                            'mobile',
+                        ],
+                    },
+                    {
+                        model: Event,
+                        as: 'event',
+                        attributes: ['name', 'date_from', 'date_to'],
+                        include: [
+                            {
+                                model: Currency,
+                                as: 'currencyName',
+                                attributes: ['Currency_symbol'],
+                            },
+                        ],
+                    },
+                    ],
+                },
+            ],
+            order: [['id', 'DESC']],
+        });
+
+        return {
+            success: true,
+            message: 'Tickets fetched successfully.',
+            data: tickets,
+        };
+    } catch (error) {
+        console.error('Error fetching tickets:', error);
+        return {
+            success: false,
+            message: 'An unexpected error occurred while fetching tickets.',
+            code: 'INTERNAL_SERVER_ERROR',
+        };
+    }
+};
+
+
+const ITEM_TYPE_COLUMN_MAP = {
+    ticket: 'ticket_id',
+    addon: 'addon_id',
+    package: 'package_id',
+    appointment: 'appointment_id',
+};
+
+module.exports.getOrderItemsByItem = async (req) => {
+    try {
+
+        const { event_id, item_id, item_type } = req.body;
+        if (!event_id || !item_id || !item_type) {
+            return {
+                success: false,
+                message: 'event_id, item_id and item_type are required',
+                code: 'VALIDATION_ERROR',
+            };
+        }
+
+        const column = ITEM_TYPE_COLUMN_MAP[item_type];
+
+        if (!column) {
+            return {
+                success: false,
+                message: 'Invalid item_type provided',
+                code: 'VALIDATION_ERROR',
+            };
+        }
+
+        const items = await OrderItems.findAll({
+            where: {
+                event_id,
+                [column]: item_id,
+            },
+            attributes: [
+                'id',
+                "type",
+                'order_id',
+                'user_id',
+                'event_id',
+                'ticket_id',
+                'addon_id',
+                'package_id',
+                'appointment_id',
+                'count',
+            ],
+            include: [
+                { model: TicketType, as: "ticketType", attributes: ["title"] },
+                { model: AddonTypes, as: "addonType", attributes: ["name"] },
+                { model: Package, as: "package", attributes: ["name"] },
+                {
+                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
+                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
+                },
+                {
+                    model: Orders,
+                    as: "order",
+                    attributes: ['sub_total', 'tax_total', 'created'],
+                    include: [
+                        { model: User, attributes: ['id', 'email', 'first_name', 'last_name', 'mobile'], as: "user" }, {
+                            model: Event, attributes: ['name', 'date_from', 'date_to'], as: "event", include: {
+                                model: Currency, as: "currencyName", attributes: ['Currency_symbol']
+                            }
+                        },]
+                },
+            ],
+            order: [['id', 'DESC']],
+        });
+
+        return {
+            success: true,
+            message: 'Order items fetched successfully',
+            data: items,
+        };
+    } catch (error) {
+        console.error('Service error:', error);
+        return {
+            success: false,
+            message: 'Error fetching order items',
+            code: 'INTERNAL_SERVER_ERROR',
+        };
+    }
+};
 
 

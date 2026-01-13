@@ -22,55 +22,10 @@ router.get(
 
 router.get('/sales-ticket-types/:event_id', financeController.getEventSalesTypes)
 
-
-// // event Organizer Status
-// router.put(
-//     '/update-status/:id',
-//     [
-//         param('id')
-//             .isInt({ min: 1 })
-//             .withMessage('Valid Wellness ID is required'),
-//         body('status')
-//             .notEmpty()
-//             .withMessage('Status is required')
-//             .isIn(['Y', 'N'])
-//             .withMessage('Status must be Y or N'),
-//     ],
-//     validate,
-//     financeController.updateStatusEvent
-// );
+router.get('/completed-orders/:event_id', financeController.getCompletedOrdersByEvent)
 
 
-// // Update event featured status
-// router.put(
-//     '/:id/featured',
-//     [
-//         param('id')
-//             .isInt({ min: 1 })
-//             .withMessage('Valid Event ID is required'),
-//         body('featured')
-//             .notEmpty()
-//             .withMessage('Featured status is required')
-//             .isIn(['Y', 'N'])
-//             .withMessage('Featured status must be Y or N'),
-//     ],
-//     validate,
-//     financeController.updateEventFeatured
-// );
 
-
-// // 🎟️ Delete Event Route
-// router.delete(
-//     '/:id',
-//     [
-//         // Validate Event ID
-//         param('id')
-//             .isInt({ min: 1 })
-//             .withMessage('Valid Event ID is required'),
-//     ],
-//     validate,
-//     financeController.deleteEvent
-// );
 
 
 
