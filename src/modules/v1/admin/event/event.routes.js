@@ -10,6 +10,11 @@ const uploadFiles = require('../../../../middlewares/upload.middleware');
 // ✅ Get Event Organizer Route
 router.get('/', authenticate, eventController.getEventList)
 
+
+
+
+
+
 // event Organizer Status
 router.put(
     '/update-status/:id',
@@ -76,6 +81,20 @@ router.get(
     eventController.searchEventList
 );
 
+router.get(
+    "/staff-search",
+    [
+        param("event_id").optional().isString(),
+        param("first_name").optional().isString(),
+        param("email").optional().isString(),
+    ],
+    validate,
+    eventController.searchEventStaff
+);
+
+
+
+
 // get staff in event
 router.get(
     '/:eventId/staff',
@@ -99,10 +118,21 @@ router.get(
     eventController.getEventDetailsWithOrderDetails
 );
 
+
+router.get(
+    '/event-details/:event_id',
+    eventController.getEventById
+);
+
 router.get(
     '/search/search',
     eventController.getEventByName
 );
+
+
+
+
+
 
 
 module.exports = router;

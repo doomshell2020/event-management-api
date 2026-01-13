@@ -9,6 +9,7 @@ const authenticate = require('../../../../middlewares/auth.middleware');
 // ✅ Get Event Organizer Route
 router.get('/', authenticate, ordersController.getOrdersList)
 
+
 // search event details
 router.get(
     '/search',
@@ -22,5 +23,20 @@ router.get(
     validate,
     ordersController.searchOrdersList
 );
+
+router.get(
+    '/search-order-details',
+    [
+        param('customer').optional().isString().trim(),
+        param('event_id').optional().isInt(),
+        param('orderFrom').optional().isISO8601(),
+        param('orderTo').optional().isISO8601(),
+    ],
+    validate,
+    ordersController.searchOrdersDetails
+);
+
+router.get('/:event_id', ordersController.getOrdersEventId);
+
 
 module.exports = router;

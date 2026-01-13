@@ -244,8 +244,6 @@ module.exports.getEventStaff = async (req, res) => {
     }
 };
 
-
-
 // user fetch profile
 module.exports.getEventOrganizerById = async (req, res) => {
     try {
@@ -339,6 +337,90 @@ module.exports.getEventByName = async (req, res) => {
         return apiResponse.error(
             res,
             "An unexpected error occurred while fetching event. " + error.message,
+            500
+        );
+    }
+};
+
+
+
+// controllers/event.controller.js
+module.exports.getEventById = async (req, res) => {
+    try {
+        const result = await eventService.getEventById(req);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_ERROR':
+                    return apiResponse.validation(res, [], result.message);
+
+                case 'NOT_FOUND':
+                    return apiResponse.notFound(res, result.message);
+
+                case 'UNAUTHORIZED':
+                    return apiResponse.unauthorized(
+                        res,
+                        result.message || 'Unauthorized access'
+                    );
+
+                case 'INTERNAL_SERVER_ERROR':
+                default:
+                    return apiResponse.error(
+                        res,
+                        result.message || 'Internal server error'
+                    );
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message,
+            { event: result.data }
+        );
+    } catch (error) {
+        console.error('Error in getEventById controller:', error);
+        return apiResponse.error(
+            res,
+            'An unexpected error occurred while fetching event',
+            500
+        );
+    }
+};
+
+
+
+
+// controllers/event.controller.js
+module.exports.searchEventStaff = async (req, res) => {
+    try {
+        const result = await eventService.searchEventStaff(req);
+
+        if (!result.success) {
+            switch (result.code) {
+                case "VALIDATION_ERROR":
+                    return apiResponse.validation(res, [], result.message);
+
+                case "INTERNAL_SERVER_ERROR":
+                    return apiResponse.error(res, result.message);
+
+                default:
+                    return apiResponse.error(
+                        res,
+                        result.message || "Failed to fetch event staff"
+                    );
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message,
+            { staff: result.data }
+        );
+    } catch (error) {
+        console.error("Error in searchEventStaff controller:", error);
+        return apiResponse.error(
+            res,
+            "An unexpected error occurred while fetching event staff",
             500
         );
     }

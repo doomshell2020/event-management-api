@@ -162,3 +162,166 @@ module.exports.searchOrdersList = async (req) => {
 };
 
 
+// get order list with eventId
+module.exports.getOrdersEventId = async (event_id) => {
+    try {
+        const orders = await Orders.findAll({
+            where: {
+                event_id: event_id   // ⭐ FILTER HERE
+            },
+            include: [
+                {
+                    model: User,
+                    attributes: ['id', 'email', 'first_name', 'last_name', 'mobile'],
+                    as: "user"
+                },
+                {
+                    model: Event,
+                    attributes: ['name'],
+                    as: "event",
+                    include: {
+                        model: Currency,
+                        as: "currencyName",
+                        attributes: ['Currency_symbol']
+                    }
+                },
+                {
+                    model: OrderItems,
+                    as: "orderItems",
+                    attributes: ['order_id', 'ticket_id', 'count']
+                }
+            ],
+            attributes: [
+                'id',
+                'RRN',
+                'order_uid',
+                'user_id',
+                'event_id',
+                'sub_total',
+                'tax_total',
+                'created',
+                'paymenttype'
+            ],
+            order: [['id', 'DESC']]
+        });
+
+        return {
+            success: true,
+            message: 'Orders fetched successfully.',
+            data: orders
+        };
+
+    } catch (error) {
+        console.error('Error fetching orders:', error);
+        return {
+            success: false,
+            message: 'An unexpected error occurred while fetching orders.',
+            code: 'INTERNAL_SERVER_ERROR'
+        };
+    }
+};
+
+
+// search order details..with event_id
+module.exports.searchOrdersDetails = async (req) => {
+    try {
+        const { customer, event_id, orderFrom, orderTo } = req.query;
+console.log("customer--------------")
+        const whereCondition = {};
+
+        /* ============================
+           📅 ORDER DATE FILTER
+        ============================ */
+        const from = orderFrom
+            ? new Date(new Date(orderFrom).setHours(0, 0, 0, 0))
+            : null;
+
+        const to = orderTo
+            ? new Date(new Date(orderTo).setHours(23, 59, 59, 999))
+            : null;
+
+        if (from && to) {
+            whereCondition.created = { [Op.between]: [from, to] };
+        } else if (from) {
+            whereCondition.created = { [Op.gte]: from };
+        } else if (to) {
+            whereCondition.created = { [Op.lte]: to };
+        }
+
+        /* ============================
+           🎟 EVENT FILTER (DIRECT)
+        ============================ */
+        if (event_id) {
+            whereCondition.event_id = event_id; // ✅ DIRECT FILTER
+        }
+
+        /* ============================
+           🔎 FETCH ORDERS
+        ============================ */
+        const orders = await Orders.findAll({
+            where: whereCondition,
+            include: [
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ['id', 'email', 'first_name', 'last_name', 'mobile'],
+                    where: customer
+                        ? {
+                            [Op.or]: [
+                                { first_name: { [Op.like]: `%${customer}%` } },
+                                // { last_name: { [Op.like]: `%${customer}%` } }
+                            ]
+                        }
+                        : undefined,
+                    required: !!customer
+                },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ['id', 'name'],
+                    include: {
+                        model: Currency,
+                        as: "currencyName",
+                        attributes: ['Currency_symbol']
+                    }
+                },
+                {
+                    model: OrderItems,
+                    as: "orderItems",
+                    attributes: ['order_id', 'ticket_id', 'count']
+                }
+            ],
+            attributes: [
+                'id',
+                'RRN',
+                'order_uid',
+                'user_id',
+                'event_id',
+                'sub_total',
+                'tax_total',
+                'grand_total',
+                'created',
+                'paymenttype'
+            ],
+            order: [['id', 'DESC']]
+        });
+
+        return {
+            success: true,
+            message: 'Orders details fetched successfully.',
+            data: orders
+        };
+
+    } catch (error) {
+        console.error('Error searching orders:', error);
+        return {
+            success: false,
+            message: 'An unexpected error occurred while searching orders.',
+            code: 'INTERNAL_SERVER_ERROR'
+        };
+    }
+};
+
+
+
+

@@ -101,8 +101,6 @@ module.exports.updateStatusEvent = async (req) => {
 };
 
 
-
-
 // featured Status update Api..
 module.exports.updateEventFeatured = async (req) => {
     try {
@@ -180,7 +178,7 @@ module.exports.getTicketTypesByEvent = async (req) => {
             where: { id: eventId },
             attributes: ['id', 'name'],
             include: [{ model: TicketType, attributes: ['id', 'eventid', 'title', 'count', 'price', 'access_type', 'type', 'sold_out'], as: "tickets" },
-            { model: Currency, as: "currencyName", attributes: ['Currency_symbol']}
+            { model: Currency, as: "currencyName", attributes: ['Currency_symbol'] }
             ],
             order: [['id', 'DESC']]
         });
@@ -528,9 +526,6 @@ module.exports.getEventDetailsWithOrderDetails = async (req) => {
 };
 
 
-
-
-
 // service...
 module.exports.getEventByName = async (search = "") => {
     try {
@@ -565,3 +560,106 @@ module.exports.getEventByName = async (search = "") => {
         };
     }
 };
+
+
+
+// services/event.service.js
+module.exports.getEventById = async (req) => {
+    try {
+        const eventId = req.params.event_id;
+        if (!eventId) {
+            return {
+                success: false,
+                message: 'Event ID is required.',
+                code: 'VALIDATION_ERROR',
+            };
+        }
+
+        const event = await Event.findOne({
+            where: { id: eventId },
+            attributes: ['id', 'name'],
+        });
+
+        if (!event) {
+            return {
+                success: false,
+                message: 'Event not found.',
+                code: 'NOT_FOUND',
+            };
+        }
+
+        return {
+            success: true,
+            message: 'Event fetched successfully.',
+            data: event,
+        };
+    } catch (error) {
+        console.error('Error fetching event by id:', error);
+        return {
+            success: false,
+            message: 'An unexpected error occurred while fetching event.',
+            code: 'INTERNAL_SERVER_ERROR',
+        };
+    }
+};
+
+
+
+// search staff list with eventId service
+module.exports.searchEventStaff = async (req) => {
+    try {
+        const { event_id, first_name, email } = req.query;
+        if (!event_id) {
+            return {
+                success: false,
+                message: "Event ID is required.",
+                code: "VALIDATION_ERROR",
+            };
+        }
+
+        const whereCondition = {
+            [Op.and]: [
+                Sequelize.where(
+                    Sequelize.fn("FIND_IN_SET", event_id, Sequelize.col("eventId")),
+                    { [Op.gt]: 0 }
+                ),
+            ],
+        };
+
+        // 🔍 First name search
+        if (first_name) {
+            whereCondition[Op.and].push({
+                first_name: { [Op.like]: `%${first_name}%` },
+            });
+        }
+
+        // 🔍 Email search
+        if (email) {
+            whereCondition[Op.and].push({
+                email: { [Op.like]: `%${email}%` },
+            });
+        }
+
+        const staff = await User.findAll({
+            where: whereCondition,
+            attributes: ["id", "email", "first_name", "last_name", "mobile"],
+            order: [["id", "DESC"]],
+        });
+
+        return {
+            success: true,
+            message: "Event staff fetched successfully.",
+            data: staff,
+        };
+    } catch (error) {
+        console.error("Error fetching event staff:", error);
+        return {
+            success: false,
+            message: "An unexpected error occurred while fetching event staff.",
+            code: "INTERNAL_SERVER_ERROR",
+        };
+    }
+};
+
+
+

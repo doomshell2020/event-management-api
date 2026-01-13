@@ -241,3 +241,37 @@ module.exports.getCustomersFirstName = async (search = "") => {
         };
     }
 };
+
+module.exports.getCustomersEmail = async (search = "") => {
+    try {
+        const whereCondition = {
+            // role_id: 3, // Customer role
+        };
+
+        if (search) {
+            whereCondition.email = {
+                [Op.like]: `%${search}%`, 
+            };
+        }
+
+        const customers = await User.findAll({
+            where: whereCondition,
+            attributes: ["id", "email"],
+            order: [["id", "DESC"]],
+            limit: 20, 
+        });
+
+        return {
+            success: true,
+            message: "Customers fetched successfully.",
+            data: customers,
+        };
+    } catch (error) {
+        console.error("Error fetching customers:", error);
+        return {
+            success: false,
+            message: "An unexpected error occurred while fetching customers.",
+            code: "INTERNAL_SERVER_ERROR",
+        };
+    }
+};
