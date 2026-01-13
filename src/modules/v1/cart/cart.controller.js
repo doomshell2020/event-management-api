@@ -2,9 +2,10 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const requestTicket = require('../../../common/utils/emailTemplates/requestTicket');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers, Questions, QuestionItems, CartQuestionsDetails, PackageDetails } = require('../../../models');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers, Questions, QuestionItems, CartQuestionsDetails, PackageDetails, Templates } = require('../../../models');
 const { Op, Sequelize } = require("sequelize");
 const config = require('../../../config/app');
+const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 
 
 module.exports = {
@@ -169,10 +170,6 @@ module.exports = {
                 status: item_type == 'committesale' ? 'N' : 'Y'
             };
 
-            // console.log('>>>>>>>>>>>>',createData);
-            // return false
-
-
             const newItem = await Cart.create(createData);
 
             /* ================= SAVE QUESTION ANSWERS ================= */
@@ -198,26 +195,47 @@ module.exports = {
 
 
             /* ================= EMAIL (COMMITTEE) ================= */
-            // if (item_type == 'committesale') {
-            //     const committeeMember = await User.findByPk(
-            //         committee_member_id,
-            //         { attributes: ['first_name', 'last_name', 'email'] }
-            //     );
+            if (item_type == 'committesale') {
+                const committeeMember = await User.findByPk(
+                    committee_member_id,
+                    { attributes: ['first_name', 'last_name', 'email'] }
+                );
 
-            //     if (committeeMember?.email) {
-            //         sendEmail(
-            //             committeeMember.email,
-            //             `Ticket Request for ${eventExists.name}`,
-            //             requestTicket({
-            //                 RequesterName: `${req.user.firstName} ${req.user.lastName}`,
-            //                 CommitteeName: `${committeeMember.first_name} ${committeeMember.last_name}`,
-            //                 EventName: eventExists.name,
-            //                 URL: `${config.clientUrl}/committee/sales`,
-            //                 SITE_URL: config.clientUrl
-            //             })
-            //         );
-            //     }
-            // }
+                if (committeeMember?.email) {
+                    const templateId = config.emailTemplates.committeeRequestTicket;
+                    const templateRecord = await Templates.findOne({
+                        where: { id: templateId }
+                    });
+
+                    if (!templateRecord) {
+                        throw new Error('Password changed email template not found');
+                    }
+
+                    const { subject, description, fromemail } = templateRecord;
+
+                    const html = replaceTemplateVariables(description, {
+                        CommitteeName: `${committeeMember.first_name} ${committeeMember.last_name}`,
+                        RequesterName: `${req.user.firstName} ${req.user.lastName}`,
+                        EventName: eventExists.name || '',
+                        URL: `${config.clientUrl}/committee/sales`,
+                        SITE_URL: config.clientUrl
+                    });
+
+                    await sendEmail(committeeMember.email,`${subject} ${eventExists.name}`,html);
+
+                    // sendEmail(
+                    //     committeeMember.email,
+                    //     `Ticket Request for ${eventExists.name}`,
+                    //     requestTicket({
+                    //         RequesterName: `${req.user.firstName} ${req.user.lastName}`,
+                    //         CommitteeName: `${committeeMember.first_name} ${committeeMember.last_name}`,
+                    //         EventName: eventExists.name,
+                    //         URL: `${config.clientUrl}/committee/sales`,
+                    //         SITE_URL: config.clientUrl
+                    //     })
+                    // );
+                }
+            }
 
             return apiResponse.success(res, "Item added to cart", newItem);
 
@@ -330,7 +348,7 @@ module.exports = {
                             model: TicketPricing,
                             as: "ticketPrices",
                             required: false,
-                            attributes: [ "id","price", "date"],
+                            attributes: ["id", "price", "date"],
                             include: [
                                 {
                                     model: TicketType,

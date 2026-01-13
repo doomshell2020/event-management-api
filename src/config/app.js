@@ -49,6 +49,9 @@ const config = {
     forgotPasswordChanged: process.env.FORGOT_PASSWORD_CHANGED_EMAIL_TEMPLATE_ID || '15',
     verifyEmail: process.env.VERIFY_EMAIL_TEMPLATE_ID || '41',
     changedPassword: process.env.CHANGED_PASSWORD_EMAIL_TEMPLATE_ID || '42',
+    committeeRequestTicket: process.env.COMMITTEE_REQUEST_TICKET_TEMPLATE_ID || '26',
+    committeeApproveTicket: process.env.COMMITTEE_APPROVE_TICKET_TEMPLATE_ID || '27',
+    committeeRejectTicket: process.env.COMMITTEE_REJECT_TICKET_TEMPLATE_ID || '28',
   },
 
   // -------------------------

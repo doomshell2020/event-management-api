@@ -6,8 +6,9 @@ const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { sequelize } = require("../../../models");
 const config = require('../../../config/app');
-const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType } = require('../../../models');
+const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType, Templates } = require('../../../models');
 const { pushFromCommitteeCompsTicket } = require('../tickets/tickets.service');
+const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 
 
 exports.importCommitteeMembers = async (req, res) => {
@@ -546,11 +547,32 @@ exports.handleAction = async (req, res) => {
             await cartItem.update({ status: 'I' });
 
             if (user?.email) {
-                sendEmail(
-                    user.email,
-                    'Committee Ticket Request Update',
-                    committeeTicketIgnoredTemplate(user, event, ticket)
-                );
+
+                const templateId = config.emailTemplates.committeeRejectTicket;
+                const templateRecord = await Templates.findOne({
+                    where: { id: templateId }
+                });
+
+                if (!templateRecord) {
+                    throw new Error('Email template not found');
+                }
+
+                const { subject, description } = templateRecord;
+
+                const html = replaceTemplateVariables(description, {
+                    RequesterName: `${user.first_name} ${user.last_name}`,
+                    EventName: event.name || 'Unknown Event',
+                    TicketName: ticket.title || 'Unknown Ticket',
+                    SITE_URL: config.clientUrl
+                });
+                await sendEmail(user.email, `${subject} for ${event.name} ${ticket.title}`, html);
+
+
+                // sendEmail(
+                //     user.email,
+                //     'Committee Ticket Request Update',
+                //     committeeTicketIgnoredTemplate(user, event, ticket)
+                // );
             }
 
             return apiResponse.success(
@@ -589,21 +611,42 @@ exports.handleAction = async (req, res) => {
         }
 
         // 🔒 Update allocation and cart status
-        await assign.update({ usedticket: used + 1 });
-        await cartItem.update({ status: 'Y' });
+        // await assign.update({ usedticket: used + 1 });
+        // await cartItem.update({ status: 'Y' });
 
         /* ================= APPROVAL EMAIL ================= */
         if (user?.email) {
-            sendEmail(
-                user.email,
-                'Committee Ticket Approved',
-                committeeTicketApprovedTemplate(
-                    user,
-                    event,
-                    ticket,
-                    `${config.clientUrl}`
-                )
-            );
+
+            const templateId = config.emailTemplates.committeeApproveTicket;
+            const templateRecord = await Templates.findOne({
+                where: { id: templateId }
+            });
+
+            if (!templateRecord) {
+                    throw new Error('Email template not found');
+            }
+
+            const { subject, description } = templateRecord;
+
+            const html = replaceTemplateVariables(description, {
+                RequesterName: `${user.first_name} ${user.last_name}`,
+                EventName: event.name || '',
+                TicketName: ticket.title || '',
+                URL: `${config.clientUrl}/event/${event.id}/${event.slug}`,
+                SITE_URL: config.clientUrl
+            });
+            await sendEmail(user.email, `${subject} for ${event.name} ${ticket.title}`, html);
+
+            // sendEmail(
+            //     user.email,
+            //     'Committee Ticket Approved',
+            //     committeeTicketApprovedTemplate(
+            //         user,
+            //         event,
+            //         ticket,
+            //         `${config.clientUrl}`
+            //     )
+            // );
         }
 
         return apiResponse.success(

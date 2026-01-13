@@ -37,9 +37,9 @@ router.post('/add-staff',
             .isLength({ min: 8 })
             .withMessage('Mobile number is invalid'),
 
-        body('event_ids')
+        body('eventId')
             .isArray({ min: 1 })
-            .withMessage('event_ids must be a non-empty array')
+            .withMessage('eventId must be a non-empty array')
     ],
     validate,
     userController.addStaff
