@@ -227,10 +227,12 @@ module.exports.searchTicketList = async (req) => {
 
 
 // services/ticket.service.js
+
 module.exports.getTicketsWithEventIdAndType = async (req) => {
     try {
         const adminId = req.user?.id;
         const { event_id, type } = req.params;
+
         if (!adminId) {
             return {
                 success: false,
@@ -247,8 +249,15 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
             };
         }
 
-        // ✅ Allowed types (important)
-        const ALLOWED_TYPES = ['ticket', 'addon', 'appointment', 'package'];
+        // ✅ Allowed types
+        const ALLOWED_TYPES = [
+            'ticket',
+            'addon',
+            'appointment',
+            'package',
+            'committesale',
+            'comps',
+        ];
 
         if (!ALLOWED_TYPES.includes(type)) {
             return {
@@ -258,67 +267,107 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
             };
         }
 
-        // ✅ Dynamic condition based on type
+        // ✅ STRICT type + id condition (BUG FIX)
         const typeCondition = {
-            ticket: { ticket_id: { [Op.ne]: null } },
-            addon: { addon_id: { [Op.ne]: null } },
-            appointment: { appointment_id: { [Op.ne]: null } },
-            package: { package_id: { [Op.ne]: null } }, // ✅ FIX
+            ticket: {
+                type: 'ticket',
+                ticket_id: { [Op.ne]: null },
+            },
+            addon: {
+                type: 'addon',
+                addon_id: { [Op.ne]: null },
+            },
+            appointment: {
+                type: 'appointment',
+                appointment_id: { [Op.ne]: null },
+            },
+            package: {
+                type: 'package',
+                package_id: { [Op.ne]: null },
+            },
+            committesale: {
+                type: 'committesale',
+                ticket_id: { [Op.ne]: null },
+            },
+            comps: {
+                type: 'comps',
+                ticket_id: { [Op.ne]: null },
+            },
         };
 
         const tickets = await OrderItems.findAll({
             where: {
                 event_id,
-                ...typeCondition[type],
+                ...typeCondition[type], // 👈 key fix
             },
             attributes: [
                 'id',
-                "type",
+                'type',
                 'order_id',
                 'user_id',
                 'event_id',
                 'ticket_id',
                 'addon_id',
                 'appointment_id',
-                "package_id",
+                'package_id',
                 'count',
             ],
             include: [
-                { model: TicketType, as: "ticketType", attributes: ["title"] },
-                { model: AddonTypes, as: "addonType", attributes: ["name"] },
-                { model: Package, as: "package", attributes: ["name"] },
                 {
-                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
-                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["title"],
                 },
-
+                {
+                    model: AddonTypes,
+                    as: "addonType",
+                    attributes: ["name"],
+                },
+                {
+                    model: Package,
+                    as: "package",
+                    attributes: ["name"],
+                },
+                {
+                    model: WellnessSlots,
+                    as: "appointment",
+                    attributes: ["wellness_id"],
+                    include: [
+                        {
+                            model: Wellness,
+                            as: "wellnessList",
+                            attributes: ["name"],
+                        },
+                    ],
+                },
                 {
                     model: Orders,
                     as: 'order',
                     attributes: ['sub_total', 'tax_total', 'created'],
-                    include: [{
-                        model: User,
-                        as: 'user',
-                        attributes: [
-                            'id',
-                            'email',
-                            'first_name',
-                            'last_name',
-                            'mobile',
-                        ],
-                    },
-                    {
-                        model: Event,
-                        as: 'event',
-                        attributes: ['name', 'date_from', 'date_to'],
-                        include: [
-                            {
-                                model: Currency,
-                                as: 'currencyName',
-                                attributes: ['Currency_symbol'],
-                            },
-                        ],
-                    },
+                    include: [
+                        {
+                            model: User,
+                            as: 'user',
+                            attributes: [
+                                'id',
+                                'email',
+                                'first_name',
+                                'last_name',
+                                'mobile',
+                            ],
+                        },
+                        {
+                            model: Event,
+                            as: 'event',
+                            attributes: ['name', 'date_from', 'date_to'],
+                            include: [
+                                {
+                                    model: Currency,
+                                    as: 'currencyName',
+                                    attributes: ['Currency_symbol'],
+                                },
+                            ],
+                        },
                     ],
                 },
             ],
@@ -339,6 +388,120 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
         };
     }
 };
+
+
+// module.exports.getTicketsWithEventIdAndType = async (req) => {
+//     try {
+//         const adminId = req.user?.id;
+//         const { event_id, type } = req.params;
+//         if (!adminId) {
+//             return {
+//                 success: false,
+//                 message: 'Unauthorized access.',
+//                 code: 'UNAUTHORIZED',
+//             };
+//         }
+
+//         if (!event_id || !type) {
+//             return {
+//                 success: false,
+//                 message: 'Event ID and type are required.',
+//                 code: 'VALIDATION_ERROR',
+//             };
+//         }
+
+//         // ✅ Allowed types (important)
+//         const ALLOWED_TYPES = ['ticket', 'addon', 'appointment', 'package','committesale'];
+
+//         if (!ALLOWED_TYPES.includes(type)) {
+//             return {
+//                 success: false,
+//                 message: 'Invalid type provided.',
+//                 code: 'VALIDATION_ERROR',
+//             };
+//         }
+
+//         // ✅ Dynamic condition based on type
+//         const typeCondition = {
+//             ticket: { ticket_id: { [Op.ne]: null } },
+//             addon: { addon_id: { [Op.ne]: null } },
+//             appointment: { appointment_id: { [Op.ne]: null } },
+//             package: { package_id: { [Op.ne]: null } }, 
+//         };
+
+//         const tickets = await OrderItems.findAll({
+//             where: {
+//                 event_id,
+//                 ...typeCondition[type],
+//             },
+//             attributes: [
+//                 'id',
+//                 "type",
+//                 'order_id',
+//                 'user_id',
+//                 'event_id',
+//                 'ticket_id',
+//                 'addon_id',
+//                 'appointment_id',
+//                 "package_id",
+//                 'count',
+//             ],
+//             include: [
+//                 { model: TicketType, as: "ticketType", attributes: ["title"] },
+//                 { model: AddonTypes, as: "addonType", attributes: ["name"] },
+//                 { model: Package, as: "package", attributes: ["name"] },
+//                 {
+//                     model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
+//                     include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
+//                 },
+
+//                 {
+//                     model: Orders,
+//                     as: 'order',
+//                     attributes: ['sub_total', 'tax_total', 'created'],
+//                     include: [{
+//                         model: User,
+//                         as: 'user',
+//                         attributes: [
+//                             'id',
+//                             'email',
+//                             'first_name',
+//                             'last_name',
+//                             'mobile',
+//                         ],
+//                     },
+//                     {
+//                         model: Event,
+//                         as: 'event',
+//                         attributes: ['name', 'date_from', 'date_to'],
+//                         include: [
+//                             {
+//                                 model: Currency,
+//                                 as: 'currencyName',
+//                                 attributes: ['Currency_symbol'],
+//                             },
+//                         ],
+//                     },
+//                     ],
+//                 },
+//             ],
+//             order: [['id', 'DESC']],
+//         });
+
+//         return {
+//             success: true,
+//             message: 'Tickets fetched successfully.',
+//             data: tickets,
+//         };
+//     } catch (error) {
+//         console.error('Error fetching tickets:', error);
+//         return {
+//             success: false,
+//             message: 'An unexpected error occurred while fetching tickets.',
+//             code: 'INTERNAL_SERVER_ERROR',
+//         };
+//     }
+// };
 
 
 const ITEM_TYPE_COLUMN_MAP = {
