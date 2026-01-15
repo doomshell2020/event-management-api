@@ -140,7 +140,7 @@ module.exports.resendVerificationEmail = async ({ userId }) => {
 // Searching Customers...
 module.exports.searchCustomers = async (req) => {
     try {
-        const { first_name, email, fromDate, toDate } = req.query;
+        const { first_name, email, fromDate, toDate, status } = req.query;
         const whereCondition = { role_id: 3 };
         // 🔹 First Name filter
         if (first_name) {
@@ -153,6 +153,10 @@ module.exports.searchCustomers = async (req) => {
             whereCondition.email = {
                 [Op.like]: `%${email}%`
             };
+        }
+        // 🔹 Status filter
+        if (status) {
+            whereCondition.status = status; // "Y" or "N"
         }
         // 🔹 Date range filter (createdAt)
         if (fromDate || toDate) {
@@ -216,7 +220,7 @@ module.exports.getCustomersFirstName = async (search = "") => {
 
         if (search) {
             whereCondition.first_name = {
-                [Op.like]: `%${search}%`, 
+                [Op.like]: `%${search}%`,
             };
         }
 
@@ -224,7 +228,7 @@ module.exports.getCustomersFirstName = async (search = "") => {
             where: whereCondition,
             attributes: ["id", "first_name"],
             order: [["id", "DESC"]],
-            limit: 20, 
+            limit: 20,
         });
 
         return {
@@ -250,7 +254,7 @@ module.exports.getCustomersEmail = async (search = "") => {
 
         if (search) {
             whereCondition.email = {
-                [Op.like]: `%${search}%`, 
+                [Op.like]: `%${search}%`,
             };
         }
 
@@ -258,7 +262,7 @@ module.exports.getCustomersEmail = async (search = "") => {
             where: whereCondition,
             attributes: ["id", "email"],
             order: [["id", "DESC"]],
-            limit: 20, 
+            limit: 20,
         });
 
         return {
