@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, Orders, Currency, OrderItems } = require('../../../../models');
+const { User, Event, Orders, Currency, OrderItems,TicketType,AddonTypes,Package,Wellness,WellnessSlots,EventSlots,TicketPricing } = require('../../../../models');
 
 
 // Get event List..
@@ -226,7 +226,6 @@ module.exports.getOrdersEventId = async (event_id) => {
 module.exports.searchOrdersDetails = async (req) => {
     try {
         const { customer, event_id, orderFrom, orderTo } = req.query;
-console.log("customer--------------")
         const whereCondition = {};
 
         /* ============================
@@ -322,6 +321,111 @@ console.log("customer--------------")
     }
 };
 
+
+
+// get order list with eventId
+module.exports.getOrderDetails = async (order_id) => {
+    try {
+        const orders = await OrderItems.findAll({
+            where: {
+                order_id: order_id   // ⭐ FILTER HERE
+            },
+           attributes: [
+                'id',
+                'type',
+                'order_id',
+                'user_id',
+                'event_id',
+                'ticket_id',
+                'addon_id',
+                'appointment_id',
+                'package_id',
+                'count',
+            ],
+            include: [
+                {
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["title"],
+                },
+                {
+                    model: AddonTypes,
+                    as: "addonType",
+                    attributes: ["name"],
+                },
+                {
+                    model: Package,
+                    as: "package",
+                    attributes: ["name"],
+                },
+                {
+                    model: TicketPricing, as: 'ticketPricing', required: false, attributes: ["id", "price"],
+                    include: [{ model: TicketType, as: "ticket", required: false, attributes: ["title"] },
+                    { model: EventSlots, as: "slot", required: false, attributes: ["id", "slot_name"] }
+                    ]
+                },
+                {
+                    model: WellnessSlots,
+                    as: "appointment",
+                    attributes: ["wellness_id"],
+                    include: [
+                        {
+                            model: Wellness,
+                            as: "wellnessList",
+                            attributes: ["name"],
+                        },
+                    ],
+                },
+                {
+                    model: Orders,
+                    as: 'order',
+                    attributes: ['sub_total', 'tax_total', 'created','order_uid','RRN','paymenttype'],
+                    include: [
+                        {
+                            model: User,
+                            as: 'user',
+                            attributes: [
+                                'id',
+                                'email',
+                                'first_name',
+                                'last_name',
+                                'mobile',
+                            ],
+                        },
+                        {
+                            model: Event,
+                            as: 'event',
+                            attributes: ['name', 'date_from', 'date_to'],
+                            include: [
+                                {
+                                    model: Currency,
+                                    as: 'currencyName',
+                                    attributes: ['Currency_symbol'],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+           
+            order: [['id', 'DESC']]
+        });
+
+        return {
+            success: true,
+            message: 'Order Details fetched successfully.',
+            data: orders
+        };
+
+    } catch (error) {
+        console.error('Error fetching orders:', error);
+        return {
+            success: false,
+            message: 'An unexpected error occurred while fetching orders.',
+            code: 'INTERNAL_SERVER_ERROR'
+        };
+    }
+};
 
 
 

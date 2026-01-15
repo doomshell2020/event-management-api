@@ -114,7 +114,6 @@ module.exports.getOrdersEventId = async (req, res) => {
 
 
 module.exports.searchOrdersDetails = async (req, res) => {
-    console.log("searchOrdersDetails-----------searchOrdersDetails")
     try {
         const result = await ordersService.searchOrdersDetails(req);
 
@@ -158,6 +157,41 @@ module.exports.searchOrdersDetails = async (req, res) => {
         return apiResponse.error(
             res,
             'An unexpected error occurred while fetching events',
+            500
+        );
+    }
+};
+
+
+// get order details...
+module.exports.getOrderDetails = async (req, res) => {
+    try {
+        const { order_id } = req.params;
+
+        if (!order_id) {
+            return apiResponse.validation(res, [], 'order_id is required');
+        }
+        const result = await ordersService.getOrderDetails(order_id);
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Orders Details fetched successfully.',
+            { orders: result.data }
+        );
+
+    } catch (error) {
+        console.log('Error in getOrdersEventId controller:', error);
+        return apiResponse.error(
+            res,
+            'An unexpected error occurred while fetching orders. ' + error.message,
             500
         );
     }

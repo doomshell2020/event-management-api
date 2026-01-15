@@ -27,8 +27,8 @@ router.put(
 );
 
 router.post(
-  "/resend-verification-email",
-  customerController.resendVerificationEmail
+    "/resend-verification-email",
+    customerController.resendVerificationEmail
 );
 
 router.get(
@@ -36,6 +36,7 @@ router.get(
     [
         param('firstName').optional().isString(),
         param('email').optional().isString(),
+        param('status').optional().isIn(['Y', 'N']),
         param('fromDate').optional().isDate(),
         param('toDate').optional().isDate(),
     ],
