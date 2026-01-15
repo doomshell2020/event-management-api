@@ -656,6 +656,9 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
                 SITE_URL: config.clientUrl,
                 HostedBy: authUser.firstName || authUser.email,
                 EventName: existingEvent.name || '',
+                EventImage: existingEvent.feat_image
+                    ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${existingEvent.feat_image}`
+                    : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
                 EventStart: formatFriendlyDate(existingEvent.date_from, tz),
                 EventEnd: formatFriendlyDate(existingEvent.date_to, tz),
                 SaleStart: saleStartValue,
