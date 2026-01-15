@@ -1,8 +1,11 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency } = require('../../../models');
-const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+const { Company, Event, TicketType, AddonTypes, Currency, Templates } = require('../../../models');
+const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+const config = require('../../../config/app');
+const { replaceTemplateVariables } = require('../../../common/utils/helpers');
+const sendEmail = require('../../../common/utils/sendEmail');
 
 module.exports.searchEvents = async ({ keyword, loginId }) => {
     try {
@@ -585,7 +588,7 @@ module.exports.createEvent = async (req, res) => {
     }
 };
 
-module.exports.updateEvent = async (eventId, updateData, user) => {
+module.exports.updateEvent = async (eventId, updateData, authUser) => {
     try {
         const existingEvent = await Event.findByPk(eventId);
         if (!existingEvent) {
@@ -621,6 +624,51 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             existingEvent.status = updateData.status;
             await existingEvent.save();
 
+
+
+            // ===== EMAIL TEMPLATE FETCH =====
+            const templateId = config.emailTemplates.newEventCreated;
+
+            const templateRecord = await Templates.findOne({
+                where: { id: templateId }
+            });
+
+            if (!templateRecord) {
+                throw new Error('Add staff email template not found');
+            }
+
+            const { description } = templateRecord;
+
+            const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+            const imagePath = "uploads/events";
+
+            const tz = existingEvent.event_timezone || "UTC";
+
+            let saleStartValue = 'N/A';
+            let saleEndValue = 'N/A';
+
+            if (existingEvent.is_free !== 'Y') {
+                saleStartValue = formatFriendlyDate(existingEvent.sale_start, tz);
+                saleEndValue = formatFriendlyDate(existingEvent.sale_end, tz);
+            }
+
+            const html = replaceTemplateVariables(description, {
+                SITE_URL: config.clientUrl,
+                HostedBy: authUser.firstName || authUser.email,
+                EventName: existingEvent.name || '',
+                EventStart: formatFriendlyDate(existingEvent.date_from, tz),
+                EventEnd: formatFriendlyDate(existingEvent.date_to, tz),
+                SaleStart: saleStartValue,
+                SaleEnd: saleEndValue,
+                Location: existingEvent.location || '',
+                Slug: existingEvent.slug || '',
+                Description: existingEvent.desp || '',
+                IsFree: existingEvent.is_free == 'Y' ? 'Free Event' : 'Paid Event'
+            });
+
+            await sendEmail(authUser.email, `Your Event ${existingEvent.name} is Now Live on eboxtickets!`, html);
+            // ===== EMAIL TEMPLATE FETCH =====
+
             return {
                 success: true,
                 message: "Event status updated successfully",
@@ -645,12 +693,9 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             }
         }
 
-
-
         // ✅ Determine effective values for validation
         const effectiveIsFree = is_free !== undefined ? is_free : existingEvent.is_free;
         const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;
-        // console.log('>>>>>>>',effectiveIsFree);
 
         // ✅ Free event validation
         if (effectiveIsFree == 'Y' && !effectiveRequestRsvp) {

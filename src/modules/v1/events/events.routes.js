@@ -225,8 +225,7 @@ router.get('/public-event-detail/:id',
 );
 
 // Search Events (For Import Committee / Dropdown Search)
-router.get(
-    '/search',
+router.get('/search',
     authenticate,
     [
         query('keyword')
