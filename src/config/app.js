@@ -55,6 +55,8 @@ const config = {
     committeePushTicketsToUser: process.env.COMMITTEE_PUSH_TICKETS_TO_USER_TEMPLATE_ID || '44',
     orderConfirmationWithQR: process.env.ORDER_CONFIRMATION_WITH_QR_TEMPLATE_ID || '30',
     complimentaryTicket: process.env.COMPLIMENTARY_TICKET_TEMPLATE_ID || '31',
+    addStaffForEvent:process.env.ADD_STAFF_FOR_EVENT_TEMPLATE_ID || '33',
+    changeStaffPassword:process.env.CHANGE_STAFF_PASSWORD_TEMPLATE_ID || '37',
   },
 
   // -------------------------
