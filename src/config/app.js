@@ -58,6 +58,7 @@ const config = {
     addStaffForEvent: process.env.ADD_STAFF_FOR_EVENT_TEMPLATE_ID || '33',
     changeStaffPassword: process.env.CHANGE_STAFF_PASSWORD_TEMPLATE_ID || '37',
     newEventCreated: process.env.NEW_EVENT_CREATED_TEMPLATE_ID || '18',
+    contactUs: process.env.CONTACT_US_TEMPLATE_ID || '25',
   },
 
   // -------------------------

@@ -10,11 +10,6 @@ const uploadFiles = require('../../../../middlewares/upload.middleware');
 // ✅ Get Event Organizer Route
 router.get('/', authenticate, eventController.getEventList)
 
-
-
-
-
-
 // event Organizer Status
 router.put(
     '/update-status/:id',
