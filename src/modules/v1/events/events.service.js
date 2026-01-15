@@ -624,53 +624,58 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
             existingEvent.status = updateData.status;
             await existingEvent.save();
 
+            // Only send email if status is 'Y'
+            if (existingEvent.status == 'Y') {
 
+                // ===== EMAIL TEMPLATE FETCH =====
+                const templateId = config.emailTemplates.newEventCreated;
 
-            // ===== EMAIL TEMPLATE FETCH =====
-            const templateId = config.emailTemplates.newEventCreated;
+                const templateRecord = await Templates.findOne({
+                    where: { id: templateId }
+                });
 
-            const templateRecord = await Templates.findOne({
-                where: { id: templateId }
-            });
+                if (!templateRecord) {
+                    throw new Error('Add staff email template not found');
+                }
 
-            if (!templateRecord) {
-                throw new Error('Add staff email template not found');
+                const { description } = templateRecord;
+
+                const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+                const imagePath = "uploads/events";
+
+                const tz = existingEvent.event_timezone || "UTC";
+
+                let saleStartValue = 'N/A';
+                let saleEndValue = 'N/A';
+
+                if (existingEvent.is_free !== 'Y') {
+                    saleStartValue = formatFriendlyDate(existingEvent.sale_start, tz);
+                    saleEndValue = formatFriendlyDate(existingEvent.sale_end, tz);
+                }
+
+                const html = replaceTemplateVariables(description, {
+                    SITE_URL: config.clientUrl,
+                    HostedBy: authUser.firstName || authUser.email,
+                    EventName: existingEvent.name || '',
+                    EventImage: existingEvent.feat_image
+                        ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${existingEvent.feat_image}`
+                        : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+                    EventStart: formatFriendlyDate(existingEvent.date_from, tz),
+                    EventEnd: formatFriendlyDate(existingEvent.date_to, tz),
+                    SaleStart: saleStartValue,
+                    SaleEnd: saleEndValue,
+                    Location: existingEvent.location || '',
+                    Slug: existingEvent.slug || '',
+                    Description: existingEvent.desp || '',
+                    IsFree: existingEvent.is_free == 'Y' ? 'Free Event' : 'Paid Event'
+                });
+
+                await sendEmail(
+                    authUser.email,
+                    `Your Event ${existingEvent.name} is Now Live on eboxtickets!`,
+                    html
+                );
             }
-
-            const { description } = templateRecord;
-
-            const baseUrl = process.env.BASE_URL || "http://localhost:5000";
-            const imagePath = "uploads/events";
-
-            const tz = existingEvent.event_timezone || "UTC";
-
-            let saleStartValue = 'N/A';
-            let saleEndValue = 'N/A';
-
-            if (existingEvent.is_free !== 'Y') {
-                saleStartValue = formatFriendlyDate(existingEvent.sale_start, tz);
-                saleEndValue = formatFriendlyDate(existingEvent.sale_end, tz);
-            }
-
-            const html = replaceTemplateVariables(description, {
-                SITE_URL: config.clientUrl,
-                HostedBy: authUser.firstName || authUser.email,
-                EventName: existingEvent.name || '',
-                EventImage: existingEvent.feat_image
-                    ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${existingEvent.feat_image}`
-                    : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
-                EventStart: formatFriendlyDate(existingEvent.date_from, tz),
-                EventEnd: formatFriendlyDate(existingEvent.date_to, tz),
-                SaleStart: saleStartValue,
-                SaleEnd: saleEndValue,
-                Location: existingEvent.location || '',
-                Slug: existingEvent.slug || '',
-                Description: existingEvent.desp || '',
-                IsFree: existingEvent.is_free == 'Y' ? 'Free Event' : 'Paid Event'
-            });
-
-            await sendEmail(authUser.email, `Your Event ${existingEvent.name} is Now Live on eboxtickets!`, html);
-            // ===== EMAIL TEMPLATE FETCH =====
 
             return {
                 success: true,
