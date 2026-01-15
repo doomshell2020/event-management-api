@@ -39,4 +39,7 @@ router.get(
 router.get('/:event_id', ordersController.getOrdersEventId);
 
 
+router.get('/order-details/:order_id', ordersController.getOrderDetails);
+
+
 module.exports = router;

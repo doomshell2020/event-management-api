@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness,EventSlots,TicketPricing,Package } = require('../../../../models');
+const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness, EventSlots, TicketPricing, Package } = require('../../../../models');
 
 
 
@@ -235,15 +235,6 @@ module.exports.getDashboardCounts = async (req, res) => {
 // payment chart data....
 module.exports.getPaymentChartData = async (req, res) => {
     try {
-        // const adminId = req.user?.id;
-        // if (!adminId) {
-        //     return {
-        //         success: false,
-        //         message: 'Unauthorized access',
-        //         code: 'UNAUTHORIZED'
-        //     };
-        // }
-
         const result = await Orders.findAll({
             attributes: [
                 [Sequelize.fn('MONTH', Sequelize.col('createdAt')), 'month'],
@@ -297,33 +288,25 @@ module.exports.getPaymentPieChart = async (req, res) => {
                 'paymenttype',
                 [Sequelize.fn('SUM', Sequelize.col('grand_total')), 'total']
             ],
-            group: ['paymenttype'] // ✅ FIXED
+            group: ['paymenttype']
         });
 
-        // Default values
         const pieData = {
-            Earnings: 0,
-            EventOffice: 0,
             Cash: 0,
             Online: 0
         };
 
         result.forEach(item => {
-            const method = item.paymenttype; // ✅ FIXED
+            const method = item.paymenttype;
             const total = Number(item.dataValues.total || 0);
 
-            if (method === 'free') pieData.EventOffice = total;
             if (method === 'cash') pieData.Cash = total;
             if (method === 'stripe') pieData.Online = total;
         });
 
-        // Earnings = sum of all payment types
-        pieData.Earnings =
-            pieData.EventOffice + pieData.Cash + pieData.Online;
-
         return {
             success: true,
-            message: 'Payment pie chart data fetched successfully',
+            message: 'Payment method distribution fetched successfully',
             data: {
                 labels: Object.keys(pieData),
                 series: Object.values(pieData)
@@ -339,3 +322,4 @@ module.exports.getPaymentPieChart = async (req, res) => {
         };
     }
 };
+
