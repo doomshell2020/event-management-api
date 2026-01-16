@@ -12,6 +12,7 @@ router.get('/', authenticate, eventController.getEventList)
 
 // event Organizer Status
 router.put('/update-status/:id',
+    authenticate,
     [
         param('id')
             .isInt({ min: 1 })
@@ -21,6 +22,18 @@ router.put('/update-status/:id',
             .withMessage('Status is required')
             .isIn(['Y', 'N'])
             .withMessage('Status must be Y or N'),
+        body('activation_date')
+            .optional()
+            .isISO8601()
+            .withMessage('Activation date must be a valid date'),
+        body('activation_amount')
+            .optional()
+            .isFloat({ min: 0 })
+            .withMessage('Activation amount must be a valid number'),
+        body('activation_remarks')
+            .optional()
+            .isString()
+            .withMessage('Activation remarks must be a string'),
     ],
     validate,
     eventController.updateStatusEvent
@@ -28,6 +41,7 @@ router.put('/update-status/:id',
 
 // Update event featured status
 router.put('/:id/featured',
+    authenticate,
     [
         param('id')
             .isInt({ min: 1 })
@@ -44,6 +58,7 @@ router.put('/:id/featured',
 
 // 🎟️ Delete Event Route
 router.delete('/:id',
+    authenticate,
     [
         // Validate Event ID
         param('id')
@@ -92,7 +107,7 @@ router.get('/:eventId/staff',
 );
 
 // get Event Organizer..
-router.get('/:id',eventController.getEventOrganizerById);
+router.get('/:id', eventController.getEventOrganizerById);
 
 // event details with order details
 router.get("/:id/details",
