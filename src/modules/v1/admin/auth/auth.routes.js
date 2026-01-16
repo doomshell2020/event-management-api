@@ -19,8 +19,7 @@ router.post('/login',
 
 router.get('/me', authenticate, authController.getAdminInfo);
 
-router.patch(
-  "/:id/update-profile",
+router.patch("/:id/update-profile",
   authenticate,
   [
     body("first_name")
@@ -38,6 +37,24 @@ router.patch(
       .optional()
       .isLength({ min: 10, max: 15 })
       .withMessage("Mobile number must be between 10 to 15 digits"),
+
+    body("payment_gateway_charges")
+      .isLength({ min: 1 })
+      .withMessage("Payment gateway charges must be digits"),
+
+    body("default_platform_charges")
+      .isLength({ min: 1 })
+      .withMessage("Default platform charges must be digits"),
+
+    body("admin_approval_required")
+      .optional()
+      .isIn(["Y", "N"])
+      .withMessage("Admin approval required must be either 'Y' or 'N'"),
+
+    body("approval_type")
+      .optional()
+      .isIn(["all", "paid", "free"])
+      .withMessage("Approval type must be one of the following: all, paid, free"),
 
     body("fburl")
       .optional()
@@ -67,13 +84,13 @@ router.patch(
       .optional()
       .isURL()
       .withMessage("Apple Store URL must be a valid URL"),
+
   ],
   validate,
   authController.updateProfile
 );
 
-router.patch(
-  "/:id/update-password",
+router.patch("/:id/update-password",
   authenticate,
   [
     body("password")
@@ -84,13 +101,5 @@ router.patch(
   validate,
   authController.changeAdminPassword
 );
-
-
-
-
-
-
-
-
 
 module.exports = router;

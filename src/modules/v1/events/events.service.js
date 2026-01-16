@@ -437,7 +437,7 @@ module.exports.createEvent = async (req, res) => {
 
         const user_id = req.user?.id;
         // ✅ Set default timezone if missing or empty
-        const finalTimezone = event_timezone && event_timezone.trim() !== ''
+        const finalTimezone = event_timezone && event_timezone.trim() != ''
             ? event_timezone
             : 'UTC';
 
@@ -509,7 +509,7 @@ module.exports.createEvent = async (req, res) => {
         const feat_image = filename;
 
         // ✅ Extra validation for paid events
-        if (is_free !== 'Y') {
+        if (is_free != 'Y') {
             if (!ticket_limit || !payment_currency || !sale_start || !sale_end || !approve_timer) {
                 return {
                     success: false,

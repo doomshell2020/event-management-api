@@ -11,8 +11,7 @@ const uploadFiles = require('../../../../middlewares/upload.middleware');
 router.get('/', authenticate, eventController.getEventList)
 
 // event Organizer Status
-router.put(
-    '/update-status/:id',
+router.put('/update-status/:id',
     [
         param('id')
             .isInt({ min: 1 })
@@ -27,10 +26,8 @@ router.put(
     eventController.updateStatusEvent
 );
 
-
 // Update event featured status
-router.put(
-    '/:id/featured',
+router.put('/:id/featured',
     [
         param('id')
             .isInt({ min: 1 })
@@ -45,10 +42,8 @@ router.put(
     eventController.updateEventFeatured
 );
 
-
 // 🎟️ Delete Event Route
-router.delete(
-    '/:id',
+router.delete('/:id',
     [
         // Validate Event ID
         param('id')
@@ -59,12 +54,10 @@ router.delete(
     eventController.deleteEvent
 );
 
-
 router.get('/:id/ticket-types', eventController.getTicketTypesByEvent)
 
 // search event details
-router.get(
-    '/search',
+router.get('/search',
     // authenticate, // optional
     [
         param('eventName').optional().isString(),
@@ -76,8 +69,7 @@ router.get(
     eventController.searchEventList
 );
 
-router.get(
-    "/staff-search",
+router.get("/staff-search",
     [
         param("event_id").optional().isString(),
         param("first_name").optional().isString(),
@@ -87,12 +79,8 @@ router.get(
     eventController.searchEventStaff
 );
 
-
-
-
 // get staff in event
-router.get(
-    '/:eventId/staff',
+router.get('/:eventId/staff',
     // authenticate,
     [
         param('eventId')
@@ -103,31 +91,20 @@ router.get(
     eventController.getEventStaff
 );
 
-
 // get Event Organizer..
 router.get('/:id',eventController.getEventOrganizerById);
 
 // event details with order details
-router.get(
-    "/:id/details",
+router.get("/:id/details",
     eventController.getEventDetailsWithOrderDetails
 );
 
-
-router.get(
-    '/event-details/:event_id',
+router.get('/event-details/:event_id',
     eventController.getEventById
 );
 
-router.get(
-    '/search/search',
+router.get('/search/search',
     eventController.getEventByName
 );
-
-
-
-
-
-
 
 module.exports = router;

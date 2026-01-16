@@ -1,9 +1,6 @@
 const { Op, Sequelize } = require('sequelize');
 const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness } = require('../../../../models');
 
-
-
-
 // Get event List..
 module.exports.getEventList = async (req, res) => {
     try {
@@ -41,6 +38,7 @@ module.exports.getEventList = async (req, res) => {
                 'featured',
                 'video_url',
                 'slug',
+                'is_free',
 
                 // 🔥 TOTAL SALES
                 [Sequelize.fn('SUM', Sequelize.col('orders.sub_total')), 'total_sales'],
