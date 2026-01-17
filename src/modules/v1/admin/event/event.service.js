@@ -14,18 +14,36 @@ module.exports.getEventList = async (req, res) => {
         }
         const events = await Event.findAll({
             // where: { role_id: 2 }, // Event Organiser role
-            include: [{ model: User, attributes: ['id', 'email', 'first_name', 'last_name'], as: "Organizer" },
-            { model: TicketType, attributes: ['id', 'title', 'type'], as: "tickets" },
-            {
-                model: Orders,
-                as: "orders",
-                attributes: []
-            },
-            {
-                model: Currency,
-                as: "currencyName",
-                attributes: ['Currency_symbol']
-            }
+            include: [
+                { model: User, attributes: ['id', 'email', 'first_name', 'last_name'], as: "Organizer" },
+                { model: TicketType, attributes: ['id', 'title', 'type'], as: "tickets" },
+                {
+                    model: Orders,
+                    as: "orders",
+                    attributes: []
+                },
+                {
+                    model: Currency,
+                    as: "currencyName",
+                    attributes: ['Currency_symbol']
+                },
+                {
+                    model: EventActivationLog,
+                    as: 'eventActivationLogs',
+                    separate: true,
+                    limit: 1,
+                    order: [['createdAt', 'DESC']],
+                    attributes: [
+                        'id',
+                        'status',
+                        'activation_date',
+                        'activation_amount',
+                        'activation_remarks',
+                        'activated_by',
+                        'createdAt'
+                    ]
+                }
+
             ],
             attributes: [
                 'id',
@@ -68,6 +86,7 @@ module.exports.getEventList = async (req, res) => {
     }
 };
 
+
 module.exports.updateStatusEvent = async (req) => {
     try {
         const eventId = req.params.id;
@@ -81,7 +100,6 @@ module.exports.updateStatusEvent = async (req) => {
 
         // Find event
         const existingEvent = await Event.findByPk(eventId);
-
         if (!existingEvent) {
             return {
                 success: false,
@@ -90,7 +108,7 @@ module.exports.updateStatusEvent = async (req) => {
             };
         }
 
-        // If status already same → do nothing
+        // If already same status
         if (existingEvent.status == status) {
             return {
                 success: false,
@@ -100,17 +118,26 @@ module.exports.updateStatusEvent = async (req) => {
         }
 
         // Update event status
-        await existingEvent.update({ status,admineventstatus:status });
+        await existingEvent.update({ status, admineventstatus: status });
 
-        // Check if activation log already exists for this event
+        // If status is NOT 'Y' → Deactivation case
+        if (status !== 'Y') {
+            return {
+                success: true,
+                message: 'Event status updated successfully (no activation log changes)',
+            };
+        }
+
+        // From here only activation logic (status === 'Y')
+
         const existingLog = await EventActivationLog.findOne({
             where: {
                 event_id: eventId
             }
         });
 
+        // If log exists → UPDATE
         if (existingLog) {
-            // UPDATE existing log
             await existingLog.update({
                 status,
                 activation_date: activation_date || null,
@@ -121,11 +148,11 @@ module.exports.updateStatusEvent = async (req) => {
 
             return {
                 success: true,
-                message: 'Event status updated and activation log updated successfully',
+                message: 'Event activated and activation log updated successfully',
             };
         }
 
-        // If no log exists → CREATE new
+        // If log does not exist → CREATE NEW
         await EventActivationLog.create({
             event_id: eventId,
             status,
@@ -137,7 +164,7 @@ module.exports.updateStatusEvent = async (req) => {
 
         return {
             success: true,
-            message: 'Event status updated and activation log created successfully',
+            message: 'Event activated and activation log created successfully',
         };
 
     } catch (error) {
@@ -148,6 +175,7 @@ module.exports.updateStatusEvent = async (req) => {
         };
     }
 };
+
 
 // featured Status update Api..
 module.exports.updateEventFeatured = async (req) => {

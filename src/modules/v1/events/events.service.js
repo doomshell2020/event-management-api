@@ -102,6 +102,7 @@ module.exports.eventList = async (req, res) => {
         const {
             search,
             status,
+            admineventstatus,
             id,
             company_id,
             slug,
