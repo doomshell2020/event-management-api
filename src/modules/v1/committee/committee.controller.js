@@ -874,7 +874,7 @@ exports.requestList = async (req, res) => {
 
 exports.updateAssignedTickets = async (req, res) => {
     try {
-        const { event_id, user_id, tickets } = req.body;
+        const { event_id, user_id, tickets, commission } = req.body;
 
         /* ================= VALIDATE MEMBER ================= */
         const member = await CommitteeMembers.findOne({
@@ -891,6 +891,14 @@ exports.updateAssignedTickets = async (req, res) => {
                 "Committee member not found for this event",
                 404
             );
+        }
+
+        /* ================= UPDATE COMMISSION ================= */
+
+        if (commission !== undefined) {
+            await member.update({
+                commission: commission
+            });
         }
 
         /* ================= PROCESS TICKETS ================= */
@@ -943,7 +951,7 @@ exports.updateAssignedTickets = async (req, res) => {
 
         return apiResponse.success(
             res,
-            "Committee tickets updated successfully"
+            "Committee tickets and commission updated successfully"
         );
 
     } catch (error) {
@@ -1014,7 +1022,9 @@ exports.assignTicketList = async (req, res) => {
             attributes: [
                 'id',
                 'user_id',
-                'status'
+                'status',
+                'commission',
+                'createdAt'
             ],
             order: [['id', 'DESC']]
         });

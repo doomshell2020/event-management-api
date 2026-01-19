@@ -306,27 +306,27 @@ module.exports.publicEventList = async (req, res) => {
         const imagePath = "uploads/events";
         let whereCondition = {};
 
-        // ✅ ID Filter
+        // ID Filter
         if (id) whereCondition.id = id;
 
-        // ✅ Organizer ID
+        // Organizer ID
         if (org_id) whereCondition.event_org_id = org_id;
 
-        // ✅ Company ID
+        // Company ID
         if (company_id) whereCondition.company_id = company_id;
 
-        // ✅ Slug
+        // Slug
         if (slug && slug.trim() !== "") whereCondition.slug = slug.trim();
 
-        // ✅ Status
+        // Status
         if (status && status.trim() !== "") whereCondition.status = status.trim();
 
-        // ✅ Search by Name
+        // Search by Name
         if (search && search.trim() !== "") {
             whereCondition.name = { [Op.like]: `%${search.trim()}%` };
         }
 
-        // ✅ Event Date Range Filter
+        // Event Date Range Filter
         if (date_from && date_to) {
             whereCondition.date_from = { [Op.between]: [new Date(date_from), new Date(date_to)] };
         } else if (date_from) {
@@ -335,7 +335,7 @@ module.exports.publicEventList = async (req, res) => {
             whereCondition.date_from = { [Op.lte]: new Date(date_to) };
         }
 
-        // ✅ Sale Start / End Date Range Filters
+        // Sale Start / End Date Range Filters
         if (sale_start && sale_end) {
             whereCondition.sale_start = { [Op.between]: [new Date(sale_start), new Date(sale_end)] };
         } else if (sale_start) {
@@ -344,7 +344,7 @@ module.exports.publicEventList = async (req, res) => {
             whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
         }
 
-        // ✅ EXCLUDE expired events (date_to < today)
+        // EXCLUDE expired events (date_to < today)
 
         const today = new Date();
         if (!is_details_page) {
@@ -354,8 +354,7 @@ module.exports.publicEventList = async (req, res) => {
             };
         }
 
-
-        // ✅ Fetch Events
+        // Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
             include: [
@@ -363,13 +362,26 @@ module.exports.publicEventList = async (req, res) => {
                 { model: AddonTypes, as: "addons" },
                 { model: Company, as: "companyInfo", attributes: ["name"] }
             ],
-            order: [["date_from", "DESC"]],
+            order: [
+                ["featured", "ASC"],      // Y will come first
+                ["date_from", "DESC"]      // then sort by date
+            ],
         });
 
-        // ✅ Format and Convert Dates
+
+        // Format and Convert Dates
         const formattedEvents = events.map((event) => {
             const data = event.toJSON();
             const tz = data.event_timezone || "UTC";
+            const adminStatus = data.admineventstatus || "N";
+            const eventStatus = data.status || "N";
+            let status = null;
+            // For public listing, show only events that are approved by admin and active
+            if (adminStatus !== "Y" || eventStatus !== "Y") {
+                status = "N";
+            } else {
+                status = "Y";
+            }
 
             const formatDate = (date) =>
                 date
@@ -396,7 +408,7 @@ module.exports.publicEventList = async (req, res) => {
             };
         });
 
-        // ✅ Send Response
+        // Send Response
         return {
             success: true,
             message: "Active/Upcoming events fetched successfully",
@@ -528,7 +540,7 @@ module.exports.createEvent = async (req, res) => {
         const formatted_sale_end = sale_end ? convertToUTC(sale_end, finalTimezone) : null;
         const formatted_request_rsvp = request_rsvp ? convertToUTC(request_rsvp, finalTimezone) : null;
 
-        const admin_status = is_free == 'Y' ? 'Y' : 'N';
+        // const admin_status = is_free == 'Y' ? 'Y' : 'N';
 
         // ✅ Build final event object
         const eventData = {
@@ -552,7 +564,7 @@ module.exports.createEvent = async (req, res) => {
             fee_assign: 'user',
             is_free: is_free == 'Y' ? 'Y' : 'N',
             allow_register: allow_register == 'Y' ? 'Y' : 'N',
-            admineventstatus: admin_status,
+            // admineventstatus: admin_status,
             request_rsvp: formatted_request_rsvp,
             event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
         };

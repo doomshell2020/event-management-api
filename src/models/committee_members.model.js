@@ -13,6 +13,10 @@ const CommitteeMembers = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: false,
         },
+        commission:{
+            type: DataTypes.FLOAT,
+            allowNull: true,
+        },
         user_id: {
             type: DataTypes.INTEGER,
             allowNull: false,

@@ -217,7 +217,12 @@ router.post('/ticket/update',
 
         body('tickets')
             .isObject()
-            .withMessage('Tickets must be an object')
+            .withMessage('Tickets must be an object'),
+            
+        body('commission')
+            .optional()
+            .isFloat({ min: 0 })
+            .withMessage('Commission must be a positive number')
     ],
     validate,
     committeeController.updateAssignedTickets
