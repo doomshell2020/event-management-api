@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
-const { Op } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency, Templates } = require('../../../models');
+const { Op, where } = require('sequelize');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User } = require('../../../models');
 const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
@@ -165,7 +165,8 @@ module.exports.eventList = async (req, res) => {
             where: whereCondition,
             include: [
                 { model: Company, as: "companyInfo", attributes: ["name"] },
-                { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] }
+                { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] },
+                { model: User, as: "Organizer", attributes: ["id", "email", "first_name", "last_name", "payment_gateway_charges", "default_platform_charges", "admin_approval_required", "approval_type"] }
             ],
             order: [["created", "DESC"]],
         });
@@ -343,6 +344,7 @@ module.exports.publicEventList = async (req, res) => {
         } else if (sale_end) {
             whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
         }
+        
 
         // EXCLUDE expired events (date_to < today)
 
@@ -353,6 +355,10 @@ module.exports.publicEventList = async (req, res) => {
                 [Op.gte]: today, // only events whose end date >= today
             };
         }
+
+        whereCondition.admineventstatus = 'Y';
+        whereCondition.status = 'Y';
+        // console.log('whereCondition :', whereCondition);
 
         // Fetch Events
         const events = await Event.findAll({
@@ -589,6 +595,11 @@ module.exports.createEvent = async (req, res) => {
             price: parseFloat(0) || 0
         });
 
+        await User.update(
+            { role_id: config.ORGANIZER_ROLE },
+            { where: { id: user_id } }
+        );
+
         return { success: true, event: newEvent };
 
     } catch (error) {
@@ -690,6 +701,11 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
                 );
             }
 
+            await User.update(
+                { role_id: config.ORGANIZER_ROLE },
+                { where: { id: authUser.id } }
+            );
+
             return {
                 success: true,
                 message: "Event status updated successfully",
@@ -776,6 +792,11 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
 
         // ✅ Save updates
         await existingEvent.save();
+
+        await User.update(
+            { role_id: config.ORGANIZER_ROLE },
+            { where: { id: authUser.id } }
+        );
 
         return { success: true, event: existingEvent };
 

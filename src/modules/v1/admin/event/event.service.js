@@ -90,6 +90,7 @@ module.exports.getEventList = async (req, res) => {
 module.exports.updateStatusEvent = async (req) => {
     try {
         const eventId = req.params.id;
+        // console.log('eventId :', eventId);
 
         const {
             status,
@@ -118,6 +119,7 @@ module.exports.updateStatusEvent = async (req) => {
         }
 
         // Update event status
+        console.log('status :', status);
         await existingEvent.update({ status, admineventstatus: status });
 
         // If status is NOT 'Y' → Deactivation case

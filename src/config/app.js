@@ -4,6 +4,10 @@ const config = {
   // Server
   port: process.env.PORT || 5000,
 
+  ORGANIZER_ROLE: "2",
+  CUSTOMER_ROLE: "3",
+  ADMIN_ROLE: "1",
+
   // JWT
   jwtSecret: process.env.JWT_SECRET || 'yourjwtsecret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
@@ -60,7 +64,6 @@ const config = {
     newEventCreated: process.env.NEW_EVENT_CREATED_TEMPLATE_ID || '18',
     contactUs: process.env.CONTACT_US_TEMPLATE_ID || '25',
   },
-
   // -------------------------
   // 🔐 SECURITY CONFIG
   // -------------------------

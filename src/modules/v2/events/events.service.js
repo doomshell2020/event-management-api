@@ -1,9 +1,10 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event, EventSlots, TicketType, TicketPricing, Wellness, WellnessSlots, Currency, OrderItems } = require('../../../models');
+const { Company, Event, EventSlots, TicketType, TicketPricing, Wellness, WellnessSlots, Currency, OrderItems, User } = require('../../../models');
 const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const moment = require('moment');
+const config = require('../../../config/app');
 
 
 module.exports.deleteSlotById = async (event_id, slot_id) => {
@@ -346,6 +347,11 @@ module.exports.createEvent = async (req, res) => {
             };
         }
 
+        await User.update(
+            { role_id: config.ORGANIZER_ROLE },
+            { where: { id: user_id } }
+        );
+
         return { success: true, event: newEvent };
 
     } catch (error) {
@@ -395,6 +401,11 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         ) {
             existingEvent.status = updateData.status;
             await existingEvent.save();
+
+            await User.update(
+                { role_id: config.ORGANIZER_ROLE },
+                { where: { id: user.id } }
+            );
 
             return {
                 success: true,
@@ -488,6 +499,12 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         // Save updates
         // console.log('existingEvent :', existingEvent);
         await existingEvent.save();
+
+        await User.update(
+            { role_id: config.ORGANIZER_ROLE },
+            { where: { id:  user.id } }
+        );
+
         return { success: true, event: existingEvent };
     } catch (error) {
         console.error('Error updating event:', error);
