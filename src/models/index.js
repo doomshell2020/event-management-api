@@ -36,6 +36,7 @@ const Seo = require('./seo.model');
 const Templates = require('./templates.model');
 const Payouts = require('./payouts.model');
 const EventActivationLog = require('./event_activation_logs.model');
+const Coupons = require('./coupons.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
@@ -134,9 +135,11 @@ Templates.belongsTo(Event, { foreignKey: 'eventId', as: 'events' });
 
 Payouts.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 
+Coupons.belongsTo(Event, { foreignKey: "event", as: "events" });
+
 module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries,
   Event, TicketType, OrderItems, User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness,
   WellnessSlots, Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup,
-  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog
+  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog,Coupons
 };

@@ -293,7 +293,7 @@ module.exports.updateStatusTemplates = async (req) => {
 module.exports.getEventList = async (req, res) => {
     try {
         const events = await Event.findAll({
-            where: { status: "Y" },
+            // where: { status: "Y" },
             attributes: ["id", "name"],
             order: [["id", "DESC"]],
             raw: true, // 👈 important for plain objects
