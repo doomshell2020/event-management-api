@@ -50,6 +50,14 @@ const Orders = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true
         },
+        discount_type: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+        discount_value: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },     
         RRN: {
             type: DataTypes.STRING,
             allowNull: true
