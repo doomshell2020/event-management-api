@@ -38,8 +38,23 @@ exports.applyCoupon = async (req, res) => {
             );
         }
 
+        // Check max redeems (how many times this coupon has been used in Orders)
+        const redeemedCount = await Orders.count({
+            where: {
+                discount_code: coupon_code
+            }
+        });
+
+        if (coupon.max_redeems && redeemedCount >= coupon.max_redeems) {
+            return apiResponse.conflict(
+                res,
+                "Coupon has reached its maximum number of uses",
+                "COUPON_MAX_REDEEMED"
+            );
+        }
+
         // Date Validation
-        if (coupon.validity_period === "specified_date") {
+        if (coupon.validity_period == "specified_date") {
             const today = new Date();
 
             if (
@@ -58,7 +73,7 @@ exports.applyCoupon = async (req, res) => {
         let amountToApply = cartTotal;
 
         // Coupon applicability validation
-        if (coupon.applicable_for !== "all") {
+        if (coupon.applicable_for != "all") {
             return apiResponse.conflict(
                 res,
                 `This coupon is only applicable for ${coupon.applicable_for} items`,
@@ -69,7 +84,7 @@ exports.applyCoupon = async (req, res) => {
         // Calculate Discount
         let discount = 0;
 
-        if (coupon.discount_type === "percentage") {
+        if (coupon.discount_type == "percentage") {
             discount = (amountToApply * parseFloat(coupon.discount_value)) / 100;
         } else {
             discount = parseFloat(coupon.discount_value);
@@ -117,6 +132,8 @@ exports.applyCoupon = async (req, res) => {
                 discount,
                 final_amount: finalAmount,
                 applicable_on: amountToApply,
+                redeemed_count: redeemedCount,
+                max_redeems: coupon.max_redeems || "unlimited"
             }
         );
 
