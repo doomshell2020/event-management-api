@@ -1,5 +1,5 @@
 const Stripe = require("stripe");
-const { Payment, Orders, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons } = require("../../../models");
+const { Payment, Orders, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons, WellnessSlots, Wellness } = require("../../../models");
 const apiResponse = require("../../../common/utils/apiResponse");
 const config = require("../../../config/app");
 const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
@@ -465,8 +465,7 @@ exports.stripeWebhook = async (req, res) => {
           { model: AddonTypes, as: "addonType", required: false },
           { model: Package, as: "packageType", required: false },
           {
-            model: TicketPricing,
-            as: "ticketPricing",
+            model: TicketPricing, as: "ticketPricing",
             required: false,
             attributes: ["id", "price", "date"],
             include: [
@@ -491,6 +490,16 @@ exports.stripeWebhook = async (req, res) => {
               },
             ],
           },
+          {
+            model: WellnessSlots, as: "appointment", required: false,
+            include: [
+              {
+                model: Wellness,
+                as: "wellnessList",
+                required: false
+              }
+            ]
+          }
         ],
       });
 
@@ -576,24 +585,11 @@ exports.manualWebhook = async (req, res) => {
     const snapshotItems = await PaymentSnapshotItems.findAll({
       where: { id: snapshotIds },
       include: [
+        { model: TicketType, as: "ticketType", required: false },
+        { model: AddonTypes, as: "addonType", required: false },
+        { model: Package, as: "packageType", required: false },
         {
-          model: TicketType,
-          as: 'ticketType',
-          required: false
-        },
-        {
-          model: AddonTypes,
-          as: 'addonType',
-          required: false
-        },
-        {
-          model: Package,
-          as: 'packageType',
-          required: false
-        },
-        {
-          model: TicketPricing,
-          as: 'ticketPricing',
+          model: TicketPricing, as: "ticketPricing",
           required: false,
           attributes: ["id", "price", "date"],
           include: [
@@ -607,12 +603,30 @@ exports.manualWebhook = async (req, res) => {
               model: EventSlots,
               as: "slot",
               required: false,
-              attributes: ["id", "slot_name", "slot_date", "start_time", "end_time", "description"],
+              attributes: [
+                "id",
+                "slot_name",
+                "slot_date",
+                "start_time",
+                "end_time",
+                "description",
+              ],
+            },
+          ],
+        },
+        {
+          model: WellnessSlots, as: "appointment", required: false,
+          include: [
+            {
+              model: Wellness,
+              as: "wellnessList",
+              required: false
             }
           ]
         }
-      ]
+      ],
     });
+
 
     const payment = await Payment.create({
       user_id: 4870,

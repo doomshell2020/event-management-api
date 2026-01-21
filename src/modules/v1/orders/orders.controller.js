@@ -1100,7 +1100,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
     }
 };
 
-
 exports.createOrder = async (req, res) => {
     try {
         const user_id = req.user.id;

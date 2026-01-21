@@ -428,7 +428,7 @@ exports.isCouponAppointmentEligible = async (req, res) => {
             message: "Coupon applied successfully",
             data: {
                 ...coupon.dataValues,
-                discountAmt: discountPrice,
+                discountAmt: discountPrice
             },
         });
 

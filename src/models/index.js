@@ -130,6 +130,8 @@ PaymentSnapshotItems.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticke
 PaymentSnapshotItems.belongsTo(AddonTypes, { foreignKey: 'ticket_id', as: 'addonType' });
 PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
 PaymentSnapshotItems.belongsTo(TicketPricing, { foreignKey: 'ticket_id', as: 'ticketPricing' });
+PaymentSnapshotItems.belongsTo(WellnessSlots, { foreignKey: 'ticket_id', as: 'appointment' });
+
 
 Templates.belongsTo(Event, { foreignKey: 'eventId', as: 'events' });
 
