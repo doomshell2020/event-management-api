@@ -1048,7 +1048,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 // DISCOUNT CODE ROW (NEW)
                 // Compute discount display
                 const discountDisplay = order.discount_amount && order.discount_code
-                    ? `-${formattedEvent.currency_symbol}${formatPrice(order.discount_amount)} (${order.discount_code})`
+                    ? `(${order.discount_code}) -${formattedEvent.currency_symbol}${formatPrice(order.discount_amount)}`
                     : "N/A";
 
                 // FINAL EMAIL HTML
