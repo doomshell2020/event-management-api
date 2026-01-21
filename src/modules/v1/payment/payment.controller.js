@@ -1,5 +1,5 @@
 const Stripe = require("stripe");
-const { Payment, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing } = require("../../../models");
+const { Payment, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons } = require("../../../models");
 const apiResponse = require("../../../common/utils/apiResponse");
 const config = require("../../../config/app");
 const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
@@ -12,8 +12,7 @@ const stripe = new Stripe(config.stripeKey, {
   apiVersion: "2024-06-20",
 });
 
-// -------------------------------------------------------------
-// CREATE PAYMENT INTENT
+
 exports.createPaymentIntent = async (req, res) => {
   try {
     const {
@@ -23,22 +22,90 @@ exports.createPaymentIntent = async (req, res) => {
       sub_total = 0,
       grand_total = 0,
       discount_amount = 0,
-      discount_code,
       cartData,
       currency = "usd",
+      appliedCoupon = null
     } = req.body;
 
-    if (!user_id || !event_id || !grand_total || !cartData?.length) {
+
+    // BASIC VALIDATION
+    if (!user_id || !event_id || !grand_total || !Array.isArray(cartData) || cartData.length == 0) {
       return apiResponse.error(res, "Missing required fields", 400);
     }
 
+    // DISCOUNT VALIDATION LOGIC
 
-    // -------------------------------------------------------------
+    let validatedDiscount = 0;
+    let couponCode = null;
+
+    if (appliedCoupon) {
+      couponCode = appliedCoupon.coupon_code;
+
+      const coupon = await Coupons.findOne({
+        where: {
+          code: couponCode,
+          event: event_id,
+          status: "Y",
+        },
+      });
+
+      if (!coupon) {
+        return apiResponse.error(res, "Invalid coupon code", 400);
+      }
+
+      // DATE VALIDATION
+      if (coupon.validity_period == "specified_date") {
+        const today = new Date();
+
+        if (
+          today < new Date(coupon.specific_date_from) ||
+          today > new Date(coupon.specific_date_to)
+        ) {
+          return apiResponse.error(res, "Coupon is expired", 400);
+        }
+      }
+
+      // DISCOUNT CALCULATION
+      if (coupon.discount_type == "percentage") {
+        validatedDiscount =
+          (Number(sub_total) * parseFloat(coupon.discount_value)) / 100;
+      } else {
+        validatedDiscount = parseFloat(coupon.discount_value);
+      }
+
+      // MAX LIMIT SAFETY
+      if (validatedDiscount > Number(sub_total)) {
+        validatedDiscount = Number(sub_total);
+      }
+
+      // SECURITY CHECK – prevent frontend manipulation
+      if (Math.abs(validatedDiscount - Number(discount_amount)) > 1) {
+        return apiResponse.error(
+          res,
+          "Discount mismatch detected. Please try again.",
+          400
+        );
+      }
+    }
+
+    // GRAND TOTAL VALIDATION
+    const expectedGrandTotal =
+      Number(sub_total) +
+      Number(tax_total) -
+      Number(validatedDiscount);
+
+    if (Math.abs(expectedGrandTotal - Number(grand_total)) > 1) {
+      return apiResponse.error(
+        res,
+        "Amount mismatch detected. Please refresh and try again.",
+        400
+      );
+    }
+
     // VALIDATE LIMITS (Ticket / Committee / Addon / Package)
-    // -------------------------------------------------------------
+
     for (const item of cartData) {
 
-      // 🚫 Skip appointment items completely
       if (item.ticketType == "appointment") {
         continue;
       }
@@ -50,7 +117,6 @@ exports.createPaymentIntent = async (req, res) => {
       let limitField = null;
       let nameField = null;
 
-      // 🔹 Decide source table, limit field & name field
       if (item.ticketType == "ticket" || item.ticketType == "committesale") {
         Model = TicketType;
         whereClause.ticket_id = item.ticketId;
@@ -87,7 +153,6 @@ exports.createPaymentIntent = async (req, res) => {
         continue;
       }
 
-      // 🔹 Fetch limit + display name
       const masterItem = await Model.findOne({
         where: { id: itemId },
         attributes: ["id", limitField, nameField]
@@ -95,10 +160,8 @@ exports.createPaymentIntent = async (req, res) => {
 
       const totalLimit = Number(masterItem?.[limitField] || 0);
 
-      // If no limit defined → allow
       if (!totalLimit) continue;
 
-      // 🔹 Count already booked
       const booked = await OrderItems.findOne({
         where: {
           ...whereClause,
@@ -113,17 +176,17 @@ exports.createPaymentIntent = async (req, res) => {
       const alreadyBooked = Number(booked?.totalBooked || 0);
       const requested = Number(item.quantity || 1);
 
-      // 🔥 LIMIT CHECK
       if (alreadyBooked + requested > totalLimit) {
         return apiResponse.error(
           res,
-          `${typeLabel} "${masterItem?.[nameField] || "Item"}" is sold out or its booking limit has been reached. Please remove this item from your cart and add another available option.`,
+          `${typeLabel} "${masterItem?.[nameField] || "Item"}" is sold out or its booking limit has been reached.`,
           400
         );
       }
     }
 
-    // Create snapshot rows
+    // CREATE SNAPSHOT
+
     const snapshotRows = await PaymentSnapshotItems.bulkCreate(
       cartData.map((item) => ({
         user_id,
@@ -142,6 +205,8 @@ exports.createPaymentIntent = async (req, res) => {
 
     const snapshotIds = snapshotRows.map((r) => r.id).join(",");
 
+    // STRIPE METADATA BUILDER
+
     const buildStripeMetadata = (data = {}) => {
       const metadata = {};
 
@@ -150,35 +215,203 @@ exports.createPaymentIntent = async (req, res) => {
           metadata[key] = String(value).slice(0, 500);
         }
       });
+
       return metadata;
     };
 
-    // 2️⃣ Create Stripe PaymentIntent
+    // CREATE STRIPE PAYMENT INTENT
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(grand_total * 100),
+      amount: Math.round(Number(grand_total) * 100),
       currency,
       metadata: buildStripeMetadata({
         user_id,
         event_id,
         tax_total,
-        discount_amount,
         sub_total,
-        grand_total,
-        discount_code,
         snapshot_ids: snapshotIds,
+        discount_amount: validatedDiscount,
+        grand_total,
+        coupon_code: couponCode || "",
       }),
     });
 
     return apiResponse.success(res, "Payment Intent Created", {
       clientSecret: paymentIntent.client_secret,
     });
+
   } catch (error) {
     console.error("Stripe Error:", error);
     return apiResponse.error(res, error.message, 500);
   }
 };
 
-// -------------------------------------------------------------
+
+// CREATE PAYMENT INTENT
+// exports.createPaymentIntent = async (req, res) => {
+//   try {
+//     const {
+//       user_id,
+//       event_id,
+//       tax_total = 0,
+//       sub_total = 0,
+//       grand_total = 0,
+//       discount_amount = 0,
+//       discount_code,
+//       cartData,
+//       currency = "usd",
+//     } = req.body;
+
+//     if (!user_id || !event_id || !grand_total || !cartData?.length) {
+//       return apiResponse.error(res, "Missing required fields", 400);
+//     }
+
+
+//     // -------------------------------------------------------------
+//     // VALIDATE LIMITS (Ticket / Committee / Addon / Package)
+//     // -------------------------------------------------------------
+//     for (const item of cartData) {
+
+//       // 🚫 Skip appointment items completely
+//       if (item.ticketType == "appointment") {
+//         continue;
+//       }
+
+//       let Model = null;
+//       let whereClause = {};
+//       let itemId = null;
+//       let typeLabel = "";
+//       let limitField = null;
+//       let nameField = null;
+
+//       // 🔹 Decide source table, limit field & name field
+//       if (item.ticketType == "ticket" || item.ticketType == "committesale") {
+//         Model = TicketType;
+//         whereClause.ticket_id = item.ticketId;
+//         itemId = item.ticketId;
+//         typeLabel = "Ticket";
+//         limitField = "count";
+//         nameField = "title";
+//       }
+//       else if (item.ticketType == "addon") {
+//         Model = AddonTypes;
+//         whereClause.addon_id = item.ticketId;
+//         itemId = item.ticketId;
+//         typeLabel = "Addon";
+//         limitField = "count";
+//         nameField = "name";
+//       }
+//       else if (item.ticketType == "package") {
+//         Model = Package;
+//         whereClause.package_id = item.ticketId;
+//         itemId = item.ticketId;
+//         typeLabel = "Package";
+//         limitField = "total_package";
+//         nameField = "name";
+//       }
+//       else if (item.ticketType == "ticket_price") {
+//         Model = TicketPricing;
+//         whereClause.package_id = item.ticketId;
+//         itemId = item.ticketId;
+//         typeLabel = "TicketPrice";
+//         limitField = "total_count";
+//         nameField = "price";
+//       }
+//       else {
+//         continue;
+//       }
+
+//       // 🔹 Fetch limit + display name
+//       const masterItem = await Model.findOne({
+//         where: { id: itemId },
+//         attributes: ["id", limitField, nameField]
+//       });
+
+//       const totalLimit = Number(masterItem?.[limitField] || 0);
+
+//       // If no limit defined → allow
+//       if (!totalLimit) continue;
+
+//       // 🔹 Count already booked
+//       const booked = await OrderItems.findOne({
+//         where: {
+//           ...whereClause,
+//           event_id
+//         },
+//         attributes: [
+//           [fn("SUM", col("count")), "totalBooked"]
+//         ],
+//         raw: true
+//       });
+
+//       const alreadyBooked = Number(booked?.totalBooked || 0);
+//       const requested = Number(item.quantity || 1);
+
+//       // 🔥 LIMIT CHECK
+//       if (alreadyBooked + requested > totalLimit) {
+//         return apiResponse.error(
+//           res,
+//           `${typeLabel} "${masterItem?.[nameField] || "Item"}" is sold out or its booking limit has been reached. Please remove this item from your cart and add another available option.`,
+//           400
+//         );
+//       }
+//     }
+
+//     // Create snapshot rows
+//     const snapshotRows = await PaymentSnapshotItems.bulkCreate(
+//       cartData.map((item) => ({
+//         user_id,
+//         event_id,
+//         ticket_id: item.ticketId || null,
+//         cart_id: item.id || null,
+//         addon_id: item.addonId || null,
+//         appointment_id: item.appointmentId || null,
+//         committee_user_id: item.committee_user_id || null,
+//         item_type: item.ticketType,
+//         quantity: item.quantity || 1,
+//         price: item.price || 0,
+//         payment_status: "pending",
+//       }))
+//     );
+
+//     const snapshotIds = snapshotRows.map((r) => r.id).join(",");
+
+//     const buildStripeMetadata = (data = {}) => {
+//       const metadata = {};
+
+//       Object.entries(data).forEach(([key, value]) => {
+//         if (value !== undefined && value !== null && value !== "") {
+//           metadata[key] = String(value).slice(0, 500);
+//         }
+//       });
+//       return metadata;
+//     };
+
+//     // 2️⃣ Create Stripe PaymentIntent
+//     const paymentIntent = await stripe.paymentIntents.create({
+//       amount: Math.round(grand_total * 100),
+//       currency,
+//       metadata: buildStripeMetadata({
+//         user_id,
+//         event_id,
+//         tax_total,
+//         discount_amount,
+//         sub_total,
+//         grand_total,
+//         discount_code,
+//         snapshot_ids: snapshotIds,
+//       }),
+//     });
+
+//     return apiResponse.success(res, "Payment Intent Created", {
+//       clientSecret: paymentIntent.client_secret,
+//     });
+//   } catch (error) {
+//     console.error("Stripe Error:", error);
+//     return apiResponse.error(res, error.message, 500);
+//   }
+// };
+
 // STRIPE WEBHOOK (RAW BODY REQUIRED)
 exports.stripeWebhook = async (req, res) => {
   console.log("🔥 WEBHOOK HIT");
@@ -202,14 +435,21 @@ exports.stripeWebhook = async (req, res) => {
 
   try {
     // PAYMENT SUCCESS
-    // ---------------------------------------------------------
     if (event.type == "payment_intent.succeeded") {
       const pi = event.data.object;
+      const meta = pi.metadata || {};
 
-      const snapshotIds = pi.metadata.snapshot_ids
-        .split(",")
-        .map(Number);
+      // 🔒 Snapshot IDs (safe)
+      const snapshotIds = meta.snapshot_ids
+        ? meta.snapshot_ids.split(",").map(Number)
+        : [];
 
+      if (!snapshotIds.length) {
+        console.warn("⚠️ No snapshot IDs found for PI:", pi.id);
+        return res.json({ received: true });
+      }
+
+      // Update snapshot payment status
       await PaymentSnapshotItems.update(
         {
           payment_status: "paid",
@@ -218,27 +458,16 @@ exports.stripeWebhook = async (req, res) => {
         { where: { id: snapshotIds } }
       );
 
+      // Fetch snapshot items
       const snapshotItems = await PaymentSnapshotItems.findAll({
         where: { id: snapshotIds },
         include: [
-          {
-            model: TicketType,
-            as: 'ticketType',
-            required: false
-          },
-          {
-            model: AddonTypes,
-            as: 'addonType',
-            required: false
-          },
-          {
-            model: Package,
-            as: 'packageType',
-            required: false
-          },
+          { model: TicketType, as: "ticketType", required: false },
+          { model: AddonTypes, as: "addonType", required: false },
+          { model: Package, as: "packageType", required: false },
           {
             model: TicketPricing,
-            as: 'ticketPricing',
+            as: "ticketPricing",
             required: false,
             attributes: ["id", "price", "date"],
             include: [
@@ -252,59 +481,92 @@ exports.stripeWebhook = async (req, res) => {
                 model: EventSlots,
                 as: "slot",
                 required: false,
-                attributes: ["id", "slot_name", "slot_date", "start_time", "end_time", "description"],
-              }
-            ]
-          }
-        ]
+                attributes: [
+                  "id",
+                  "slot_name",
+                  "slot_date",
+                  "start_time",
+                  "end_time",
+                  "description",
+                ],
+              },
+            ],
+          },
+        ],
       });
 
+      // COUPON HANDLING (NO KEY CHANGES)
+      const couponCode = meta.coupon_code || null;
+      let couponDetails = null;
+
+      if (couponCode) {
+        couponDetails = await Coupons.findOne({
+          where: { code: couponCode },
+        });
+      }
+
+      // Normalize numeric values (Stripe metadata = string)
+      const grandTotal = Number(meta.grand_total || 0);
+      const discountAmount = Number(meta.discount_amount || 0);
+
+      // CREATE PAYMENT RECORD
       const payment = await Payment.create({
-        user_id: pi.metadata.user_id,
-        event_id: pi.metadata.event_id,
-        amount: pi.metadata?.grand_total || 0,
+        user_id: Number(meta.user_id),
+        event_id: Number(meta.event_id),
+        amount: grandTotal,
         payment_intent: pi.id,
         payment_status: "paid",
+        coupon_code: couponCode,
+        discount_amount: discountAmount,
+        discount_type: couponDetails?.discount_type || null,
+        discount_value: couponDetails?.discount_value || null,
       });
 
-      const order = await fulfilOrderFromSnapshot({
-        meta_data: pi.metadata,
-        user_id: pi.metadata.user_id,
-        event_id: pi.metadata.event_id,
+      // FULFIL ORDER
+      await fulfilOrderFromSnapshot({
+        meta_data: meta,
+        user_id: Number(meta.user_id),
+        event_id: Number(meta.event_id),
         payment,
         snapshotItems,
         payment_method: "stripe",
+        coupon_code: couponCode,
+        discount_amount: discountAmount,
+        coupon_details: couponDetails,
       });
-      // console.log('>>>>>>>>>>>>>>order',order);      
 
       console.log("✅ Payment → Order → QR completed");
     }
 
     // PAYMENT FAILED
-    // ---------------------------------------------------------
     if (event.type == "payment_intent.payment_failed") {
       const pi = event.data.object;
-      const snapshotIds = pi.metadata.snapshot_ids
-        .split(",")
-        .map(Number);
+      const meta = pi.metadata || {};
 
-      await PaymentSnapshotItems.update(
-        {
-          payment_status: "failed",
-          payment_intent_id: pi.id,
-        },
-        { where: { id: snapshotIds } }
-      );
+      const snapshotIds = meta.snapshot_ids
+        ? meta.snapshot_ids.split(",").map(Number)
+        : [];
 
-      console.log("❌ Payment failed");
+      if (snapshotIds.length) {
+        await PaymentSnapshotItems.update(
+          {
+            payment_status: "failed",
+            payment_intent_id: pi.id,
+          },
+          { where: { id: snapshotIds } }
+        );
+      }
+
+      console.log("❌ Payment failed:", pi.id);
     }
 
     return res.json({ received: true });
   } catch (error) {
-    console.error("Webhook processing error:", error);
+    console.error("❌ Webhook processing error:", error);
     return res.status(500).send("Webhook handler failed");
   }
 };
+
 
 exports.manualWebhook = async (req, res) => {
   try {

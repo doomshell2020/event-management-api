@@ -6,8 +6,7 @@ const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 
 // CREATE ORDER
-router.post(
-    "/create",
+router.post("/create",
     authenticate,
     [
         body("event_id").notEmpty().withMessage("event_id is required"),
@@ -24,7 +23,7 @@ router.post(
             .isNumeric()
             .withMessage("discountValue must be numeric"),
         body("applicableFor")
-            .isIn(["ticket", "addon", "appointment", "all",'committesale','package','ticket_price'])
+            .isIn(["ticket", "addon", "appointment", "all", 'committesale', 'package', 'ticket_price'])
             .withMessage("Invalid applicableFor value"),
         body("validityPeriod")
             .isIn(["unlimited", "specified_date"])
@@ -34,20 +33,26 @@ router.post(
     couponController.CouponCodeCreation
 );
 
-
-
-router.get(
-    "/event/:event_id",
+router.get("/event/:event_id",
     authenticate,
     couponController.getPromotionCodesByEvent
 );
 
-router.get(
-    "/check-eligibility/:eventId",
+router.post("/apply",
+  authenticate,
+  [
+    body("coupon_code").notEmpty().withMessage("coupon_code is required"),
+    body("event_id").notEmpty().withMessage("event_id is required"),
+    body("total_amount").isNumeric().withMessage("total_amount must be numeric"),
+    // coupon_code, event_id, totalAmount = 0
+  ],
+  validate,
+  couponController.applyCoupon
+);
+
+router.get("/check-eligibility/:eventId",
     authenticate,
     couponController.isCouponAppointmentEligible
 );
-
-
 
 module.exports = router;

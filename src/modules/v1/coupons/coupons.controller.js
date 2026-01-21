@@ -2,6 +2,136 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const { Coupons, Event, Currency, Orders, Cart, WellnessSlots, sequelize } = require('../../../models');
 const { Op, fn, col, literal } = require("sequelize");
 
+exports.applyCoupon = async (req, res) => {
+    try {
+        const { coupon_code, event_id, total_amount = 0 } = req.body;
+
+        // Basic validation
+        if (!coupon_code || !event_id) {
+            return apiResponse.validation(res, [
+                "coupon_code and event_id are required"
+            ]);
+        }
+
+        const cartTotal = parseFloat(total_amount);
+
+        if (!cartTotal || cartTotal <= 0) {
+            return apiResponse.validation(res, [
+                "Total amount must be greater than zero"
+            ]);
+        }
+
+        // Find coupon for this event
+        const coupon = await Coupons.findOne({
+            where: {
+                code: coupon_code,
+                event: event_id,
+                status: "Y",
+            },
+        });
+
+        if (!coupon) {
+            return apiResponse.notFound(
+                res,
+                "Invalid coupon code",
+                "INVALID_COUPON"
+            );
+        }
+
+        // Date Validation
+        if (coupon.validity_period === "specified_date") {
+            const today = new Date();
+
+            if (
+                today < new Date(coupon.specific_date_from) ||
+                today > new Date(coupon.specific_date_to)
+            ) {
+                return apiResponse.conflict(
+                    res,
+                    "Coupon is expired",
+                    "COUPON_EXPIRED"
+                );
+            }
+        }
+
+        // Determine applicable amount
+        let amountToApply = cartTotal;
+
+        // Coupon applicability validation
+        if (coupon.applicable_for !== "all") {
+            return apiResponse.conflict(
+                res,
+                `This coupon is only applicable for ${coupon.applicable_for} items`,
+                "COUPON_NOT_APPLICABLE"
+            );
+        }
+
+        // Calculate Discount
+        let discount = 0;
+
+        if (coupon.discount_type === "percentage") {
+            discount = (amountToApply * parseFloat(coupon.discount_value)) / 100;
+        } else {
+            discount = parseFloat(coupon.discount_value);
+        }
+
+        // Discount validations
+        if (!discount || discount <= 0) {
+            return apiResponse.error(
+                res,
+                "Coupon discount value is invalid",
+                400,
+                [],
+                "INVALID_DISCOUNT"
+            );
+        }
+
+        if (discount > amountToApply) {
+            return apiResponse.error(
+                res,
+                `Discount amount (${discount}) cannot be greater than cart amount (${amountToApply})`,
+                400,
+                [],
+                "DISCOUNT_EXCEEDS_TOTAL"
+            );
+        }
+
+        const finalAmount = cartTotal - discount;
+
+        if (finalAmount < 0) {
+            return apiResponse.error(
+                res,
+                "Final amount cannot be negative",
+                400,
+                [],
+                "NEGATIVE_FINAL_AMOUNT"
+            );
+        }
+
+        return apiResponse.success(
+            res,
+            "Coupon applied successfully",
+            {
+                coupon_code,
+                original_amount: cartTotal,
+                discount,
+                final_amount: finalAmount,
+                applicable_on: amountToApply,
+            }
+        );
+
+    } catch (error) {
+        console.error("Apply coupon error:", error);
+
+        return apiResponse.error(
+            res,
+            "Failed to apply coupon",
+            500,
+            [error.message],
+            "APPLY_COUPON_FAILED"
+        );
+    }
+};
 
 exports.CouponCodeCreation = async (req, res) => {
     try {
@@ -81,7 +211,6 @@ exports.CouponCodeCreation = async (req, res) => {
         });
     }
 };
-
 
 // get promotion code..
 exports.getPromotionCodesByEvent = async (req, res) => {
@@ -191,14 +320,12 @@ exports.getPromotionCodesByEvent = async (req, res) => {
     }
 };
 
-
-
 // new api for couponEligible for appointments pass
 exports.isCouponAppointmentEligible = async (req, res) => {
     try {
         const userId = req.user.id;
         const { eventId } = req.params;
-        const { couponCode} = req.query;
+        const { couponCode } = req.query;
 
         if (!eventId || !couponCode || !userId) {
             return res.status(400).json({
@@ -224,7 +351,7 @@ exports.isCouponAppointmentEligible = async (req, res) => {
         }
 
         /* -------- Date Validation -------- */
-        if (coupon.validity_period === "specified_date") {
+        if (coupon.validity_period == "specified_date") {
             const today = new Date();
 
             if (
@@ -263,10 +390,10 @@ exports.isCouponAppointmentEligible = async (req, res) => {
         };
 
         /* -------- Applicable Logic -------- */
-        if (coupon.applicable_for === "appointment") {
+        if (coupon.applicable_for == "appointment") {
             const cart = await Cart.findOne({
                 where: { ticket_type: "appointment", user_id: userId },
-                include: [{ model: WellnessSlots, as: 'appointments' }], 
+                include: [{ model: WellnessSlots, as: 'appointments' }],
             });
 
             if (!cart) {
