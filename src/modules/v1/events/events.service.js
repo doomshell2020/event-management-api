@@ -74,7 +74,7 @@ module.exports.deleteEvent = async (eventId) => {
             return {
                 success: false,
                 code: "EVENT_HAS_ORDERS",
-                message: "Event cannot be deleted because orders exist for this event"
+                message: "Event cannot be deleted because orders exist for this event."
             };
         }
 
