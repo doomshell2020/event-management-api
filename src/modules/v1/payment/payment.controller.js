@@ -85,14 +85,6 @@ exports.createPaymentIntent = async (req, res) => {
         validatedDiscount = Number(sub_total);
       }
 
-      // SECURITY CHECK – prevent frontend manipulation
-      if (Math.abs(validatedDiscount - Number(discount_amount)) > 1) {
-        return apiResponse.error(
-          res,
-          "Discount mismatch detected. Please try again.",
-          400
-        );
-      }
     }
 
     // GRAND TOTAL VALIDATION
