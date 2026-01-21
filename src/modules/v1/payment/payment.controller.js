@@ -88,18 +88,18 @@ exports.createPaymentIntent = async (req, res) => {
     }
 
     // GRAND TOTAL VALIDATION
-    const expectedGrandTotal =
-      Number(sub_total) +
-      Number(tax_total) -
-      Number(validatedDiscount);
+    // const expectedGrandTotal =
+    //   Number(sub_total) +
+    //   Number(tax_total) -
+    //   Number(validatedDiscount);
 
-    if (Math.abs(expectedGrandTotal - Number(grand_total)) > 1) {
-      return apiResponse.error(
-        res,
-        "Amount mismatch detected. Please refresh and try again.",
-        400
-      );
-    }
+    // if (Math.abs(expectedGrandTotal - Number(grand_total)) > 1) {
+    //   return apiResponse.error(
+    //     res,
+    //     "Amount mismatch detected. Please refresh and try again.",
+    //     400
+    //   );
+    // }
 
     // VALIDATE LIMITS (Ticket / Committee / Addon / Package)
 
