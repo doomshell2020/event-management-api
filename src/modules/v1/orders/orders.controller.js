@@ -1046,14 +1046,10 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 `).join("");
 
                 // DISCOUNT CODE ROW (NEW)
-                const discountCodeRow = order.discount_code
-                    ? `<tr>
-                            <td style="color:#3d6db5;">Coupon Applied</td>
-                            <td align="right" style="color:#3d6db5; font-weight:bold;">
-                                ${order.discount_code}
-                            </td>
-                        </tr>
-                        `: "";
+                // Compute discount display
+                const discountDisplay = order.discount_amount && order.discount_code
+                    ? `-${formattedEvent.currency_symbol}${formatPrice(order.discount_amount)} (${order.discount_code})`
+                    : "N/A";
 
                 // FINAL EMAIL HTML
                 const html = replaceTemplateVariables(template.description, {
@@ -1069,7 +1065,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
                     // totals
                     SubTotal: formatPrice(order.sub_total),
-                    Discount: formatPrice(order.discount_amount || 0),
+                    Discount: discountDisplay,
                     Tax: formatPrice(order.tax_total),
                     GrandTotal: formatPrice(order.grand_total),
 
@@ -1078,7 +1074,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
                     // tables / blocks
                     OrderItemsTable: orderItemsTable,
-                    DiscountCodeRow: discountCodeRow,
                     QRCodes: qrCodesHtml,
 
                     SITE_URL: config.clientUrl,
