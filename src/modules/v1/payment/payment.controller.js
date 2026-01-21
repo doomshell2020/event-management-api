@@ -1,5 +1,5 @@
 const Stripe = require("stripe");
-const { Payment, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons } = require("../../../models");
+const { Payment, Orders, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons } = require("../../../models");
 const apiResponse = require("../../../common/utils/apiResponse");
 const config = require("../../../config/app");
 const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
@@ -53,6 +53,14 @@ exports.createPaymentIntent = async (req, res) => {
         return apiResponse.error(res, "Invalid coupon code", 400);
       }
 
+      // MAX REDEEMS CHECK
+      if (coupon.max_redeems && coupon.max_redeems > 0) {
+        const redeemedCount = await Orders.count({ where: { discount_code: couponCode } });
+        if (redeemedCount >= coupon.max_redeems) {
+          return apiResponse.error(res, "Coupon has reached its maximum number of uses", 400);
+        }
+      }
+
       // DATE VALIDATION
       if (coupon.validity_period == "specified_date") {
         const today = new Date();
@@ -67,8 +75,7 @@ exports.createPaymentIntent = async (req, res) => {
 
       // DISCOUNT CALCULATION
       if (coupon.discount_type == "percentage") {
-        validatedDiscount =
-          (Number(sub_total) * parseFloat(coupon.discount_value)) / 100;
+        validatedDiscount = (Number(sub_total) * parseFloat(coupon.discount_value)) / 100;
       } else {
         validatedDiscount = parseFloat(coupon.discount_value);
       }
