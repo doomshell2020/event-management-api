@@ -456,7 +456,6 @@ module.exports = {
                     ]
                 });
 
-
                 let questions = [];
                 if (events) {
                     // 🔹 Collect all ticket type IDs from event tickets

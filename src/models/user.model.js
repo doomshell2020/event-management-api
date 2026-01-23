@@ -190,6 +190,22 @@ const User = sequelize.define(
       type: DataTypes.ENUM('user', 'admin', 'organizer'),
       defaultValue: 'user',
     },
+    payment_gateway_charges: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    default_platform_charges: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    admin_approval_required: {
+      type: DataTypes.ENUM('Y', 'N'),
+      defaultValue: 'N',
+    },
+    approval_type: {
+      type: DataTypes.ENUM('all', 'paid', 'free'),
+      defaultValue: 'all',
+    },
     eventId: {
       type: DataTypes.STRING(100),
       allowNull: true,

@@ -1,8 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness } = require('../../../../models');
-
-
-
+const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness, EventActivationLog } = require('../../../../models');
 
 // Get event List..
 module.exports.getEventList = async (req, res) => {
@@ -17,18 +14,36 @@ module.exports.getEventList = async (req, res) => {
         }
         const events = await Event.findAll({
             // where: { role_id: 2 }, // Event Organiser role
-            include: [{ model: User, attributes: ['id', 'email', 'first_name', 'last_name'], as: "Organizer" },
-            { model: TicketType, attributes: ['id', 'title', 'type'], as: "tickets" },
-            {
-                model: Orders,
-                as: "orders",
-                attributes: []
-            },
-            {
-                model: Currency,
-                as: "currencyName",
-                attributes: ['Currency_symbol']
-            }
+            include: [
+                { model: User, attributes: ['id', 'email', 'first_name', 'last_name'], as: "Organizer" },
+                { model: TicketType, attributes: ['id', 'title', 'type'], as: "tickets" },
+                {
+                    model: Orders,
+                    as: "orders",
+                    attributes: []
+                },
+                {
+                    model: Currency,
+                    as: "currencyName",
+                    attributes: ['Currency_symbol']
+                },
+                {
+                    model: EventActivationLog,
+                    as: 'eventActivationLogs',
+                    separate: true,
+                    limit: 1,
+                    order: [['createdAt', 'DESC']],
+                    attributes: [
+                        'id',
+                        'status',
+                        'activation_date',
+                        'activation_amount',
+                        'activation_remarks',
+                        'activated_by',
+                        'createdAt'
+                    ]
+                }
+
             ],
             attributes: [
                 'id',
@@ -41,6 +56,7 @@ module.exports.getEventList = async (req, res) => {
                 'featured',
                 'video_url',
                 'slug',
+                'is_free',
 
                 // 🔥 TOTAL SALES
                 [Sequelize.fn('SUM', Sequelize.col('orders.sub_total')), 'total_sales'],
@@ -71,26 +87,88 @@ module.exports.getEventList = async (req, res) => {
 };
 
 
-// Status update Api..
 module.exports.updateStatusEvent = async (req) => {
     try {
         const eventId = req.params.id;
-        const { status } = req.body;
-        // Find record
+        // console.log('eventId :', eventId);
+
+        const {
+            status,
+            activation_date,
+            activation_amount,
+            activation_remarks
+        } = req.body;
+
+        // Find event
         const existingEvent = await Event.findByPk(eventId);
         if (!existingEvent) {
             return {
                 success: false,
-                message: 'Event  not found',
+                message: 'Event not found',
                 code: 'EVENT_NOT_FOUND'
             };
         }
-        // Update ONLY status
-        await existingEvent.update({ status });
+
+        // If already same status
+        if (existingEvent.status == status) {
+            return {
+                success: false,
+                message: 'Event is already in the same status',
+                code: 'ALREADY_UPDATED'
+            };
+        }
+
+        // Update event status
+        console.log('status :', status);
+        await existingEvent.update({ status, admineventstatus: status });
+
+        // If status is NOT 'Y' → Deactivation case
+        if (status !== 'Y') {
+            return {
+                success: true,
+                message: 'Event status updated successfully (no activation log changes)',
+            };
+        }
+
+        // From here only activation logic (status === 'Y')
+
+        const existingLog = await EventActivationLog.findOne({
+            where: {
+                event_id: eventId
+            }
+        });
+
+        // If log exists → UPDATE
+        if (existingLog) {
+            await existingLog.update({
+                status,
+                activation_date: activation_date || null,
+                activation_amount: activation_amount || null,
+                activation_remarks: activation_remarks || null,
+                activated_by: req.user.id
+            });
+
+            return {
+                success: true,
+                message: 'Event activated and activation log updated successfully',
+            };
+        }
+
+        // If log does not exist → CREATE NEW
+        await EventActivationLog.create({
+            event_id: eventId,
+            status,
+            activated_by: req.user.id,
+            activation_date: activation_date || null,
+            activation_amount: activation_amount || null,
+            activation_remarks: activation_remarks || null
+        });
+
         return {
             success: true,
-            message: 'Event Status updated successfully',
+            message: 'Event activated and activation log created successfully',
         };
+
     } catch (error) {
         return {
             success: false,

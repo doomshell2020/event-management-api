@@ -5,7 +5,7 @@ const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemp
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
 const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
-const { generateUniqueOrderId, getItemTitle, replaceTemplateVariables,formatPrice } = require('../../../common/utils/helpers');
+const { generateUniqueOrderId, getItemTitle, replaceTemplateVariables, formatPrice } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { Op, fn, col, literal } = require("sequelize");
 const { sequelize } = require("../../../models");
@@ -824,18 +824,26 @@ module.exports.fulfilOrderFromSnapshot = async ({
     payment,
     snapshotItems,
     payment_method = "stripe",
+    coupon_code,
+    discount_amount,
+    coupon_details,
 }) => {
 
     const transaction = await sequelize.transaction();
 
     try {
         const {
-            discount_amount,
             grand_total,
             snapshot_ids,
             sub_total,
             tax_total
         } = meta_data;
+
+        // normalize numbers (stripe metadata = string)
+        const discountAmount = Number(discount_amount || 0);
+        const subTotal = Number(sub_total || 0);
+        const taxTotal = Number(tax_total || 0);
+        const grandTotal = Number(grand_total || 0);
 
         // 🔁 IDEMPOTENCY CHECK
         const existingOrder = await Orders.findOne({
@@ -895,22 +903,28 @@ module.exports.fulfilOrderFromSnapshot = async ({
             currency_name: event.currencyName?.Currency || "INR"
         };
 
-        // 🧾 CREATE ORDER
+        // 🧾 CREATE ORDER (COUPON IMPLEMENTED ✅)
         const order = await Orders.create({
             order_uid: generateUniqueOrderId(),
             user_id,
             event_id,
-            grand_total: grand_total || 0,
-            sub_total: sub_total || 0,
-            tax_total: tax_total || 0,
-            discount_amount: discount_amount || 0,
+
+            sub_total: subTotal,
+            tax_total: taxTotal,
+            discount_amount: discountAmount,
+
+            discount_code: coupon_code || null,
+            discount_type: coupon_details?.discount_type || null,
+            discount_value: coupon_details?.discount_value || null,
+
+            grand_total: grandTotal,
             paymenttype: payment_method,
             RRN: payment.payment_intent,
             paymentgateway: "Stripe",
             status: "Y"
         }, { transaction });
 
-        // 🧠 PREFETCH CART QUESTIONS (1 QUERY)
+        // 🧠 PREFETCH CART QUESTIONS
         const cartIds = snapshotItems.map(i => i.cart_id).filter(Boolean);
         const cartQuestionsMap = {};
 
@@ -951,7 +965,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     slot_id: item.slot_id || null
                 }, { transaction });
 
-                // ❓ QUESTIONS
                 const questions = cartQuestionsMap[item.cart_id] || [];
                 if (questions.length) {
                     await QuestionsBook.bulkCreate(
@@ -967,7 +980,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     );
                 }
 
-                // 🔲 QR CODE
                 const qr = await generateQRCode(orderItem);
                 if (qr) {
                     await orderItem.update({
@@ -996,16 +1008,14 @@ module.exports.fulfilOrderFromSnapshot = async ({
             transaction
         });
 
-        // ✅ COMMIT
         await transaction.commit();
 
-        // 📧 EMAIL
+        // 📧 EMAIL (DISCOUNT ALREADY SUPPORTED)
         try {
-            const template = await Templates.findByPk(
-                config.emailTemplates.orderConfirmationWithQR
-            );
+            const template = await Templates.findByPk(config.emailTemplates.orderConfirmationWithQR);
 
             if (template) {
+                // ORDER ITEMS TABLE (UNCHANGED)
                 const orderItemsTable = `
                 <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">
                 <thead>
@@ -1035,23 +1045,37 @@ module.exports.fulfilOrderFromSnapshot = async ({
                 </div>
                 `).join("");
 
+                // DISCOUNT CODE ROW (NEW)
+                // Compute discount display
+                const discountDisplay = order.discount_amount && order.discount_code
+                    ? `(${order.discount_code}) -${formattedEvent.currency_symbol}${formatPrice(order.discount_amount)}`
+                    : "N/A";
+
+                // FINAL EMAIL HTML
                 const html = replaceTemplateVariables(template.description, {
                     UserName: `${userInfo.first_name} ${userInfo.last_name}`,
                     EventName: formattedEvent.name,
                     EventImage: formattedEvent.feat_image,
                     EventDate: `${formattedEvent.date_from} – ${formattedEvent.date_to}`,
-                    EventStartDate:formattedEvent.date_from,
+                    EventStartDate: formattedEvent.date_from,
                     EventEndDate: formattedEvent.date_to,
                     EventLocation: formattedEvent.location,
                     Currency: formattedEvent.currency_symbol,
                     OrderId: order.order_uid,
+
+                    // totals
                     SubTotal: formatPrice(order.sub_total),
-                    Discount: formatPrice(order.discount_amount || 0),
+                    Discount: discountDisplay,
                     Tax: formatPrice(order.tax_total),
                     GrandTotal: formatPrice(order.grand_total),
+
+                    // payment
                     PaymentMethod: order.paymentgateway,
+
+                    // tables / blocks
                     OrderItemsTable: orderItemsTable,
                     QRCodes: qrCodesHtml,
+
                     SITE_URL: config.clientUrl,
                     AccountURL: `${config.clientUrl}/orders`
                 });
@@ -1062,15 +1086,12 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     html
                 );
             }
+
         } catch (emailErr) {
             console.error("📧 Email failed:", emailErr);
         }
 
-        return {
-            order,
-            qrResults,
-            grand_total
-        };
+        return { order, qrResults, grand_total: grandTotal };
 
     } catch (error) {
         await transaction.rollback();

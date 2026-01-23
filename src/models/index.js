@@ -35,6 +35,7 @@ const ContactUs = require('./contact_us.model');
 const Seo = require('./seo.model');
 const Templates = require('./templates.model');
 const Payouts = require('./payouts.model');
+const EventActivationLog = require('./event_activation_logs.model');
 const Coupons = require('./coupons.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -79,6 +80,8 @@ Orders.hasMany(OrderItems, { foreignKey: "order_id", as: "orderItems", onDelete:
 Orders.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 Orders.belongsTo(User, { foreignKey: "user_id", as: "user" });
 
+EventActivationLog.belongsTo(Event, {foreignKey: 'event_id',as: 'event' });
+Event.hasMany(EventActivationLog, {foreignKey: 'event_id',as: 'eventActivationLogs' });
 Event.hasMany(CommitteeAssignTickets, { foreignKey: 'event_id', as: 'assignedTickets' });
 Event.belongsTo(User, { foreignKey: 'event_org_id', as: 'Organizer' })
 Event.hasMany(Orders, { foreignKey: "event_id", as: "orders" });
@@ -127,6 +130,8 @@ PaymentSnapshotItems.belongsTo(TicketType, { foreignKey: 'ticket_id', as: 'ticke
 PaymentSnapshotItems.belongsTo(AddonTypes, { foreignKey: 'ticket_id', as: 'addonType' });
 PaymentSnapshotItems.belongsTo(Package, { foreignKey: 'ticket_id', as: 'packageType' });
 PaymentSnapshotItems.belongsTo(TicketPricing, { foreignKey: 'ticket_id', as: 'ticketPricing' });
+PaymentSnapshotItems.belongsTo(WellnessSlots, { foreignKey: 'ticket_id', as: 'appointment' });
+
 
 Templates.belongsTo(Event, { foreignKey: 'eventId', as: 'events' });
 
@@ -135,7 +140,8 @@ Payouts.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 Coupons.belongsTo(Event, { foreignKey: "event", as: "events" });
 
 module.exports = {
-  sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries, Event, TicketType, OrderItems,
-  User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness, WellnessSlots,
-  Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts,Coupons
+  sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries,
+  Event, TicketType, OrderItems, User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness,
+  WellnessSlots, Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup,
+  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog,Coupons
 };

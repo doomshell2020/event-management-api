@@ -2,9 +2,6 @@ const bcrypt = require('bcryptjs');
 const { Op, Sequelize } = require('sequelize');
 const { User, Event, Orders, Currency } = require('../../../../models');
 
-
-
-
 // Get event organizer List..
 module.exports.getEventOrganizerList = async (req, res) => {
     try {
@@ -28,6 +25,8 @@ module.exports.getEventOrganizerList = async (req, res) => {
                 'status',
                 'is_email_verified',
                 'is_suspend',
+                'admin_approval_required',
+                'default_platform_charges',
                 'createdAt'
             ],
             include: [
@@ -162,12 +161,12 @@ module.exports.createEventOrganizer = async (req) => {
 // update event Organizer
 module.exports.updateEventOrganizer = async (userId, data) => {
     try {
-        const { first_name, email, mobile } = data;
+        const { first_name, email, mobile, platform_fee, auto_approve_events } = data;
         // ✅ Find Event Organizer
         const existingOrganizer = await User.findOne({
             where: {
                 id: userId,
-                role_id: 2 // Event Organizer role
+                // role_id: 2 // Event Organizer role
             }
         });
         if (!existingOrganizer) {
@@ -197,6 +196,9 @@ module.exports.updateEventOrganizer = async (userId, data) => {
         if (first_name !== undefined) existingOrganizer.first_name = first_name.trim();
         if (email !== undefined) existingOrganizer.email = email.trim().toLowerCase();
         if (mobile !== undefined) existingOrganizer.mobile = mobile.trim();
+        if (platform_fee !== undefined) existingOrganizer.default_platform_charges = platform_fee;
+        if (auto_approve_events !== undefined) existingOrganizer.admin_approval_required = auto_approve_events;
+
         await existingOrganizer.save();
         return {
             success: true,
@@ -269,7 +271,9 @@ module.exports.getEventOrganizerById = async (userId) => {
                 'first_name',
                 'last_name',
                 'email',
-                'mobile'
+                'mobile',
+                'admin_approval_required',
+                'default_platform_charges'
             ]
         });
 
@@ -296,7 +300,6 @@ module.exports.getEventOrganizerById = async (userId) => {
         };
     }
 };
-
 
 // searching api
 module.exports.searchEventOrganizer = async (req) => {
@@ -366,4 +369,3 @@ module.exports.searchEventOrganizer = async (req) => {
         };
     }
 };
-

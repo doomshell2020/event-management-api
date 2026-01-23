@@ -19,6 +19,27 @@ function formatDate(date) {
     return d.toISOString().split("T")[0];
 }
 
+const formatDate2 = (dateStr) => {
+    return new Date(dateStr).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    });
+};
+
+const formatTime = (timeStr) => {
+    const [h, m] = timeStr.split(":");
+    const date = new Date();
+    date.setHours(h, m);
+
+    return date.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+    });
+};
+
+
 const replaceTemplateVariables = (template, variables = {}) => {
     let output = template;
     // console.log('variables :', variables);
@@ -32,6 +53,7 @@ const replaceTemplateVariables = (template, variables = {}) => {
 };
 
 const getItemTitle = (item) => {
+
     switch (item.item_type) {
 
         case 'ticket_price':
@@ -52,6 +74,22 @@ const getItemTitle = (item) => {
         case 'ticket':
             return item.ticketType?.title || 'Ticket';
 
+        case 'appointment': {
+            const appointment = item.appointment;
+            if (!appointment) return 'Appointment';
+            const name = appointment.wellnessList?.name || 'Appointment';
+            const date = appointment.date ? formatDate2(appointment.date) : '';
+            const start = appointment.slot_start_time
+                ? formatTime(appointment.slot_start_time)
+                : '';
+            const end = appointment.slot_end_time
+                ? formatTime(appointment.slot_end_time)
+                : '';
+
+            const timeRange = start && end ? `${start} – ${end}` : '';
+
+            return [name, date, timeRange].filter(Boolean).join(' — ');
+        }
         default:
             return 'Item';
     }

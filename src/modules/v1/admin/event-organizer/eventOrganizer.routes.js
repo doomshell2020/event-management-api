@@ -46,7 +46,15 @@ router.put(
 
         body('mobile')
             .notEmpty().withMessage('Mobile number is required')
-            .isLength({ min: 8, max: 15 }).withMessage('Mobile number must be valid')
+            .isLength({ min: 8, max: 15 }).withMessage('Mobile number must be valid'),
+
+        body('auto_approve_events')
+            .notEmpty().withMessage('Auto Approve Events field is required')
+            .isIn(['Y', 'N']).withMessage('Auto Approve Events must be Y or N'),
+
+        body('platform_fee')
+            .notEmpty().withMessage('Platform Fee is required')
+            .isFloat({ min: 0 }).withMessage('Platform Fee must be a positive number')
     ],
     validate,
     eventOrganizerController.updateEventOrganizer
@@ -81,7 +89,7 @@ router.get(
     eventOrganizerController.searchEventOrganizer
 );
 // get Event Organizer..
-router.get('/:id',eventOrganizerController.getEventOrganizerById);
+router.get('/:id', eventOrganizerController.getEventOrganizerById);
 
 // router.get(
 //     '/search',

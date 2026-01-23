@@ -71,7 +71,11 @@ module.exports.getAdminInfo = async (userId) => {
             'linkdinurl',
             'googleplusurl',
             'googleplaystore',
-            'applestore'
+            'applestore',
+            'payment_gateway_charges',
+            'default_platform_charges',
+            'admin_approval_required',
+            'approval_type'
         ],
     });
 
@@ -103,6 +107,10 @@ module.exports.updateUserProfile = async (userId, data) => {
             googleplusurl,
             googleplaystore,
             applestore,
+            payment_gateway_charges,
+            default_platform_charges,
+            admin_approval_required,
+            approval_type
         } = data;
 
         // 🔍 Find User
@@ -119,31 +127,47 @@ module.exports.updateUserProfile = async (userId, data) => {
         }
 
         // ✏️ Update only provided fields
-        if (first_name !== undefined) user.first_name = first_name.trim();
-        if (email !== undefined) user.email = email.trim();
-        if (mobile !== undefined) user.mobile = mobile.trim();
+        if (first_name != undefined) user.first_name = first_name.trim();
+        if (email != undefined) user.email = email.trim();
+        if (mobile != undefined) user.mobile = mobile.trim();
 
-        if (fburl !== undefined) user.fburl = fburl.trim();
-        if (instaurl !== undefined) user.instaurl = instaurl.trim();
-        if (Twitterurl !== undefined) user.Twitterurl = Twitterurl.trim();
-        if (linkdinurl !== undefined) user.linkdinurl = linkdinurl.trim();
-        if (googleplusurl !== undefined)
-            user.googleplusurl = googleplusurl.trim();
-        if (googleplaystore !== undefined)
-            user.googleplaystore = googleplaystore.trim();
-        if (applestore !== undefined) user.applestore = applestore.trim();
+        if (fburl != undefined) user.fburl = fburl.trim();
+        if (instaurl != undefined) user.instaurl = instaurl.trim();
+        if (Twitterurl != undefined) user.Twitterurl = Twitterurl.trim();
+        if (linkdinurl != undefined) user.linkdinurl = linkdinurl.trim();
+        if (googleplusurl != undefined) user.googleplusurl = googleplusurl.trim();
+        if (googleplaystore != undefined) user.googleplaystore = googleplaystore.trim();
+        if (applestore != undefined) user.applestore = applestore.trim();
+
+        // 🔥 NEW FIELDS UPDATE LOGIC
+
+        if (payment_gateway_charges != undefined) {
+            user.payment_gateway_charges = parseFloat(payment_gateway_charges) || 0;
+        }
+
+        if (default_platform_charges != undefined) {
+            user.default_platform_charges = parseFloat(default_platform_charges) || 0;
+        }
+
+        if (admin_approval_required != undefined) {
+            user.admin_approval_required = admin_approval_required;
+        }
+
+        if (approval_type != undefined) {
+            user.approval_type = approval_type;
+        }
 
         // 💾 Save updates
         await user.save();
-
-        // ❌ Remove sensitive data
         const { password, ...userData } = user.toJSON();
+
         // ✅ Success response
         return {
             success: true,
             message: "Admin profile updated successfully.",
             data: userData,
         };
+
     } catch (error) {
         console.error("❌ Error updating user profile:", error);
         return {
@@ -153,7 +177,6 @@ module.exports.updateUserProfile = async (userId, data) => {
         };
     }
 };
-
 
 // change password..
 module.exports.changeAdminPassword = async (userId, data) => {

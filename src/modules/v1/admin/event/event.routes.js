@@ -6,18 +6,12 @@ const validate = require('../../../../middlewares/validation.middleware');
 const authenticate = require('../../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../../middlewares/upload.middleware');
 
-
 // ✅ Get Event Organizer Route
 router.get('/', authenticate, eventController.getEventList)
 
-
-
-
-
-
 // event Organizer Status
-router.put(
-    '/update-status/:id',
+router.put('/update-status/:id',
+    authenticate,
     [
         param('id')
             .isInt({ min: 1 })
@@ -27,15 +21,26 @@ router.put(
             .withMessage('Status is required')
             .isIn(['Y', 'N'])
             .withMessage('Status must be Y or N'),
+        body('activation_date')
+            .optional()
+            .isISO8601()
+            .withMessage('Activation date must be a valid date'),
+        body('activation_amount')
+            .optional()
+            .isFloat({ min: 0 })
+            .withMessage('Activation amount must be a valid number'),
+        body('activation_remarks')
+            .optional()
+            .isString()
+            .withMessage('Activation remarks must be a string'),
     ],
     validate,
     eventController.updateStatusEvent
 );
 
-
 // Update event featured status
-router.put(
-    '/:id/featured',
+router.put('/:id/featured',
+    authenticate,
     [
         param('id')
             .isInt({ min: 1 })
@@ -50,10 +55,9 @@ router.put(
     eventController.updateEventFeatured
 );
 
-
 // 🎟️ Delete Event Route
-router.delete(
-    '/:id',
+router.delete('/:id',
+    authenticate,
     [
         // Validate Event ID
         param('id')
@@ -64,12 +68,10 @@ router.delete(
     eventController.deleteEvent
 );
 
-
 router.get('/:id/ticket-types', eventController.getTicketTypesByEvent)
 
 // search event details
-router.get(
-    '/search',
+router.get('/search',
     // authenticate, // optional
     [
         param('eventName').optional().isString(),
@@ -81,8 +83,7 @@ router.get(
     eventController.searchEventList
 );
 
-router.get(
-    "/staff-search",
+router.get("/staff-search",
     [
         param("event_id").optional().isString(),
         param("first_name").optional().isString(),
@@ -92,12 +93,8 @@ router.get(
     eventController.searchEventStaff
 );
 
-
-
-
 // get staff in event
-router.get(
-    '/:eventId/staff',
+router.get('/:eventId/staff',
     // authenticate,
     [
         param('eventId')
@@ -108,31 +105,20 @@ router.get(
     eventController.getEventStaff
 );
 
-
 // get Event Organizer..
-router.get('/:id',eventController.getEventOrganizerById);
+router.get('/:id', eventController.getEventOrganizerById);
 
 // event details with order details
-router.get(
-    "/:id/details",
+router.get("/:id/details",
     eventController.getEventDetailsWithOrderDetails
 );
 
-
-router.get(
-    '/event-details/:event_id',
+router.get('/event-details/:event_id',
     eventController.getEventById
 );
 
-router.get(
-    '/search/search',
+router.get('/search/search',
     eventController.getEventByName
 );
-
-
-
-
-
-
 
 module.exports = router;

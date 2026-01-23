@@ -4,6 +4,10 @@ const config = {
   // Server
   port: process.env.PORT || 5000,
 
+  ORGANIZER_ROLE: "2",
+  CUSTOMER_ROLE: "3",
+  ADMIN_ROLE: "1",
+
   // JWT
   jwtSecret: process.env.JWT_SECRET || 'yourjwtsecret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
@@ -58,8 +62,8 @@ const config = {
     addStaffForEvent: process.env.ADD_STAFF_FOR_EVENT_TEMPLATE_ID || '33',
     changeStaffPassword: process.env.CHANGE_STAFF_PASSWORD_TEMPLATE_ID || '37',
     newEventCreated: process.env.NEW_EVENT_CREATED_TEMPLATE_ID || '18',
+    contactUs: process.env.CONTACT_US_TEMPLATE_ID || '25',
   },
-
   // -------------------------
   // 🔐 SECURITY CONFIG
   // -------------------------

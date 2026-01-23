@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
-const { Op } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency, Templates, Orders } = require('../../../models');
+const { Op, where } = require('sequelize');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User } = require('../../../models');
 const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
@@ -115,6 +115,7 @@ module.exports.eventList = async (req, res) => {
         const {
             search,
             status,
+            admineventstatus,
             id,
             company_id,
             slug,
@@ -177,7 +178,8 @@ module.exports.eventList = async (req, res) => {
             where: whereCondition,
             include: [
                 { model: Company, as: "companyInfo", attributes: ["name"] },
-                { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] }
+                { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] },
+                { model: User, as: "Organizer", attributes: ["id", "email", "first_name", "last_name", "payment_gateway_charges", "default_platform_charges", "admin_approval_required", "approval_type"] }
             ],
             order: [["created", "DESC"]],
         });
@@ -318,27 +320,27 @@ module.exports.publicEventList = async (req, res) => {
         const imagePath = "uploads/events";
         let whereCondition = {};
 
-        // ✅ ID Filter
+        // ID Filter
         if (id) whereCondition.id = id;
 
-        // ✅ Organizer ID
+        // Organizer ID
         if (org_id) whereCondition.event_org_id = org_id;
 
-        // ✅ Company ID
+        // Company ID
         if (company_id) whereCondition.company_id = company_id;
 
-        // ✅ Slug
+        // Slug
         if (slug && slug.trim() !== "") whereCondition.slug = slug.trim();
 
-        // ✅ Status
+        // Status
         if (status && status.trim() !== "") whereCondition.status = status.trim();
 
-        // ✅ Search by Name
+        // Search by Name
         if (search && search.trim() !== "") {
             whereCondition.name = { [Op.like]: `%${search.trim()}%` };
         }
 
-        // ✅ Event Date Range Filter
+        // Event Date Range Filter
         if (date_from && date_to) {
             whereCondition.date_from = { [Op.between]: [new Date(date_from), new Date(date_to)] };
         } else if (date_from) {
@@ -347,7 +349,7 @@ module.exports.publicEventList = async (req, res) => {
             whereCondition.date_from = { [Op.lte]: new Date(date_to) };
         }
 
-        // ✅ Sale Start / End Date Range Filters
+        // Sale Start / End Date Range Filters
         if (sale_start && sale_end) {
             whereCondition.sale_start = { [Op.between]: [new Date(sale_start), new Date(sale_end)] };
         } else if (sale_start) {
@@ -355,8 +357,9 @@ module.exports.publicEventList = async (req, res) => {
         } else if (sale_end) {
             whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
         }
+        
 
-        // ✅ EXCLUDE expired events (date_to < today)
+        // EXCLUDE expired events (date_to < today)
 
         const today = new Date();
         if (!is_details_page) {
@@ -366,8 +369,11 @@ module.exports.publicEventList = async (req, res) => {
             };
         }
 
+        whereCondition.admineventstatus = 'Y';
+        whereCondition.status = 'Y';
+        // console.log('whereCondition :', whereCondition);
 
-        // ✅ Fetch Events
+        // Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
             include: [
@@ -375,13 +381,26 @@ module.exports.publicEventList = async (req, res) => {
                 { model: AddonTypes, as: "addons" },
                 { model: Company, as: "companyInfo", attributes: ["name"] }
             ],
-            order: [["date_from", "DESC"]],
+            order: [
+                ["featured", "ASC"],      // Y will come first
+                ["date_from", "DESC"]      // then sort by date
+            ],
         });
 
-        // ✅ Format and Convert Dates
+
+        // Format and Convert Dates
         const formattedEvents = events.map((event) => {
             const data = event.toJSON();
             const tz = data.event_timezone || "UTC";
+            const adminStatus = data.admineventstatus || "N";
+            const eventStatus = data.status || "N";
+            let status = null;
+            // For public listing, show only events that are approved by admin and active
+            if (adminStatus !== "Y" || eventStatus !== "Y") {
+                status = "N";
+            } else {
+                status = "Y";
+            }
 
             const formatDate = (date) =>
                 date
@@ -408,7 +427,7 @@ module.exports.publicEventList = async (req, res) => {
             };
         });
 
-        // ✅ Send Response
+        // Send Response
         return {
             success: true,
             message: "Active/Upcoming events fetched successfully",
@@ -450,7 +469,7 @@ module.exports.createEvent = async (req, res) => {
 
         const user_id = req.user?.id;
         // ✅ Set default timezone if missing or empty
-        const finalTimezone = event_timezone && event_timezone.trim() !== ''
+        const finalTimezone = event_timezone && event_timezone.trim() != ''
             ? event_timezone
             : 'UTC';
 
@@ -522,7 +541,7 @@ module.exports.createEvent = async (req, res) => {
         const feat_image = filename;
 
         // ✅ Extra validation for paid events
-        if (is_free !== 'Y') {
+        if (is_free != 'Y') {
             if (!ticket_limit || !payment_currency || !sale_start || !sale_end || !approve_timer) {
                 return {
                     success: false,
@@ -540,7 +559,7 @@ module.exports.createEvent = async (req, res) => {
         const formatted_sale_end = sale_end ? convertToUTC(sale_end, finalTimezone) : null;
         const formatted_request_rsvp = request_rsvp ? convertToUTC(request_rsvp, finalTimezone) : null;
 
-        const admin_status = is_free == 'Y' ? 'Y' : 'N';
+        // const admin_status = is_free == 'Y' ? 'Y' : 'N';
 
         // ✅ Build final event object
         const eventData = {
@@ -564,7 +583,7 @@ module.exports.createEvent = async (req, res) => {
             fee_assign: 'user',
             is_free: is_free == 'Y' ? 'Y' : 'N',
             allow_register: allow_register == 'Y' ? 'Y' : 'N',
-            admineventstatus: admin_status,
+            // admineventstatus: admin_status,
             request_rsvp: formatted_request_rsvp,
             event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
         };
@@ -588,6 +607,11 @@ module.exports.createEvent = async (req, res) => {
             type: "comps",
             price: parseFloat(0) || 0
         });
+
+        await User.update(
+            { role_id: config.ORGANIZER_ROLE },
+            { where: { id: user_id } }
+        );
 
         return { success: true, event: newEvent };
 
@@ -637,53 +661,63 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
             existingEvent.status = updateData.status;
             await existingEvent.save();
 
+            // Only send email if status is 'Y'
+            if (existingEvent.status == 'Y') {
 
+                // ===== EMAIL TEMPLATE FETCH =====
+                const templateId = config.emailTemplates.newEventCreated;
 
-            // ===== EMAIL TEMPLATE FETCH =====
-            const templateId = config.emailTemplates.newEventCreated;
+                const templateRecord = await Templates.findOne({
+                    where: { id: templateId }
+                });
 
-            const templateRecord = await Templates.findOne({
-                where: { id: templateId }
-            });
+                if (!templateRecord) {
+                    throw new Error('Add staff email template not found');
+                }
 
-            if (!templateRecord) {
-                throw new Error('Add staff email template not found');
+                const { description } = templateRecord;
+
+                const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+                const imagePath = "uploads/events";
+
+                const tz = existingEvent.event_timezone || "UTC";
+
+                let saleStartValue = 'N/A';
+                let saleEndValue = 'N/A';
+
+                if (existingEvent.is_free !== 'Y') {
+                    saleStartValue = formatFriendlyDate(existingEvent.sale_start, tz);
+                    saleEndValue = formatFriendlyDate(existingEvent.sale_end, tz);
+                }
+
+                const html = replaceTemplateVariables(description, {
+                    SITE_URL: config.clientUrl,
+                    HostedBy: authUser.firstName || authUser.email,
+                    EventName: existingEvent.name || '',
+                    EventImage: existingEvent.feat_image
+                        ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${existingEvent.feat_image}`
+                        : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+                    EventStart: formatFriendlyDate(existingEvent.date_from, tz),
+                    EventEnd: formatFriendlyDate(existingEvent.date_to, tz),
+                    SaleStart: saleStartValue,
+                    SaleEnd: saleEndValue,
+                    Location: existingEvent.location || '',
+                    Slug: existingEvent.slug || '',
+                    Description: existingEvent.desp || '',
+                    IsFree: existingEvent.is_free == 'Y' ? 'Free Event' : 'Paid Event'
+                });
+
+                await sendEmail(
+                    authUser.email,
+                    `Your Event ${existingEvent.name} is Now Live on eboxtickets!`,
+                    html
+                );
             }
 
-            const { description } = templateRecord;
-
-            const baseUrl = process.env.BASE_URL || "http://localhost:5000";
-            const imagePath = "uploads/events";
-
-            const tz = existingEvent.event_timezone || "UTC";
-
-            let saleStartValue = 'N/A';
-            let saleEndValue = 'N/A';
-
-            if (existingEvent.is_free !== 'Y') {
-                saleStartValue = formatFriendlyDate(existingEvent.sale_start, tz);
-                saleEndValue = formatFriendlyDate(existingEvent.sale_end, tz);
-            }
-
-            const html = replaceTemplateVariables(description, {
-                SITE_URL: config.clientUrl,
-                HostedBy: authUser.firstName || authUser.email,
-                EventName: existingEvent.name || '',
-                EventImage: existingEvent.feat_image
-                    ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${existingEvent.feat_image}`
-                    : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
-                EventStart: formatFriendlyDate(existingEvent.date_from, tz),
-                EventEnd: formatFriendlyDate(existingEvent.date_to, tz),
-                SaleStart: saleStartValue,
-                SaleEnd: saleEndValue,
-                Location: existingEvent.location || '',
-                Slug: existingEvent.slug || '',
-                Description: existingEvent.desp || '',
-                IsFree: existingEvent.is_free == 'Y' ? 'Free Event' : 'Paid Event'
-            });
-
-            await sendEmail(authUser.email, `Your Event ${existingEvent.name} is Now Live on eboxtickets!`, html);
-            // ===== EMAIL TEMPLATE FETCH =====
+            await User.update(
+                { role_id: config.ORGANIZER_ROLE },
+                { where: { id: authUser.id } }
+            );
 
             return {
                 success: true,
@@ -771,6 +805,11 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
 
         // ✅ Save updates
         await existingEvent.save();
+
+        await User.update(
+            { role_id: config.ORGANIZER_ROLE },
+            { where: { id: authUser.id } }
+        );
 
         return { success: true, event: existingEvent };
 

@@ -12,6 +12,9 @@ module.exports.createContactUs = async (req, res) => {
             switch (result.code) {
                 case 'VALIDATION_FAILED':
                     return apiResponse.validation(res, [], result.message);
+                    
+                case 'DUPLICATE_SUBMISSION':
+                    return apiResponse.conflict(res, result.message);
 
                 case 'UNAUTHORIZED':
                     return apiResponse.unauthorized(res, result.message);
