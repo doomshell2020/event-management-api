@@ -221,7 +221,7 @@ module.exports = {
                         SITE_URL: config.clientUrl
                     });
 
-                    await sendEmail(committeeMember.email,`${subject} ${eventExists.name}`,html);
+                    await sendEmail(committeeMember.email, `${subject} ${eventExists.name}`, html);
 
                     // sendEmail(
                     //     committeeMember.email,
@@ -250,6 +250,24 @@ module.exports = {
         try {
             const user_id = req.user.id;
             const { event_id, item_type } = req.query;
+
+            const adminInfo = await User.findOne({
+                where: { id: 1 },
+                attributes: ["id", "payment_gateway_charges", "default_platform_charges"]
+            });
+            const authProfile = await User.findOne({
+                where: { id: user_id },
+                attributes: ['default_platform_charges']
+            })
+
+            const platformCharges =
+                authProfile?.default_platform_charges != null &&
+                    authProfile?.default_platform_charges != ""
+                    ? authProfile.default_platform_charges
+                    : adminInfo?.default_platform_charges || 0;
+
+            const gatewayCharges = adminInfo?.payment_gateway_charges || 0;
+
 
             /* ------------------ COMMITTEE CHECK ------------------ */
             const isCommitteeAssigned = await CommitteeAssignTickets.findOne({
@@ -598,6 +616,10 @@ module.exports = {
                 user_id,
                 event: formattedEvent,   // may be null if no event id found
                 cart: formatted,
+                charges: {
+                    platform_fee_percent: platformCharges,
+                    payment_gateway_percent: gatewayCharges
+                },
                 committee: {
                     assigned: !!isCommitteeAssigned,
                     pending_count: committeePendingCount
