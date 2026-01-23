@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Op, where } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency, Templates, User } = require('../../../models');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User ,Orders} = require('../../../models');
 const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
@@ -63,6 +63,19 @@ module.exports.deleteEvent = async (eventId) => {
 
         if (!event) {
             return { success: false, code: "NOT_FOUND", message: "Event not found" };
+        }
+        // ✅ Check if any order exists for this event
+        const checkOrderEvent = await Orders.findOne({
+            where: { event_id: eventId }
+        });
+
+        // ❌ If order exists, do NOT delete event
+        if (checkOrderEvent) {
+            return {
+                success: false,
+                code: "EVENT_HAS_ORDERS",
+                message: "Event cannot be deleted because orders exist for this event."
+            };
         }
 
         // ✅ Delete image from filesystem (if exists)
