@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Op, where } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency, Templates, User } = require('../../../models');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User ,Orders} = require('../../../models');
 const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
