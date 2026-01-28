@@ -125,6 +125,28 @@ const Payment = sequelize.define(
             allowNull: true
         },
 
+        // new keys added...
+        platform_fee_tax: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        payment_gateway_tax: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        platform_fee_percent: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        payment_gateway_percent: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+
+
+
+
+
         status: {
             type: DataTypes.ENUM('Y', 'N'),
             defaultValue: 'Y'

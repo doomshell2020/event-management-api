@@ -827,10 +827,9 @@ module.exports.fulfilOrderFromSnapshot = async ({
     coupon_code,
     discount_amount,
     coupon_details,
+    snapshotItemsTax // new keys
 }) => {
-
     const transaction = await sequelize.transaction();
-
     try {
         const {
             grand_total,
@@ -850,8 +849,8 @@ module.exports.fulfilOrderFromSnapshot = async ({
             where: { RRN: payment.payment_intent },
             transaction
         });
-
         if (existingOrder) {
+         
             await transaction.rollback();
             return { order: existingOrder, duplicated: true };
         }
@@ -921,7 +920,14 @@ module.exports.fulfilOrderFromSnapshot = async ({
             paymenttype: payment_method,
             RRN: payment.payment_intent,
             paymentgateway: "Stripe",
-            status: "Y"
+            status: "Y",
+
+            // new taxes
+            platform_fee_tax: snapshotItemsTax.platform_fee_tax,
+            payment_gateway_tax: snapshotItemsTax.payment_gateway_tax,
+            platform_fee_percent: snapshotItemsTax.platform_fee_percent,
+            payment_gateway_percent: snapshotItemsTax.payment_gateway_percent
+
         }, { transaction });
 
         // 🧠 PREFETCH CART QUESTIONS

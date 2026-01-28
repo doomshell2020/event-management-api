@@ -49,6 +49,23 @@ const PaymentSnapshotItems = sequelize.define(
             defaultValue: 0
         },
 
+        platform_fee_tax: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        payment_gateway_tax: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        platform_fee_percent: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        payment_gateway_percent: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+
         payment_intent_id: {
             type: DataTypes.STRING,
             allowNull: true

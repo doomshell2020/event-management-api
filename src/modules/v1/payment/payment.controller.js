@@ -24,9 +24,11 @@ exports.createPaymentIntent = async (req, res) => {
       discount_amount = 0,
       cartData,
       currency = "usd",
-      appliedCoupon = null
+      appliedCoupon = null,
+      taxBreakdown
     } = req.body;
 
+    console.log("taxBreakdown", taxBreakdown)
 
     // BASIC VALIDATION
     if (!user_id || !event_id || !grand_total || !Array.isArray(cartData) || cartData.length == 0) {
@@ -199,6 +201,13 @@ exports.createPaymentIntent = async (req, res) => {
         quantity: item.quantity || 1,
         price: item.price || 0,
         payment_status: "pending",
+
+        // new taxes
+        platform_fee_tax: taxBreakdown.platform_fee_tax,
+        payment_gateway_tax: taxBreakdown.payment_gateway_tax,
+        platform_fee_percent: taxBreakdown.platform_fee_percent,
+        payment_gateway_percent: taxBreakdown.payment_gateway_percent
+
       }))
     );
 
@@ -503,6 +512,12 @@ exports.stripeWebhook = async (req, res) => {
         ],
       });
 
+      // Fetch snapshot items only taxes..(kamal)
+      const snapshotItemsTax = await PaymentSnapshotItems.findOne({
+        where: { id: snapshotIds },
+        attributes: ['id', 'platform_fee_tax', 'payment_gateway_tax', 'platform_fee_percent', 'payment_gateway_percent'],
+      });
+
       // COUPON HANDLING (NO KEY CHANGES)
       const couponCode = meta.coupon_code || null;
       let couponDetails = null;
@@ -528,6 +543,11 @@ exports.stripeWebhook = async (req, res) => {
         discount_amount: discountAmount,
         discount_type: couponDetails?.discount_type || null,
         discount_value: couponDetails?.discount_value || null,
+        // new taxes
+        platform_fee_tax: snapshotItemsTax.platform_fee_tax,
+        payment_gateway_tax: snapshotItemsTax.payment_gateway_tax,
+        platform_fee_percent: snapshotItemsTax.platform_fee_percent,
+        payment_gateway_percent: snapshotItemsTax.payment_gateway_percent
       });
 
       // FULFIL ORDER
@@ -541,6 +561,7 @@ exports.stripeWebhook = async (req, res) => {
         coupon_code: couponCode,
         discount_amount: discountAmount,
         coupon_details: couponDetails,
+        snapshotItemsTax   // new taxes
       });
 
       console.log("✅ Payment → Order → QR completed");
@@ -626,23 +647,35 @@ exports.manualWebhook = async (req, res) => {
         }
       ],
     });
-
+    // Fetch snapshot items only taxes..(kamal)
+    const snapshotItemsTax = await PaymentSnapshotItems.findOne({
+      where: { id: snapshotIds },
+      attributes: ['id', 'platform_fee_tax', 'payment_gateway_tax', 'platform_fee_percent', 'payment_gateway_percent'],
+    });
 
     const payment = await Payment.create({
-      user_id: 4870,
-      event_id: 298,
-      amount: 3037 || 0,
+      user_id: 6450,
+      event_id: 346,
+      amount: 500 || 0,
       payment_intent: 'pi_3Sp3sWCwP2xM68Rm1wkQ3rRR',
       payment_status: "paid",
+
+
+      // new taxes
+      platform_fee_tax: snapshotItemsTax.platform_fee_tax,
+      payment_gateway_tax: snapshotItemsTax.payment_gateway_tax,
+      platform_fee_percent: snapshotItemsTax.platform_fee_percent,
+      payment_gateway_percent: snapshotItemsTax.payment_gateway_percent
     });
 
     const order = await fulfilOrderFromSnapshot({
-      meta_data: { discount_amount: 0, grand_total: 3037, snapshot_ids: req.body.snapshot_ids, sub_total: 2812, tax_total: 225 },
-      user_id: 4870,
-      event_id: 298,
+      meta_data: { discount_amount: 0, grand_total: 540, snapshot_ids: req.body.snapshot_ids, sub_total: 500, tax_total: 40 },
+      user_id: 6450,
+      event_id: 346,
       payment,
       snapshotItems,
       payment_method: "stripe",
+      snapshotItemsTax
     });
 
     console.log("✅ Payment → Order → QR completed");
