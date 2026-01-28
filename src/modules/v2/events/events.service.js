@@ -1064,11 +1064,7 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
             return {
                 success: false,
                 code: "VALIDATION_FAILED",
-<<<<<<< HEAD
                 message: "Event ID is required"
-=======
-                message: "Event ID is required",
->>>>>>> 47a060364a07d2c0f6f430be185341c66950ef2f
             };
         }
 
@@ -1083,21 +1079,14 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
                 },
                 { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] }
             ],
-<<<<<<< HEAD
             attributes: ['id', 'event_org_id', 'name', 'desp', 'location', 'feat_image']
-=======
->>>>>>> 47a060364a07d2c0f6f430be185341c66950ef2f
         });
 
         if (!event) {
             return {
                 success: false,
                 code: "EVENT_NOT_FOUND",
-<<<<<<< HEAD
-                message: "Event not found"
-=======
                 message: "Event not found",
->>>>>>> 47a060364a07d2c0f6f430be185341c66950ef2f
             };
         }
 
@@ -1182,7 +1171,6 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
                 data: formattedEvent,
             };
         }
-<<<<<<< HEAD
         // Step 3️⃣: Final Response
         return {
             success: true,
@@ -1196,20 +1184,6 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
             success: false,
             code: "DB_ERROR",
             message: "Internal server error: " + error.message
-=======
-
-        return {
-            success: true,
-            message: "Event & appointment slot details fetched successfully",
-            data: formattedEvent,
-        };
-    } catch (error) {
-        console.error("❌ Error fetching event details:", error);
-        return {
-            success: false,
-            code: "DB_ERROR",
-            message: "Internal server error",
->>>>>>> 47a060364a07d2c0f6f430be185341c66950ef2f
         };
     }
 };
