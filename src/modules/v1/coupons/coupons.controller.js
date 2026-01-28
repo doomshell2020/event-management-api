@@ -384,7 +384,7 @@ exports.isCouponAppointmentEligible = async (req, res) => {
 
         /* -------- Redeem Count -------- */
         const redemptionCount = await Orders.count({
-            where: { discount_code: couponCode, Approved: "succeeded" },
+            where: { discount_code: couponCode },
         });
 
         if (redemptionCount >= Number(coupon.max_redeems)) {

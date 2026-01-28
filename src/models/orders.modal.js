@@ -57,7 +57,7 @@ const Orders = sequelize.define(
         discount_value: {
             type: DataTypes.STRING,
             allowNull: true
-        },     
+        },
         RRN: {
             type: DataTypes.STRING,
             allowNull: true
@@ -90,6 +90,32 @@ const Orders = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true
         },
+
+        // new keys added
+        platform_fee_tax: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        payment_gateway_tax: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        platform_fee_percent: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        payment_gateway_percent: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+
+
+
+
+
+
+
+
         created: {
             type: DataTypes.DATE,
             allowNull: true
