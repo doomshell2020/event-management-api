@@ -188,6 +188,10 @@ JWT_EXPIRES_IN=7d # JWT expiration time
 TOKEN_EXPIRES_IN=1h # Token expiration time for email verification and password reset
 QR_SECRET_V1=
 
+STRIPE_SECRET_KEY = 
+STRIPE_WEBHOOK_SECRET = 
+
+
 # Email configuration
 SMTP_HOST=
 SMTP_PORT=

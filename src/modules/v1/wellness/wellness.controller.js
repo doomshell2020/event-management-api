@@ -13,7 +13,7 @@ module.exports.createWellnessAppointment = async (req, res) => {
         const fullFilePath = filename ? path.join(uploadFolder, filename) : null;
         // ✅ Validate required fields
         const { name, event_id, description, location, currency } = req.body;
-        if (!event_id || !name || !currency) {
+        if (!event_id || !name ) {
             return apiResponse.validation(res, [], 'Required fields are missing');
         }
         if (!event_id || !name) {
@@ -344,7 +344,7 @@ module.exports.createWellnessWithSlots = async (req, res) => {
         const { name, event_id, description, location, currency } = req.body;
         let { slots } = req.body;
         // ✅ Validate Required Fields
-        if (!event_id || !name || !currency) {
+        if (!event_id || !name) {
             return apiResponse.validation(res, [], "Required fields are missing");
         }
 
@@ -405,7 +405,7 @@ module.exports.updateWellnessWithSlots = async (req, res) => {
         // ✅ Validate required fields
         const { name, event_id, currency } = req.body;
 
-        if (!event_id || !name || !currency) {
+        if (!event_id || !name) {
             if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
             return apiResponse.validation(res, [], 'Required fields are missing');
         }

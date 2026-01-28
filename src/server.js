@@ -31,6 +31,11 @@ const packagesRoutesV1 = require('./modules/v1/package/package.routes');
 const cartRoutesV1 = require('./modules/v1/cart/cart.routes');
 const ordersRoutesV1 = require('./modules/v1/orders/orders.route');
 const wellnessRoutesV1 = require('./modules/v1/wellness/wellness.routes');
+const paymentRoutesV1 = require('./modules/v1/payment/payment.routes');
+const committeeRoutesV1 = require('./modules/v1/committee/committee.routes');
+const usersRoutesV1 = require('./modules/v1/users/users.routes');
+const payoutsRoutesV1 = require('./modules/v1/payouts/payouts.routes');
+const couponsRoutesV1 = require('./modules/v1/coupons/coupons.route');
 
 
 const eventsRoutesV2 = require('./modules/v2/events/events.routes');
@@ -38,8 +43,30 @@ const ticketsRoutesV2 = require('./modules/v2/tickets/tickets.routes');
 // const subscriptionsRoutesV1 = require('./modules/v1/subscriptions/subscriptions.routes');
 // const apiKeysRoutesV1 = require('./modules/v1/apiKeys/apiKeys.routes');
 
+// Admin Routes...
+const authAdminRoutesV1 = require('./modules/v1/admin/auth/auth.routes');
+const eventOrganizerAdminRoutesV1 = require('./modules/v1/admin/event-organizer/eventOrganizer.routes');
+const eventAdminRoutesV1 = require('./modules/v1/admin/event/event.routes');
+const ordersAdminRoutesV1 = require('./modules/v1/admin/orders/orders.routes');
+const ticketsAdminRoutesV1 = require('./modules/v1/admin/tickets/tickets.routes');
+const staticAdminRoutesV1 = require('./modules/v1/admin/static/static.routes');
+const contactUsAdminRoutesV1 = require('./modules/v1/admin/contact-us/contact.routes');
+const seoAdminRoutesV1 = require('./modules/v1/admin/seo/seo.routes');
+const templateAdminRoutesV1 = require('./modules/v1/admin/email-templates/email.routes');
+const customerAdminRoutesV1 = require('./modules/v1/admin/customers/customer.routes');
+const dashboardAdminRoutesV1 = require('./modules/v1/admin/dashboard/dashboard.routes');
+const payoutsAdminRoutesV1 = require('./modules/v1/admin/payouts/payouts.routes');
+const financeAdminRoutesV1 = require('./modules/v1/admin/finance/finance.routes');
+
+
 // Initialize Express
 const app = express();
+
+// ---------------- STRIPE WEBHOOK (RAW BODY FIRST) ----------------
+app.use(
+  "/api/v1/payment/webhook",
+  bodyParser.raw({ type: "application/json" })
+);
 
 // Middleware
 app.use(cors(config.corsOptions));
@@ -72,6 +99,11 @@ app.use('/api/v1/packages', packagesRoutesV1);
 app.use('/api/v1/cart', cartRoutesV1);
 app.use('/api/v1/orders', ordersRoutesV1);
 app.use('/api/v1/wellness',wellnessRoutesV1);
+app.use('/api/v1/payment',paymentRoutesV1);
+app.use('/api/v1/committee',committeeRoutesV1);
+app.use('/api/v1/users',usersRoutesV1);
+app.use('/api/v1/payouts',payoutsRoutesV1);
+app.use('/api/v1/coupons',couponsRoutesV1);
 
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);
 // app.use('/api/v1/api-keys', apiKeysRoutesV1);
@@ -79,6 +111,22 @@ app.use('/api/v1/wellness',wellnessRoutesV1);
 // API v2 routes
 app.use('/api/v2/events', eventsRoutesV2);
 app.use('/api/v2/tickets', ticketsRoutesV2);
+
+// API V1 Admin Routes
+app.use('/api/v1/admin/auth',authAdminRoutesV1);
+app.use('/api/v1/admin/event-organizer',eventOrganizerAdminRoutesV1);
+app.use('/api/v1/admin/events',eventAdminRoutesV1);
+app.use('/api/v1/admin/orders',ordersAdminRoutesV1);
+app.use('/api/v1/admin/tickets',ticketsAdminRoutesV1);
+app.use('/api/v1/admin/static',staticAdminRoutesV1);
+app.use('/api/v1/admin/contact-us',contactUsAdminRoutesV1);
+app.use('/api/v1/admin/seo',seoAdminRoutesV1);
+app.use('/api/v1/admin/email-templates',templateAdminRoutesV1);
+app.use('/api/v1/admin/customers',customerAdminRoutesV1);
+app.use('/api/v1/admin/dashboard',dashboardAdminRoutesV1);
+app.use('/api/v1/admin/payouts',payoutsAdminRoutesV1);
+app.use('/api/v1/admin/finance',financeAdminRoutesV1);
+
 
 // Handle 404 errors
 app.use((req, res) => {

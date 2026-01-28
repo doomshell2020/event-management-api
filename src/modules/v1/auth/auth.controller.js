@@ -200,8 +200,6 @@ module.exports.resetPassword = async (req, res) => {
 };
 
 
-
-
 // user fetch profile
 module.exports.getUserById = async (req, res) => {
     try {

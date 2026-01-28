@@ -12,10 +12,10 @@ router.post('/create',
         body('event_id').notEmpty().withMessage('event_id is required'),
         body('total_amount').notEmpty().withMessage('total_amount is required'),
         body('payment_method').notEmpty().withMessage('payment_method is required').isIn(['Online', 'Cash']).withMessage('Invalid payment method'),
-        body('coupon_code')
+        body('discount_code')
             .optional()
             .isString()
-            .withMessage('coupon_code must be string'),
+            .withMessage('discount_code must be string'),
     ],
     validate,
     ordersController.createOrder
@@ -36,8 +36,7 @@ router.get('/details/:order_id',
 );
 
 // // LIST ALL ORDERS FOR LOGGED-IN USER
-router.get('/',
-    authenticate,
+router.get('/',authenticate,
     [
         query('page').optional().isInt().withMessage('page must be number'),
         query('limit').optional().isInt().withMessage('limit must be number'),
@@ -68,7 +67,6 @@ router.get('/organizer/ticket-exports',
     ordersController.organizerTicketExports
 );
 
-
 // create appointment order.. new kamal
 router.post('/create-appointment',
     authenticate,
@@ -76,18 +74,17 @@ router.post('/create-appointment',
         body('event_id').notEmpty().withMessage('event_id is required'),
         body('total_amount').notEmpty().withMessage('total_amount is required'),
         body('payment_method').notEmpty().withMessage('payment_method is required').isIn(['Online', 'Cash']).withMessage('Invalid payment method'),
-        body('coupon_code')
+        body('discount_code')
             .optional()
             .isString()
-            .withMessage('coupon_code must be string'),
+            .withMessage('discount_code must be string'),
     ],
     validate,
     ordersController.createAppointmentOrder
 );
 
 // ... appointment cancel
-router.put(
-    '/cancel-appointment/:id',
+router.put('/cancel-appointment/:id',
     // authenticate,
     // [
     //     body('order_id')
@@ -96,6 +93,44 @@ router.put(
     // ],
     // validate,
     ordersController.cancelAppointment
+);
+
+// routes/sales.routes.js
+router.get('/event-sales-summary',
+    authenticate,
+    [
+        query('event_id').notEmpty().withMessage('event_id is required'),
+    ],
+    validate,
+    ordersController.eventSalesAnalytics
+);
+
+router.get("/event-dashboard-analytics",
+    authenticate,
+    [
+        query("event_id").notEmpty().withMessage("event_id is required")
+    ],
+    validate,
+    ordersController.eventDashboardAnalytics
+);
+
+router.get("/user-sales-analytics",
+    authenticate,
+    [
+        query("event_id").notEmpty().withMessage("event_id is required"),
+        query("user_id").notEmpty().withMessage("user_id is required")
+    ],
+    validate,
+    ordersController.userEventSalesAnalytics
+);
+
+router.get("/sales-addons",
+    authenticate,
+    [
+        query("event_id").notEmpty().withMessage("event_id is required")
+    ],
+    validate,
+    ordersController.salesAddons
 );
 
 module.exports = router;

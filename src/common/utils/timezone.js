@@ -36,8 +36,30 @@ const getAllTimezones = () => {
     return moment.tz.names();
 };
 
+
+/**
+ * ✅ Convert UTC date to user friendly readable format
+ * Example Output: "Jan 01, 2026 01:20 PM (Africa/Accra)"
+ * @param {string|Date} utcDate - UTC date stored in DB
+ * @param {string} timezone - IANA timezone
+ * @param {boolean} showTimezone - whether to append timezone text
+ * @returns {string}
+ */
+const formatFriendlyDate = (utcDate, timezone, showTimezone = true) => {
+    if (!utcDate) return 'N/A';
+    if (!timezone) timezone = 'UTC';
+
+    const formatted = moment.utc(utcDate)
+        .tz(timezone)
+        .format('MMM DD, YYYY hh:mm A');
+
+    return showTimezone ? `${formatted} (${timezone})` : formatted;
+};
+
+
 module.exports = {
     convertToUTC,
     convertUTCToLocal,
-    getAllTimezones
+    getAllTimezones,
+    formatFriendlyDate
 };

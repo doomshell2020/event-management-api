@@ -1,8 +1,6 @@
-
-
 // 1️⃣ Generate Unique Order ID
 function generateUniqueOrderId() {
-    const prefix = "EXT"; 
+    const prefix = "EXT";
     const date = new Date();
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -21,13 +19,105 @@ function formatDate(date) {
     return d.toISOString().split("T")[0];
 }
 
-// Add more functions here as needed...
+const formatDate2 = (dateStr) => {
+    return new Date(dateStr).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    });
+};
 
-// -------------------
-// EXPORT ALL FUNCTIONS
-// -------------------
+const formatTime = (timeStr) => {
+    const [h, m] = timeStr.split(":");
+    const date = new Date();
+    date.setHours(h, m);
+
+    return date.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+    });
+};
+
+
+const replaceTemplateVariables = (template, variables = {}) => {
+    let output = template;
+    // console.log('variables :', variables);
+
+    Object.keys(variables).forEach((key) => {
+        const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+        output = output.replace(regex, variables[key]);
+    });
+
+    return output;
+};
+
+const getItemTitle = (item) => {
+
+    switch (item.item_type) {
+
+        case 'ticket_price':
+            if (item.ticketPricing?.ticket?.title) {
+                const slotName = item.ticketPricing?.slot?.slot_name;
+                return slotName
+                    ? `${item.ticketPricing.ticket.title} (${slotName})`
+                    : item.ticketPricing.ticket.title;
+            }
+            return 'Ticket';
+
+        case 'addon':
+            return item.addonType?.name || 'Addon';
+
+        case 'package':
+            return item.packageType?.name || 'Package';
+
+        case 'ticket':
+            return item.ticketType?.title || 'Ticket';
+
+        case 'appointment': {
+            const appointment = item.appointment;
+            if (!appointment) return 'Appointment';
+            const name = appointment.wellnessList?.name || 'Appointment';
+            const date = appointment.date ? formatDate2(appointment.date) : '';
+            const start = appointment.slot_start_time
+                ? formatTime(appointment.slot_start_time)
+                : '';
+            const end = appointment.slot_end_time
+                ? formatTime(appointment.slot_end_time)
+                : '';
+
+            const timeRange = start && end ? `${start} – ${end}` : '';
+
+            return [name, date, timeRange].filter(Boolean).join(' — ');
+        }
+        default:
+            return 'Item';
+    }
+};
+
+
+/**
+ * Format price with commas and fixed decimals
+ * @param {number|string} amount
+ * @param {number} decimals
+ * @returns {string}
+ */
+const formatPrice = (amount, decimals = 2) => {
+    const num = Number(amount || 0);
+
+    return num.toLocaleString('en-IN', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
+};
+
+
+// -------------------// EXPORT ALL FUNCTIONS //-------------------
 module.exports = {
     generateUniqueOrderId,
     randomString,
     formatDate,
+    replaceTemplateVariables,
+    getItemTitle,
+    formatPrice
 };

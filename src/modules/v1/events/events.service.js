@@ -1,9 +1,60 @@
 const path = require('path');
 const fs = require('fs');
-const { Op } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes } = require('../../../models');
-const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+const { Op, where } = require('sequelize');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User ,Orders} = require('../../../models');
+const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
+const config = require('../../../config/app');
+const { replaceTemplateVariables } = require('../../../common/utils/helpers');
+const sendEmail = require('../../../common/utils/sendEmail');
 
+module.exports.searchEvents = async ({ keyword, loginId }) => {
+    try {
+        if (!loginId) {
+            return {
+                success: false,
+                code: 'VALIDATION_FAILED',
+                message: 'Invalid login user'
+            };
+        }
+
+        if (!keyword || !keyword.trim()) {
+            return {
+                success: false,
+                code: 'VALIDATION_FAILED',
+                message: 'Keyword is required'
+            };
+        }
+
+        const searchText = keyword.trim();
+
+        const events = await Event.findAll({
+            where: {
+                event_org_id: loginId, // ✅ now safe
+                [Op.or]: [
+                    { name: { [Op.like]: `%${searchText}%` } },
+                    { desp: { [Op.like]: `%${searchText}%` } },
+                    { location: { [Op.like]: `%${searchText}%` } }
+                ]
+            },
+            order: [['created', 'DESC']],
+            limit: 10,
+            attributes: ['id', 'name', 'location', 'date_from']
+        });
+
+        return {
+            success: true,
+            data: events || []
+        };
+
+    } catch (error) {
+        console.error('Error in searchEvents service:', error);
+        return {
+            success: false,
+            code: 'INTERNAL_ERROR',
+            message: 'Something went wrong while searching events'
+        };
+    }
+};
 
 module.exports.deleteEvent = async (eventId) => {
     try {
@@ -12,6 +63,19 @@ module.exports.deleteEvent = async (eventId) => {
 
         if (!event) {
             return { success: false, code: "NOT_FOUND", message: "Event not found" };
+        }
+        // ✅ Check if any order exists for this event
+        const checkOrderEvent = await Orders.findOne({
+            where: { event_id: eventId }
+        });
+
+        // ❌ If order exists, do NOT delete event
+        if (checkOrderEvent) {
+            return {
+                success: false,
+                code: "EVENT_HAS_ORDERS",
+                message: "Event cannot be deleted because orders exist for this event."
+            };
         }
 
         // ✅ Delete image from filesystem (if exists)
@@ -51,6 +115,7 @@ module.exports.eventList = async (req, res) => {
         const {
             search,
             status,
+            admineventstatus,
             id,
             company_id,
             slug,
@@ -112,9 +177,11 @@ module.exports.eventList = async (req, res) => {
         const events = await Event.findAll({
             where: whereCondition,
             include: [
-                { model: Company, as: "companyInfo", attributes: ["name"] }
+                { model: Company, as: "companyInfo", attributes: ["name"] },
+                { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] },
+                { model: User, as: "Organizer", attributes: ["id", "email", "first_name", "last_name", "payment_gateway_charges", "default_platform_charges", "admin_approval_required", "approval_type"] }
             ],
-            order: [["date_from", "DESC"]],
+            order: [["created", "DESC"]],
         });
 
         // ✅ Format and Convert Dates
@@ -244,34 +311,36 @@ module.exports.publicEventList = async (req, res) => {
             date_from,
             date_to,
             sale_start,
-            sale_end
+            sale_end,
+            is_details_page
         } = req.body || {};
+        // console.log('is_details_page :', is_details_page);
 
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
         const imagePath = "uploads/events";
         let whereCondition = {};
 
-        // ✅ ID Filter
+        // ID Filter
         if (id) whereCondition.id = id;
 
-        // ✅ Organizer ID
+        // Organizer ID
         if (org_id) whereCondition.event_org_id = org_id;
 
-        // ✅ Company ID
+        // Company ID
         if (company_id) whereCondition.company_id = company_id;
 
-        // ✅ Slug
+        // Slug
         if (slug && slug.trim() !== "") whereCondition.slug = slug.trim();
 
-        // ✅ Status
+        // Status
         if (status && status.trim() !== "") whereCondition.status = status.trim();
 
-        // ✅ Search by Name
+        // Search by Name
         if (search && search.trim() !== "") {
             whereCondition.name = { [Op.like]: `%${search.trim()}%` };
         }
 
-        // ✅ Event Date Range Filter
+        // Event Date Range Filter
         if (date_from && date_to) {
             whereCondition.date_from = { [Op.between]: [new Date(date_from), new Date(date_to)] };
         } else if (date_from) {
@@ -280,7 +349,7 @@ module.exports.publicEventList = async (req, res) => {
             whereCondition.date_from = { [Op.lte]: new Date(date_to) };
         }
 
-        // ✅ Sale Start / End Date Range Filters
+        // Sale Start / End Date Range Filters
         if (sale_start && sale_end) {
             whereCondition.sale_start = { [Op.between]: [new Date(sale_start), new Date(sale_end)] };
         } else if (sale_start) {
@@ -288,17 +357,23 @@ module.exports.publicEventList = async (req, res) => {
         } else if (sale_end) {
             whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
         }
+        
 
-        // ✅ EXCLUDE expired events (date_to < today)
+        // EXCLUDE expired events (date_to < today)
+
         const today = new Date();
-        whereCondition.date_to = {
-            ...(whereCondition.date_to || {}),
-            [Op.gte]: today, // only events whose end date >= today
-        };
+        if (!is_details_page) {
+            whereCondition.date_to = {
+                ...(whereCondition.date_to || {}),
+                [Op.gte]: today, // only events whose end date >= today
+            };
+        }
 
-        // console.log("Applied Filters:", whereCondition);
+        whereCondition.admineventstatus = 'Y';
+        whereCondition.status = 'Y';
+        // console.log('whereCondition :', whereCondition);
 
-        // ✅ Fetch Events
+        // Fetch Events
         const events = await Event.findAll({
             where: whereCondition,
             include: [
@@ -306,13 +381,26 @@ module.exports.publicEventList = async (req, res) => {
                 { model: AddonTypes, as: "addons" },
                 { model: Company, as: "companyInfo", attributes: ["name"] }
             ],
-            order: [["date_from", "DESC"]],
+            order: [
+                ["featured", "ASC"],      // Y will come first
+                ["date_from", "DESC"]      // then sort by date
+            ],
         });
 
-        // ✅ Format and Convert Dates
+
+        // Format and Convert Dates
         const formattedEvents = events.map((event) => {
             const data = event.toJSON();
             const tz = data.event_timezone || "UTC";
+            const adminStatus = data.admineventstatus || "N";
+            const eventStatus = data.status || "N";
+            let status = null;
+            // For public listing, show only events that are approved by admin and active
+            if (adminStatus !== "Y" || eventStatus !== "Y") {
+                status = "N";
+            } else {
+                status = "Y";
+            }
 
             const formatDate = (date) =>
                 date
@@ -332,10 +420,14 @@ module.exports.publicEventList = async (req, res) => {
                 date_to: formatDate(data.date_to),
                 sale_start: formatDate(data.sale_start),
                 sale_end: formatDate(data.sale_end),
+                date_from_in_db: (data.date_from),
+                date_to_in_db: (data.date_to),
+                sale_start_in_db: (data.sale_start),
+                sale_end_in_db: (data.sale_end),
             };
         });
 
-        // ✅ Send Response
+        // Send Response
         return {
             success: true,
             message: "Active/Upcoming events fetched successfully",
@@ -377,7 +469,7 @@ module.exports.createEvent = async (req, res) => {
 
         const user_id = req.user?.id;
         // ✅ Set default timezone if missing or empty
-        const finalTimezone = event_timezone && event_timezone.trim() !== ''
+        const finalTimezone = event_timezone && event_timezone.trim() != ''
             ? event_timezone
             : 'UTC';
 
@@ -449,7 +541,7 @@ module.exports.createEvent = async (req, res) => {
         const feat_image = filename;
 
         // ✅ Extra validation for paid events
-        if (is_free !== 'Y') {
+        if (is_free != 'Y') {
             if (!ticket_limit || !payment_currency || !sale_start || !sale_end || !approve_timer) {
                 return {
                     success: false,
@@ -467,7 +559,7 @@ module.exports.createEvent = async (req, res) => {
         const formatted_sale_end = sale_end ? convertToUTC(sale_end, finalTimezone) : null;
         const formatted_request_rsvp = request_rsvp ? convertToUTC(request_rsvp, finalTimezone) : null;
 
-        const admin_status = is_free == 'Y' ? 'Y' : 'N';
+        // const admin_status = is_free == 'Y' ? 'Y' : 'N';
 
         // ✅ Build final event object
         const eventData = {
@@ -478,6 +570,7 @@ module.exports.createEvent = async (req, res) => {
             location,
             company_id,
             country_id,
+            entry_type,
             ticket_limit: ticket_limit || 0,
             video_url,
             payment_currency,
@@ -490,12 +583,10 @@ module.exports.createEvent = async (req, res) => {
             fee_assign: 'user',
             is_free: is_free == 'Y' ? 'Y' : 'N',
             allow_register: allow_register == 'Y' ? 'Y' : 'N',
-            admineventstatus: admin_status,
+            // admineventstatus: admin_status,
             request_rsvp: formatted_request_rsvp,
             event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
         };
-
-        // console.log('>>>>>>>>>>>>>>>>>', eventData);
 
         // ✅ Save to DB
         const newEvent = await Event.create(eventData);
@@ -507,6 +598,20 @@ module.exports.createEvent = async (req, res) => {
                 code: 'CREATION_FAILED',
             };
         }
+
+        // ✅ Create ticket
+        const newTicket = await TicketType.create({
+            eventid: newEvent.id,
+            userid: user_id,
+            title: 'Complimentary',
+            type: "comps",
+            price: parseFloat(0) || 0
+        });
+
+        await User.update(
+            { role_id: config.ORGANIZER_ROLE },
+            { where: { id: user_id } }
+        );
 
         return { success: true, event: newEvent };
 
@@ -520,7 +625,7 @@ module.exports.createEvent = async (req, res) => {
     }
 };
 
-module.exports.updateEvent = async (eventId, updateData, user) => {
+module.exports.updateEvent = async (eventId, updateData, authUser) => {
     try {
         const existingEvent = await Event.findByPk(eventId);
         if (!existingEvent) {
@@ -546,7 +651,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             allow_register,
             request_rsvp,
             feat_image,
-            status
+            status, event_timezone
         } = updateData;
 
         if (
@@ -555,6 +660,64 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         ) {
             existingEvent.status = updateData.status;
             await existingEvent.save();
+
+            // Only send email if status is 'Y'
+            if (existingEvent.status == 'Y') {
+
+                // ===== EMAIL TEMPLATE FETCH =====
+                const templateId = config.emailTemplates.newEventCreated;
+
+                const templateRecord = await Templates.findOne({
+                    where: { id: templateId }
+                });
+
+                if (!templateRecord) {
+                    throw new Error('Add staff email template not found');
+                }
+
+                const { description } = templateRecord;
+
+                const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+                const imagePath = "uploads/events";
+
+                const tz = existingEvent.event_timezone || "UTC";
+
+                let saleStartValue = 'N/A';
+                let saleEndValue = 'N/A';
+
+                if (existingEvent.is_free !== 'Y') {
+                    saleStartValue = formatFriendlyDate(existingEvent.sale_start, tz);
+                    saleEndValue = formatFriendlyDate(existingEvent.sale_end, tz);
+                }
+
+                const html = replaceTemplateVariables(description, {
+                    SITE_URL: config.clientUrl,
+                    HostedBy: authUser.firstName || authUser.email,
+                    EventName: existingEvent.name || '',
+                    EventImage: existingEvent.feat_image
+                        ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${existingEvent.feat_image}`
+                        : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+                    EventStart: formatFriendlyDate(existingEvent.date_from, tz),
+                    EventEnd: formatFriendlyDate(existingEvent.date_to, tz),
+                    SaleStart: saleStartValue,
+                    SaleEnd: saleEndValue,
+                    Location: existingEvent.location || '',
+                    Slug: existingEvent.slug || '',
+                    Description: existingEvent.desp || '',
+                    IsFree: existingEvent.is_free == 'Y' ? 'Free Event' : 'Paid Event'
+                });
+
+                await sendEmail(
+                    authUser.email,
+                    `Your Event ${existingEvent.name} is Now Live on eboxtickets!`,
+                    html
+                );
+            }
+
+            await User.update(
+                { role_id: config.ORGANIZER_ROLE },
+                { where: { id: authUser.id } }
+            );
 
             return {
                 success: true,
@@ -580,12 +743,9 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             }
         }
 
-
-
         // ✅ Determine effective values for validation
         const effectiveIsFree = is_free !== undefined ? is_free : existingEvent.is_free;
         const effectiveRequestRsvp = request_rsvp !== undefined ? request_rsvp : existingEvent.request_rsvp;
-        // console.log('>>>>>>>',effectiveIsFree);
 
         // ✅ Free event validation
         if (effectiveIsFree == 'Y' && !effectiveRequestRsvp) {
@@ -626,6 +786,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
         if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
         if (status !== undefined && status !== null) existingEvent.status = status;
+        if (event_timezone !== undefined && event_timezone !== null) existingEvent.event_timezone = event_timezone;
 
         // ✅ Handle optional image update
         if (feat_image) {
@@ -644,6 +805,11 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
 
         // ✅ Save updates
         await existingEvent.save();
+
+        await User.update(
+            { role_id: config.ORGANIZER_ROLE },
+            { where: { id: authUser.id } }
+        );
 
         return { success: true, event: existingEvent };
 

@@ -6,8 +6,7 @@ const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 
 // ✅ Create Package with Ticket & Addon selections
-router.post(
-    '/create',
+router.post('/create',
     authenticate,
     [
         body('event_id')
@@ -26,6 +25,12 @@ router.post(
             .withMessage('Package limit is required')
             .isInt({ min: 1 })
             .withMessage('Package limit must be a number'),
+            
+        body('total_package')
+            .notEmpty()
+            .withMessage('Package Total is required')
+            .isInt({ min: 1 })
+            .withMessage('Package Total must be a number'),
 
         body('discount_percentage')
             .optional()
@@ -78,8 +83,7 @@ router.post(
 );
 
 // ✅ Update Package (name, hidden, limit — any or all)
-router.put(
-    '/update/:id',
+router.put('/update/:id',
     authenticate,
     [
         param('id')
@@ -108,15 +112,18 @@ router.put(
             .optional({ nullable: true })
             .isInt({ min: 1 })
             .withMessage('Package limit must be a positive integer'),
+
+        body('total_package')
+            .optional({ nullable: true })
+            .isInt({ min: 1 })
+            .withMessage('Package Total must be a positive integer'),
     ],
     validate,
     packageController.updatePackage
 );
 
-
 // ✅ Get Package List or Single Package (event_id required, id optional)
-router.get(
-    '/list',
+router.get('/list',
     authenticate,
     [
         query('event_id')

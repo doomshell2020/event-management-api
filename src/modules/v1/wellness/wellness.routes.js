@@ -29,8 +29,8 @@ router.post(
         body('location')
             .optional(),
 
-        body('currency')
-            .notEmpty().withMessage('currency is required')
+        // body('currency')
+        //     .notEmpty().withMessage('currency is required')
     ],
     validate,
     wellnessController.createWellnessAppointment
@@ -150,8 +150,8 @@ router.post(
         body('location')
             .optional(),
 
-        body('currency')
-            .notEmpty().withMessage('currency is required')
+        // body('currency')
+        //     .notEmpty().withMessage('currency is required')
     ],
     validate,
     wellnessController.createWellnessWithSlots
@@ -176,8 +176,8 @@ router.put(
             .isLength({ min: 3 }).withMessage('wellness description must be at least 3 characters long'),
         body('location')
             .optional(),
-        body('currency')
-            .notEmpty().withMessage('currency is required')
+        // body('currency')
+        //     .notEmpty().withMessage('currency is required')
     ],
     validate,
     wellnessController.updateWellnessWithSlots

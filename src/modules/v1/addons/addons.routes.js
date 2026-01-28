@@ -7,8 +7,7 @@ const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
 
 // 🎟️ Create Addon Route
-router.post(
-    '/create',
+router.post('/create',
     authenticate,
     uploadFiles({ folder: 'uploads/addons', type: 'single', fieldName: 'addon_image' }),
     [
@@ -55,6 +54,19 @@ router.put('/update/:id',
 
 router.get("/list/:event_id", addonController.listAddonsByEvent);
 
+
+// 🎟️ Delete Ticket Route
+router.delete('/delete/:id',
+    authenticate, // ✅ Require authentication
+    [
+        // ✅ Validate Ticket ID
+        param('id')
+            .isInt({ min: 1 })
+            .withMessage('Valid Addon ID is required'),
+    ],
+    validate,
+    addonController.deleteAddon // 👈 You’ll implement this in your controller
+);
 
 module.exports = router;
 

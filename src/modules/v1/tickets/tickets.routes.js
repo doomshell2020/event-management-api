@@ -1,11 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const ticketController = require('./tickets.controller');
-const { body, param } = require('express-validator');
+const { body, param, check } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
 
+router.post('/generate',
+    authenticate,
+    [
+        body('quantity')
+            .notEmpty().withMessage('Quantity is required')
+            .isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
+
+        body('ticket_id')
+            .notEmpty().withMessage('Ticket ID is required')
+            .isInt().withMessage('Ticket ID must be a number'),
+
+        body('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number'),
+    ],
+    validate,
+    ticketController.generateTicket
+);
 
 // 🎟️ Create Ticket Route
 router.post('/create',
@@ -33,15 +51,7 @@ router.post('/create',
 
         body('count')
             .optional()
-            .isInt({ min: 1 }).withMessage('Ticket count must be at least 1'),
-
-        // body('sale_start')
-        //     .optional()
-        //     .isISO8601().withMessage('Sale start date must be a valid ISO date'),
-
-        // body('sale_end')
-        //     .optional()
-        //     .isISO8601().withMessage('Sale end date must be a valid ISO date')
+            .isInt({ min: 1 }).withMessage('Ticket count must be at least 1')
     ],
     validate,
     ticketController.createTicket
@@ -97,10 +107,67 @@ router.delete('/delete/:id',
 );
 
 // ✅ 1. List all tickets for a given event
-router.get("/list/:event_id", ticketController.listTicketsByEvent);
+router.get("/list/:event_id", authenticate, ticketController.listTicketsByEvent);
 
-// ✅ 2. Get single ticket detail by ID
-router.get("/detail/:ticket_id", ticketController.getTicketDetail);
+/* ✅ 2. Print / fetch generated complimentary tickets (by ticket + event) */
+router.get("/print/:ticket_id",
+    authenticate,
+    ticketController.printCompsTickets
+);
+
+router.post("/import-comps",
+    authenticate,
+    uploadFiles({
+        folder: 'uploads/temp',
+        type: 'single',
+        fieldName: 'uploadFiles'
+    }),
+    [
+        check('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number')
+            .toInt()
+    ],
+    validate,
+    ticketController.importCompsTickets
+);
+
+router.get("/generated-users/:event_id",
+    authenticate,
+    [
+        check('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number')
+            .toInt()
+    ],
+    validate,
+    ticketController.getGeneratedUsers
+);
+
+router.post("/generate-single-comps",
+    authenticate,
+    [
+        check("event_id").isInt(),
+        check("user_id").isInt()
+    ],
+    validate,
+    ticketController.generateSingleCompsTicket
+);
+
+router.delete("/delete-generated-comps/:order_item_id",
+    authenticate,
+    [
+        check("order_item_id")
+            .notEmpty().withMessage("Order item ID is required")
+            .isInt().withMessage("Order item ID must be a number")
+            .toInt()
+    ],
+    validate,
+    ticketController.deleteGeneratedCompsTicket
+);
+
+//Get single ticket detail by ID
+router.get("/detail/:ticket_id", authenticate, ticketController.getTicketDetail);
 
 module.exports = router;
 

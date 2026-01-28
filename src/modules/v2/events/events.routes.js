@@ -115,8 +115,11 @@ router.put('/update/:id',
             .isInt().withMessage('Country ID must be a number'),
 
         body('slug')
-            .optional()
-            .matches(/^[a-z0-9-]+$/).withMessage('Slug must contain only lowercase letters, numbers, and hyphens'),
+            .notEmpty().withMessage('Slug is required')
+            .isLength({ max: 100 }).withMessage('Slug must not exceed 100 characters')
+            .matches(/^[a-z0-9-]+$/).withMessage(
+                'Slug must contain only lowercase letters, numbers, and hyphens'
+            ),
 
         // Conditional validation for non-free events
         body('ticket_limit')
@@ -137,6 +140,11 @@ router.put('/update/:id',
             .if(body('is_free').not().equals('Y'))
             .optional()
             .isISO8601({ strict: false }).withMessage('Sale end must be valid ISO date'),
+
+        body('entry_type')
+            .optional()
+            .isIn(['single', 'multi', 'slot', 'event'])
+            .withMessage('Event type must be one of: single, multi, slot,event'),
     ],
     validate,
     eventController.updateEvent
@@ -260,6 +268,22 @@ router.get('/:event_id/appointments',
     validate,
     eventController.getEventAppointmentsDetails
 );
+
+// ...Get all Slots with appointments ids - kamal(12-12-2025)
+router.post('/:event_id/wellness-appointments',
+    [
+        param('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be numeric'),
+        body('slotIds')
+            .isArray({ min: 1 }).withMessage('slotIds must be a non-empty array'),
+        body('slotIds.*')
+            .isInt().withMessage('Each slotId must be numeric')
+    ],
+    validate,
+    eventController.getSelectedWellnessSlots
+);
+
 
 
 

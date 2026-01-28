@@ -1,529 +1,654 @@
-const cartService = require('./cart.service');
-const apiResponse = require('../../../common/utils/apiResponse');
-const path = require('path');
-const fs = require('fs');
+const Stripe = require("stripe");
+const { Payment, Orders, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons, WellnessSlots, Wellness } = require("../../../models");
+const apiResponse = require("../../../common/utils/apiResponse");
+const config = require("../../../config/app");
+const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
+
+const { Op, fn, col } = require("sequelize");
+const sequelize = require("../../../models").sequelize;
 
 
-// add wellness...
-module.exports.addToCartAppointment = async (req, res) => {
-    try {
-        const { user_id,event_id,appointment_id,ticket_type } = req.body;
-        if (!event_id || !user_id || !appointment_id) {
-            return apiResponse.validation(res, [], 'Required fields are missing');
-        }
-        // ✅ Call service to create ticket
-        const result = await cartService.addToCartAppointment(req);
-        // ✅ Handle service errors
-        if (!result.success) {
-            switch (result.code) {
-                case 'EVENT_NOT_FOUND':
-                    return apiResponse.notFound(res, 'Associated event not found');
-                case 'DB_ERROR':
-                    return apiResponse.error(res, 'Database error occurred while adding cart');
-                case 'VALIDATION_FAILED':
-                    return apiResponse.validation(res, [], result.message);
-                case 'DUPLICATE_WELLNESS':
-                    return apiResponse.conflict(res, result.message || '');
-                default:
-                    return apiResponse.error(res, result.message || 'An unknown error occurred');
-            }
-        }
-        // ✅ Success response
-        return apiResponse.success(res, 'Appointment added to cart successfully', result.data);
-    } catch (error) {
-        console.error('Error in adding cart:', error);
-        return apiResponse.error(res, 'Internal Server Error', 500);
+const stripe = new Stripe(config.stripeKey, {
+  apiVersion: "2024-06-20",
+});
+
+
+exports.createPaymentIntent = async (req, res) => {
+  try {
+    const {
+      user_id,
+      event_id,
+      tax_total = 0,
+      sub_total = 0,
+      grand_total = 0,
+      discount_amount = 0,
+      cartData,
+      currency = "usd",
+      appliedCoupon = null
+    } = req.body;
+
+
+    // BASIC VALIDATION
+    if (!user_id || !event_id || !grand_total || !Array.isArray(cartData) || cartData.length == 0) {
+      return apiResponse.error(res, "Missing required fields", 400);
     }
-};
 
+    // DISCOUNT VALIDATION LOGIC
 
-// Deleted cart data 
-module.exports.deleteCart = async (req, res) => {
-    try {
-        const cartId = req.params.id;
-        // ✅ Validate ID param
-        if (!cartId) {
-            return apiResponse.validation(res, [], 'Cart ID is required');
+    let validatedDiscount = 0;
+    let couponCode = null;
+
+    if (appliedCoupon) {
+      couponCode = appliedCoupon.coupon_code;
+
+      const coupon = await Coupons.findOne({
+        where: {
+          code: couponCode,
+          event: event_id,
+          status: "Y",
+        },
+      });
+
+      if (!coupon) {
+        return apiResponse.error(res, "Invalid coupon code", 400);
+      }
+
+      // MAX REDEEMS CHECK
+      if (coupon.max_redeems && coupon.max_redeems > 0) {
+        const redeemedCount = await Orders.count({ where: { discount_code: couponCode } });
+        if (redeemedCount >= coupon.max_redeems) {
+          return apiResponse.error(res, "Coupon has reached its maximum number of uses", 400);
         }
-        // ✅ Call service to delete ticket
-        const result = await cartService.deleteCart(req);
-        // ✅ Handle service-layer errors
-        if (!result.success) {
-            switch (result.code) {
-                case 'CART_NOT_FOUND':
-                    return apiResponse.notFound(res, 'cart not found');
-                case 'FORBIDDEN':
-                    return apiResponse.forbidden(res, 'You are not authorized to delete this cart');
-                case 'DB_ERROR':
-                    return apiResponse.error(res, 'Database error occurred while deleting cart');
-                default:
-                    return apiResponse.error(res, result.message || 'An unknown error occurred');
-            }
+      }
+
+      // DATE VALIDATION
+      if (coupon.validity_period == "specified_date") {
+        const today = new Date();
+
+        if (
+          today < new Date(coupon.specific_date_from) ||
+          today > new Date(coupon.specific_date_to)
+        ) {
+          return apiResponse.error(res, "Coupon is expired", 400);
         }
-        // ✅ Success response
-        return apiResponse.success(res, 'Cart deleted successfully');
-    } catch (error) {
-        console.error('Error in deleteCart:', error);
-        return apiResponse.error(res, 'Internal Server Error', 500);
+      }
+
+      // DISCOUNT CALCULATION
+      if (coupon.discount_type == "percentage") {
+        validatedDiscount = (Number(sub_total) * parseFloat(coupon.discount_value)) / 100;
+      } else {
+        validatedDiscount = parseFloat(coupon.discount_value);
+      }
+
+      // MAX LIMIT SAFETY
+      if (validatedDiscount > Number(sub_total)) {
+        validatedDiscount = Number(sub_total);
+      }
+
     }
-};
 
-// cart view Api
-module.exports.getCartById = async (req, res) => {
-    try {
-        const result = await cartService.getCartById(req, res);
-        if (!result.success) {
-            switch (result.code) {
-                case 'VALIDATION_FAILED':
-                    return apiResponse.validation(res, [], result.message);
-                default:
-                    return apiResponse.error(res, result.message);
-            }
-        }
-        const cartData = result.data || {};
-        return apiResponse.success(
-            res,
-            result.message || 'Cart record fetched successfully',
-            { cart: cartData }   // singular because findOne
+    // GRAND TOTAL VALIDATION
+    // const expectedGrandTotal =
+    //   Number(sub_total) +
+    //   Number(tax_total) -
+    //   Number(validatedDiscount);
+
+    // if (Math.abs(expectedGrandTotal - Number(grand_total)) > 1) {
+    //   return apiResponse.error(
+    //     res,
+    //     "Amount mismatch detected. Please refresh and try again.",
+    //     400
+    //   );
+    // }
+
+    // VALIDATE LIMITS (Ticket / Committee / Addon / Package)
+
+    for (const item of cartData) {
+
+      if (item.ticketType == "appointment") {
+        continue;
+      }
+
+      let Model = null;
+      let whereClause = {};
+      let itemId = null;
+      let typeLabel = "";
+      let limitField = null;
+      let nameField = null;
+
+      if (item.ticketType == "ticket" || item.ticketType == "committesale") {
+        Model = TicketType;
+        whereClause.ticket_id = item.ticketId;
+        itemId = item.ticketId;
+        typeLabel = "Ticket";
+        limitField = "count";
+        nameField = "title";
+      }
+      else if (item.ticketType == "addon") {
+        Model = AddonTypes;
+        whereClause.addon_id = item.ticketId;
+        itemId = item.ticketId;
+        typeLabel = "Addon";
+        limitField = "count";
+        nameField = "name";
+      }
+      else if (item.ticketType == "package") {
+        Model = Package;
+        whereClause.package_id = item.ticketId;
+        itemId = item.ticketId;
+        typeLabel = "Package";
+        limitField = "total_package";
+        nameField = "name";
+      }
+      else if (item.ticketType == "ticket_price") {
+        Model = TicketPricing;
+        whereClause.package_id = item.ticketId;
+        itemId = item.ticketId;
+        typeLabel = "TicketPrice";
+        limitField = "total_count";
+        nameField = "price";
+      }
+      else {
+        continue;
+      }
+
+      const masterItem = await Model.findOne({
+        where: { id: itemId },
+        attributes: ["id", limitField, nameField]
+      });
+
+      const totalLimit = Number(masterItem?.[limitField] || 0);
+
+      if (!totalLimit) continue;
+
+      const booked = await OrderItems.findOne({
+        where: {
+          ...whereClause,
+          event_id
+        },
+        attributes: [
+          [fn("SUM", col("count")), "totalBooked"]
+        ],
+        raw: true
+      });
+
+      const alreadyBooked = Number(booked?.totalBooked || 0);
+      const requested = Number(item.quantity || 1);
+
+      if (alreadyBooked + requested > totalLimit) {
+        return apiResponse.error(
+          res,
+          `${typeLabel} "${masterItem?.[nameField] || "Item"}" is sold out or its booking limit has been reached.`,
+          400
         );
-    } catch (error) {
-        console.log('Error in cartFindOne controller:', error);
-        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+      }
     }
+
+    // CREATE SNAPSHOT
+
+    const snapshotRows = await PaymentSnapshotItems.bulkCreate(
+      cartData.map((item) => ({
+        user_id,
+        event_id,
+        ticket_id: item.ticketId || null,
+        cart_id: item.id || null,
+        addon_id: item.addonId || null,
+        appointment_id: item.appointmentId || null,
+        committee_user_id: item.committee_user_id || null,
+        item_type: item.ticketType,
+        quantity: item.quantity || 1,
+        price: item.price || 0,
+        payment_status: "pending",
+      }))
+    );
+
+    const snapshotIds = snapshotRows.map((r) => r.id).join(",");
+
+    // STRIPE METADATA BUILDER
+
+    const buildStripeMetadata = (data = {}) => {
+      const metadata = {};
+
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          metadata[key] = String(value).slice(0, 500);
+        }
+      });
+
+      return metadata;
+    };
+
+    // CREATE STRIPE PAYMENT INTENT
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(Number(grand_total) * 100),
+      currency,
+      metadata: buildStripeMetadata({
+        user_id,
+        event_id,
+        tax_total,
+        sub_total,
+        snapshot_ids: snapshotIds,
+        discount_amount: validatedDiscount,
+        grand_total,
+        coupon_code: couponCode || "",
+      }),
+    });
+
+    return apiResponse.success(res, "Payment Intent Created", {
+      clientSecret: paymentIntent.client_secret,
+    });
+
+  } catch (error) {
+    console.error("Stripe Error:", error);
+    return apiResponse.error(res, error.message, 500);
+  }
 };
 
 
-// // update wellness
-// module.exports.updateWellness = async (req, res) => {
-//     try {
-//         const ticketId = req.params.id;
-//         // ✅ Handle optional file upload
-//         const filename = req.file?.filename || null;
-//         const uploadFolder = path.join(process.cwd(), 'uploads/wellness');
-//         const fullFilePath = filename ? path.join(uploadFolder, filename) : null;
-//         // ✅ Validate ID param
-//         if (!ticketId) {
-//             if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
-//             return apiResponse.validation(res, [], 'Ticket ID is required');
-//         }
-//         // ✅ Validate fields
-//         const { name, event_id, description, location, currency } = req.body;
-
-//         if (!event_id || !name || !currency) {
-//             if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
-//             return apiResponse.validation(res, [], 'Required fields are missing');
-//         }
-
-//         // ✅ Call service to update ticket
-//         const result = await wellnessService.updateWellness(req);
-
-//         // ✅ Handle service-layer errors
-//         if (!result.success) {
-//             if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
-
-//             switch (result.code) {
-//                 case 'TICKET_NOT_FOUND':
-//                     return apiResponse.notFound(res, 'Ticket not found');
-//                 case 'EVENT_NOT_FOUND':
-//                     return apiResponse.notFound(res, 'Associated event not found');
-//                 case 'DB_ERROR':
-//                     return apiResponse.error(res, 'Database error occurred while updating ticket');
-//                 case 'VALIDATION_FAILED':
-//                     return apiResponse.validation(res, [], result.message);
-//                 case 'DUPLICATE_TICKET':
-//                     return apiResponse.conflict(res, result.message || '');
-//                 default:
-//                     return apiResponse.error(res, result.message || 'An unknown error occurred');
-//             }
-//         }
-
-//         // ✅ Success response
-//         return apiResponse.success(res, 'Ticket updated successfully', result.data);
-
-//     } catch (error) {
-//         console.error('Error in updateTicket:', error);
-//         return apiResponse.error(res, 'Internal Server Error', 500);
-//     }
-// };
-
-// // deleted wellness
-// module.exports.deleteWellness = async (req, res) => {
-//     try {
-//         const wellnessId = req.params.id;
-
-//         // ✅ Validate ID param
-//         if (!wellnessId) {
-//             return apiResponse.validation(res, [], 'Ticket ID is required');
-//         }
-
-//         // ✅ Call service to delete ticket
-//         const result = await wellnessService.deleteWellness(req);
-
-//         // ✅ Handle service-layer errors
-//         if (!result.success) {
-//             switch (result.code) {
-//                 case 'WELLNESS_NOT_FOUND':
-//                     return apiResponse.notFound(res, 'Wellness not found');
-//                 case 'FORBIDDEN':
-//                     return apiResponse.forbidden(res, 'You are not authorized to delete this wellness');
-//                 case 'DB_ERROR':
-//                     return apiResponse.error(res, 'Database error occurred while deleting wellness');
-//                 default:
-//                     return apiResponse.error(res, result.message || 'An unknown error occurred');
-//             }
-//         }
-//         // ✅ Success response
-//         return apiResponse.success(res, 'Wellness deleted successfully');
-//     } catch (error) {
-//         console.error('Error in deleteWellness:', error);
-//         return apiResponse.error(res, 'Internal Server Error', 500);
-//     }
-// };
-
-
-
-
-// // ..Wellness Lists
-// module.exports.wellnessList = async (req, res) => {
-//     try {
-//         const result = await wellnessService.wellnessList(req, res);
-
-//         if (!result.success) {
-//             switch (result.code) {
-//                 case 'VALIDATION_FAILED':
-//                     return apiResponse.validation(res, [], result.message);
-//                 default:
-//                     return apiResponse.error(res, result.message);
-//             }
-//         }
-//         return apiResponse.success(
-//             res,
-//             result.message || 'Wellness list fetched successfully',
-//             { wellness: result.data }  // plural naming convention
-//         );
-//     } catch (error) {
-//         console.log('Error in eventList controller:', error);
-//         return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
-//     }
-// };
-
-
-// // .. Wellness findOne
-// module.exports.getWellnessById = async (req, res) => {
-//     try {
-//         const result = await wellnessService.getWellnessById(req, res);
-//         if (!result.success) {
-//             switch (result.code) {
-//                 case 'VALIDATION_FAILED':
-//                     return apiResponse.validation(res, [], result.message);
-//                 default:
-//                     return apiResponse.error(res, result.message);
-//             }
-//         }
-//         const wellnessData = result.data || {};
-//         return apiResponse.success(
-//             res,
-//             result.message || 'Wellness record fetched successfully',
-//             { wellness: wellnessData }   // singular because findOne
-//         );
-
-//     } catch (error) {
-//         console.log('Error in wellnessFindOne controller:', error);
-//         return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
-//     }
-// };
-
-
-// // ...
-// module.exports.createWellnessSlots = async (req, res) => {
-//     try {
-
-//         const { wellness_id, date } = req.body;
-
-//         if (!wellness_id || !date) {
-//             return apiResponse.validation(res, [], 'Required fields are missing');
-//         }
-
-//         // if (type == 'Select' && !items || Array.isArray(items) && items.length == 0) {
-//         //     return apiResponse.validation(res, [], 'Items is required for select options');
-//         // }
-
-//         // ✅ Call service to create ticket
-//         const result = await wellnessService.createWellnessSlots(req);
-//         // ✅ Handle service errors
-//         if (!result.success) {
-
-//             switch (result.code) {
-//                 case 'EVENT_NOT_FOUND':
-//                     return apiResponse.notFound(res, 'Associated event not found');
-//                 case 'DB_ERROR':
-//                     return apiResponse.error(res, 'Database error occurred while creating wellness slots');
-//                 case 'VALIDATION_FAILED':
-//                     return apiResponse.validation(res, [], result.message);
-//                 case 'DUPLICATE':
-//                     return apiResponse.conflict(res, result.message || '');
-//                 default:
-//                     return apiResponse.error(res, result.message || 'An unknown error occurred');
-//             }
-//         }
-
-//         // ✅ Success response
-//         return apiResponse.success(res, 'Wellness slots created successfully', result.data);
-
-//     } catch (error) {
-//         console.error('Error in createWe:', error);
-//         return apiResponse.error(res, 'Internal Server Error', 500);
-//     }
-// }
-
-// // wellness slots lists
-// module.exports.wellnessSlotsList = async (req, res) => {
-//     try {
-//         const result = await wellnessService.wellnessSlotsList(req, res);
-//         if (!result.success) {
-//             switch (result.code) {
-//                 case 'VALIDATION_FAILED':
-//                     return apiResponse.validation(res, [], result.message);
-//                 default:
-//                     return apiResponse.error(res, result.message);
-//             }
-//         }
-//         return apiResponse.success(
-//             res,
-//             result.message || 'Wellness slots list fetched successfully',
-//             { wellness: result.data }  // plural naming convention
-//         );
-//     } catch (error) {
-//         console.log('Error in wellness slots controller:', error);
-//         return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
-//     }
-// };
-
-// // wellness slots list..
-// module.exports.getWellnessSlotById = async (req, res) => {
-//     try {
-//         const result = await wellnessService.getWellnessSlotById(req, res);
-//         if (!result.success) {
-//             switch (result.code) {
-//                 case 'VALIDATION_FAILED':
-//                     return apiResponse.validation(res, [], result.message);
-//                 default:
-//                     return apiResponse.error(res, result.message);
-//             }
-//         }
-//         const wellnessData = result.data || {};
-//         return apiResponse.success(
-//             res,
-//             result.message || 'Wellness slots record fetched successfully',
-//             { wellness: wellnessData }   // singular because findOne
-//         );
-
-//     } catch (error) {
-//         console.log('Error in wellness slot findOne controller:', error);
-//         return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
-//     }
-// };
-
-
-// // ..../
-// module.exports.updateWellnessSlots = async (req, res) => {
-//     try {
-//         const slotId = req.params.id;
-//         // ✅ Basic validation
-//         if (!slotId) {
-//             return apiResponse.validation(res, [], 'Question ID is required');
-//         }
-//         // ✅ Call service to update the question
-//         const result = await wellnessService.updateWellnessSlots(slotId, req.body);
-
-//         // ✅ Handle service errors
-//         if (!result.success) {
-//             switch (result.code) {
-//                 case 'WELLNESS_SLOT_NOT_FOUND':
-//                     return apiResponse.notFound(res, 'Slot not found');
-//                 case 'EVENT_NOT_FOUND':
-//                     return apiResponse.notFound(res, 'Associated event not found');
-//                 case 'DB_ERROR':
-//                     return apiResponse.error(res, 'Database error occurred while updating wellness slot');
-//                 case 'VALIDATION_FAILED':
-//                     return apiResponse.validation(res, [], result.message);
-//                 default:
-//                     return apiResponse.error(res, result.message || 'An unknown error occurred');
-//             }
-//         }
-
-//         // ✅ Success response
-//         return apiResponse.success(res, 'Wellness Slot updated successfully', result.data);
-
-//     } catch (error) {
-//         console.error('Error in updateWellnessSlot:', error);
-//         return apiResponse.error(res, 'Internal Server Error', 500);
-//     }
-// };
-
-// // wellness slots deleted
-// module.exports.deleteWellnessSlots = async (req, res) => {
-//     try {
-//         const wellnessSlotId = req.params.id;
-
-//         // ✅ Validate ID param
-//         if (!wellnessSlotId) {
-//             return apiResponse.validation(res, [], 'Wellness Slot ID is required');
-//         }
-
-//         // ✅ Call service to delete ticket
-//         const result = await wellnessService.deleteWellnessSlots(req);
-
-//         // ✅ Handle service-layer errors
-//         if (!result.success) {
-//             switch (result.code) {
-//                 case 'WELLNESS_NOT_FOUND':
-//                     return apiResponse.notFound(res, 'Wellness slot not found');
-//                 case 'FORBIDDEN':
-//                     return apiResponse.forbidden(res, 'You are not authorized to delete this wellness');
-//                 case 'DB_ERROR':
-//                     return apiResponse.error(res, 'Database error occurred while deleting wellness');
-//                 default:
-//                     return apiResponse.error(res, result.message || 'An unknown error occurred');
-//             }
-//         }
-//         // ✅ Success response
-//         return apiResponse.success(res, 'Wellness slot deleted successfully');
-//     } catch (error) {
-//         console.error('Error in deleteWellness:', error);
-//         return apiResponse.error(res, 'Internal Server Error', 500);
-//     }
-// };
-
-
-
-
-// // new api create wellness and slots..
-// module.exports.createWellnessWithSlots = async (req, res) => {
-//     try {
-//         // ✅ Image Handling
-//         const filename = req.file?.filename || null;
-//         const uploadFolder = path.join(process.cwd(), "uploads/wellness");
-//         const fullFilePath = filename ? path.join(uploadFolder, filename) : null;
-
-//         // ✅ Extract FormData fields
-//         const { name, event_id, description, location, currency } = req.body;
-//         let { slots } = req.body;
-//         // ✅ Validate Required Fields
-//         if (!event_id || !name || !currency) {
-//             return apiResponse.validation(res, [], "Required fields are missing");
-//         }
-
-//         // ✅ Parse Slots JSON (coming from form-data)
-//         try {
-//             slots = JSON.parse(slots);
-//         } catch (err) {
-//             return apiResponse.validation(res, [], "Slots must be valid JSON array");
-//         }
-
-//         if (!Array.isArray(slots) || slots.length === 0) {
-//             return apiResponse.validation(res, [], "At least 1 slot is required");
-//         }
-
-//         // ✅ Call SERVICE (Only ONCE)
-//         const wellnessResult = await wellnessService.createWellnessWithSlots(req);
-
-//         if (!wellnessResult.success) {
-//             // ✅ Delete uploaded image on failure
-//             if (fullFilePath && fs.existsSync(fullFilePath)) {
-//                 fs.unlinkSync(fullFilePath);
-//                 console.log("🧹 Uploaded image removed due to failure");
-//             }
-
-//             return apiResponse.error(res, wellnessResult.message);
-//         }
-
-//         // ✅ Response
-//         return apiResponse.success(
-//             res,
-//             "Wellness + Slots created successfully",
-//             wellnessResult.data
-//         );
-
-//     } catch (error) {
-//         console.error("❌ Error in Wellness + Slots:", error);
-//         return apiResponse.error(res, "Internal Server Error", 500);
-//     }
-// };
-
-// // update wellness..
-
-// module.exports.updateWellnessWithSlots = async (req, res) => {
-//     try {
-//         const wellnessId = req.params.id;
-
-//         // ✅ File Upload (Image)
-//         const filename = req.file?.filename || null;
-//         const uploadFolder = path.join(process.cwd(), 'uploads/wellness');
-//         const fullFilePath = filename ? path.join(uploadFolder, filename) : null;
-
-//         // ✅ Validate ID
-//         if (!wellnessId) {
-//             if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
-//             return apiResponse.validation(res, [], 'Wellness ID is required');
-//         }
-
-//         // ✅ Validate required fields
-//         const { name, event_id, currency } = req.body;
-
-//         if (!event_id || !name || !currency) {
-//             if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
-//             return apiResponse.validation(res, [], 'Required fields are missing');
-//         }
-
-//         // ✅ Call service (single function handles BOTH updates)
-//         const result = await wellnessService.updateWellnessWithSlots(req);
-
-//         // ✅ Handle service errors
-//         if (!result.success) {
-//             if (fullFilePath && fs.existsSync(fullFilePath)) fs.unlinkSync(fullFilePath);
-
-//             return apiResponse.error(
-//                 res,
-//                 result.message || "Update failed",
-//                 result.code
-//             );
-//         }
-
-//         // ✅ Success
-//         return apiResponse.success(res, "Wellness & Slots updated successfully", result.data);
-
-//     } catch (error) {
-//         console.error("❌ Error in updateWellness:", error);
-//         return apiResponse.error(res, "Internal Server Error", 500);
-//     }
-// };
-
-
-
-// module.exports.eventList = async (req, res) => {
+// CREATE PAYMENT INTENT
+// exports.createPaymentIntent = async (req, res) => {
 //   try {
-//     const result = await wellnessService.eventList(req, res);
+//     const {
+//       user_id,
+//       event_id,
+//       tax_total = 0,
+//       sub_total = 0,
+//       grand_total = 0,
+//       discount_amount = 0,
+//       discount_code,
+//       cartData,
+//       currency = "usd",
+//     } = req.body;
 
-//     if (!result.success) {
-//       switch (result.code) {
-//         case 'VALIDATION_FAILED':
-//           return apiResponse.validation(res, [], result.message);
-//         default:
-//           return apiResponse.error(res, result.message);
+//     if (!user_id || !event_id || !grand_total || !cartData?.length) {
+//       return apiResponse.error(res, "Missing required fields", 400);
+//     }
+
+
+//     // -------------------------------------------------------------
+//     // VALIDATE LIMITS (Ticket / Committee / Addon / Package)
+//     // -------------------------------------------------------------
+//     for (const item of cartData) {
+
+//       // 🚫 Skip appointment items completely
+//       if (item.ticketType == "appointment") {
+//         continue;
+//       }
+
+//       let Model = null;
+//       let whereClause = {};
+//       let itemId = null;
+//       let typeLabel = "";
+//       let limitField = null;
+//       let nameField = null;
+
+//       // 🔹 Decide source table, limit field & name field
+//       if (item.ticketType == "ticket" || item.ticketType == "committesale") {
+//         Model = TicketType;
+//         whereClause.ticket_id = item.ticketId;
+//         itemId = item.ticketId;
+//         typeLabel = "Ticket";
+//         limitField = "count";
+//         nameField = "title";
+//       }
+//       else if (item.ticketType == "addon") {
+//         Model = AddonTypes;
+//         whereClause.addon_id = item.ticketId;
+//         itemId = item.ticketId;
+//         typeLabel = "Addon";
+//         limitField = "count";
+//         nameField = "name";
+//       }
+//       else if (item.ticketType == "package") {
+//         Model = Package;
+//         whereClause.package_id = item.ticketId;
+//         itemId = item.ticketId;
+//         typeLabel = "Package";
+//         limitField = "total_package";
+//         nameField = "name";
+//       }
+//       else if (item.ticketType == "ticket_price") {
+//         Model = TicketPricing;
+//         whereClause.package_id = item.ticketId;
+//         itemId = item.ticketId;
+//         typeLabel = "TicketPrice";
+//         limitField = "total_count";
+//         nameField = "price";
+//       }
+//       else {
+//         continue;
+//       }
+
+//       // 🔹 Fetch limit + display name
+//       const masterItem = await Model.findOne({
+//         where: { id: itemId },
+//         attributes: ["id", limitField, nameField]
+//       });
+
+//       const totalLimit = Number(masterItem?.[limitField] || 0);
+
+//       // If no limit defined → allow
+//       if (!totalLimit) continue;
+
+//       // 🔹 Count already booked
+//       const booked = await OrderItems.findOne({
+//         where: {
+//           ...whereClause,
+//           event_id
+//         },
+//         attributes: [
+//           [fn("SUM", col("count")), "totalBooked"]
+//         ],
+//         raw: true
+//       });
+
+//       const alreadyBooked = Number(booked?.totalBooked || 0);
+//       const requested = Number(item.quantity || 1);
+
+//       // 🔥 LIMIT CHECK
+//       if (alreadyBooked + requested > totalLimit) {
+//         return apiResponse.error(
+//           res,
+//           `${typeLabel} "${masterItem?.[nameField] || "Item"}" is sold out or its booking limit has been reached. Please remove this item from your cart and add another available option.`,
+//           400
+//         );
 //       }
 //     }
-//     return apiResponse.success(
-//       res,
-//       result.message || 'Event list fetched successfully',
-//       { events: result.data }  // plural naming convention
+
+//     // Create snapshot rows
+//     const snapshotRows = await PaymentSnapshotItems.bulkCreate(
+//       cartData.map((item) => ({
+//         user_id,
+//         event_id,
+//         ticket_id: item.ticketId || null,
+//         cart_id: item.id || null,
+//         addon_id: item.addonId || null,
+//         appointment_id: item.appointmentId || null,
+//         committee_user_id: item.committee_user_id || null,
+//         item_type: item.ticketType,
+//         quantity: item.quantity || 1,
+//         price: item.price || 0,
+//         payment_status: "pending",
+//       }))
 //     );
 
+//     const snapshotIds = snapshotRows.map((r) => r.id).join(",");
+
+//     const buildStripeMetadata = (data = {}) => {
+//       const metadata = {};
+
+//       Object.entries(data).forEach(([key, value]) => {
+//         if (value !== undefined && value !== null && value !== "") {
+//           metadata[key] = String(value).slice(0, 500);
+//         }
+//       });
+//       return metadata;
+//     };
+
+//     // 2️⃣ Create Stripe PaymentIntent
+//     const paymentIntent = await stripe.paymentIntents.create({
+//       amount: Math.round(grand_total * 100),
+//       currency,
+//       metadata: buildStripeMetadata({
+//         user_id,
+//         event_id,
+//         tax_total,
+//         discount_amount,
+//         sub_total,
+//         grand_total,
+//         discount_code,
+//         snapshot_ids: snapshotIds,
+//       }),
+//     });
+
+//     return apiResponse.success(res, "Payment Intent Created", {
+//       clientSecret: paymentIntent.client_secret,
+//     });
 //   } catch (error) {
-//     console.log('Error in eventList controller:', error);
-//     return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+//     console.error("Stripe Error:", error);
+//     return apiResponse.error(res, error.message, 500);
 //   }
 // };
 
+// STRIPE WEBHOOK (RAW BODY REQUIRED)
+exports.stripeWebhook = async (req, res) => {
+  console.log("🔥 WEBHOOK HIT");
+
+  let event;
+
+  try {
+    const signature = req.headers["stripe-signature"];
+
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      signature,
+      config.stripeWebhookSecret
+    );
+
+    console.log("✅ STRIPE EVENT TYPE:", event.type);
+  } catch (err) {
+    console.error("❌ Webhook verification failed:", err.message);
+    return res.status(400).send("Webhook Error");
+  }
+
+  try {
+    // PAYMENT SUCCESS
+    if (event.type == "payment_intent.succeeded") {
+      const pi = event.data.object;
+      const meta = pi.metadata || {};
+
+      // 🔒 Snapshot IDs (safe)
+      const snapshotIds = meta.snapshot_ids
+        ? meta.snapshot_ids.split(",").map(Number)
+        : [];
+
+      if (!snapshotIds.length) {
+        console.warn("⚠️ No snapshot IDs found for PI:", pi.id);
+        return res.json({ received: true });
+      }
+
+      // Update snapshot payment status
+      await PaymentSnapshotItems.update(
+        {
+          payment_status: "paid",
+          payment_intent_id: pi.id,
+        },
+        { where: { id: snapshotIds } }
+      );
+
+      // Fetch snapshot items
+      const snapshotItems = await PaymentSnapshotItems.findAll({
+        where: { id: snapshotIds },
+        include: [
+          { model: TicketType, as: "ticketType", required: false },
+          { model: AddonTypes, as: "addonType", required: false },
+          { model: Package, as: "packageType", required: false },
+          {
+            model: TicketPricing, as: "ticketPricing",
+            required: false,
+            attributes: ["id", "price", "date"],
+            include: [
+              {
+                model: TicketType,
+                as: "ticket",
+                required: false,
+                attributes: ["id", "count", "title", "access_type"],
+              },
+              {
+                model: EventSlots,
+                as: "slot",
+                required: false,
+                attributes: [
+                  "id",
+                  "slot_name",
+                  "slot_date",
+                  "start_time",
+                  "end_time",
+                  "description",
+                ],
+              },
+            ],
+          },
+          {
+            model: WellnessSlots, as: "appointment", required: false,
+            include: [
+              {
+                model: Wellness,
+                as: "wellnessList",
+                required: false
+              }
+            ]
+          }
+        ],
+      });
+
+      // COUPON HANDLING (NO KEY CHANGES)
+      const couponCode = meta.coupon_code || null;
+      let couponDetails = null;
+
+      if (couponCode) {
+        couponDetails = await Coupons.findOne({
+          where: { code: couponCode },
+        });
+      }
+
+      // Normalize numeric values (Stripe metadata = string)
+      const grandTotal = Number(meta.grand_total || 0);
+      const discountAmount = Number(meta.discount_amount || 0);
+
+      // CREATE PAYMENT RECORD
+      const payment = await Payment.create({
+        user_id: Number(meta.user_id),
+        event_id: Number(meta.event_id),
+        amount: grandTotal,
+        payment_intent: pi.id,
+        payment_status: "paid",
+        coupon_code: couponCode,
+        discount_amount: discountAmount,
+        discount_type: couponDetails?.discount_type || null,
+        discount_value: couponDetails?.discount_value || null,
+      });
+
+      // FULFIL ORDER
+      await fulfilOrderFromSnapshot({
+        meta_data: meta,
+        user_id: Number(meta.user_id),
+        event_id: Number(meta.event_id),
+        payment,
+        snapshotItems,
+        payment_method: "stripe",
+        coupon_code: couponCode,
+        discount_amount: discountAmount,
+        coupon_details: couponDetails,
+      });
+
+      console.log("✅ Payment → Order → QR completed");
+    }
+
+    // PAYMENT FAILED
+    if (event.type == "payment_intent.payment_failed") {
+      const pi = event.data.object;
+      const meta = pi.metadata || {};
+
+      const snapshotIds = meta.snapshot_ids
+        ? meta.snapshot_ids.split(",").map(Number)
+        : [];
+
+      if (snapshotIds.length) {
+        await PaymentSnapshotItems.update(
+          {
+            payment_status: "failed",
+            payment_intent_id: pi.id,
+          },
+          { where: { id: snapshotIds } }
+        );
+      }
+
+      console.log("❌ Payment failed:", pi.id);
+    }
+
+    return res.json({ received: true });
+  } catch (error) {
+    console.error("❌ Webhook processing error:", error);
+    return res.status(500).send("Webhook handler failed");
+  }
+};
 
 
+exports.manualWebhook = async (req, res) => {
+  try {
+    const snapshotIds = req.body.snapshot_ids
+      .split(",")
+      .map(Number);
+
+    const snapshotItems = await PaymentSnapshotItems.findAll({
+      where: { id: snapshotIds },
+      include: [
+        { model: TicketType, as: "ticketType", required: false },
+        { model: AddonTypes, as: "addonType", required: false },
+        { model: Package, as: "packageType", required: false },
+        {
+          model: TicketPricing, as: "ticketPricing",
+          required: false,
+          attributes: ["id", "price", "date"],
+          include: [
+            {
+              model: TicketType,
+              as: "ticket",
+              required: false,
+              attributes: ["id", "count", "title", "access_type"],
+            },
+            {
+              model: EventSlots,
+              as: "slot",
+              required: false,
+              attributes: [
+                "id",
+                "slot_name",
+                "slot_date",
+                "start_time",
+                "end_time",
+                "description",
+              ],
+            },
+          ],
+        },
+        {
+          model: WellnessSlots, as: "appointment", required: false,
+          include: [
+            {
+              model: Wellness,
+              as: "wellnessList",
+              required: false
+            }
+          ]
+        }
+      ],
+    });
+
+
+    const payment = await Payment.create({
+      user_id: 4870,
+      event_id: 298,
+      amount: 3037 || 0,
+      payment_intent: 'pi_3Sp3sWCwP2xM68Rm1wkQ3rRR',
+      payment_status: "paid",
+    });
+
+    const order = await fulfilOrderFromSnapshot({
+      meta_data: { discount_amount: 0, grand_total: 3037, snapshot_ids: req.body.snapshot_ids, sub_total: 2812, tax_total: 225 },
+      user_id: 4870,
+      event_id: 298,
+      payment,
+      snapshotItems,
+      payment_method: "stripe",
+    });
+
+    console.log("✅ Payment → Order → QR completed");
+    return res.json({ received: true });
+  } catch (error) {
+    console.error("Webhook processing error:", error);
+    return res.status(500).send("Webhook handler failed");
+  }
+};

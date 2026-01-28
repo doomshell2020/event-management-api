@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const eventController = require('./events.controller');
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
@@ -41,16 +41,19 @@ router.post('/create',
 
         body('slug')
             .notEmpty().withMessage('Slug is required')
-            .matches(/^[a-z0-9-]+$/).withMessage('Slug must contain only lowercase letters, numbers, and hyphens'),
+            .isLength({ max: 100 }).withMessage('Slug must not exceed 100 characters')
+            .matches(/^[a-z0-9-]+$/).withMessage(
+                'Slug must contain only lowercase letters, numbers, and hyphens'
+            ),
 
         body('event_timezone')
             .optional()
             .isLength({ min: 2 }).withMessage('Event event_timezone is required'),
 
-        // body('entry_type')
-        //     .notEmpty()
-        //     .isIn(['single', 'multi', 'slot', 'event'])
-        //     .withMessage('Event type must be one of: single, multi, slot,event'),
+        body('entry_type')
+            .notEmpty()
+            .isIn(['single', 'multi', 'slot', 'event'])
+            .withMessage('Event type must be one of: single, multi, slot,event'),
 
         // ✅ Make feat_image required
         body('feat_image').custom((value, { req }) => {
@@ -219,6 +222,19 @@ router.get('/public-event-detail/:id',
     ],
     validate,
     eventController.publicEventDetail
+);
+
+// Search Events (For Import Committee / Dropdown Search)
+router.get('/search',
+    authenticate,
+    [
+        query('keyword')
+            .optional()
+            .isLength({ min: 2 })
+            .withMessage('Search query must be at least 2 characters long'),
+    ],
+    validate,
+    eventController.searchEvents
 );
 
 

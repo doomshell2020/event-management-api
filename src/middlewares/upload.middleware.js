@@ -3,11 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-// Storage factory function
+/**
+ * Storage factory
+ */
 const storage = (folder = 'uploads') => multer.diskStorage({
     destination: (req, file, cb) => {
         const dir = path.join(__dirname, '../../', folder);
-        // Create folder if not exists
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
@@ -16,29 +17,58 @@ const storage = (folder = 'uploads') => multer.diskStorage({
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);
         const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
-        const safeFieldName = file.fieldname.replace(/\s+/g, '_'); // avoid spaces
-        const filename = `${safeFieldName}-${uniqueSuffix}${ext}`;
-        cb(null, filename);
+        const safeFieldName = file.fieldname.replace(/\s+/g, '_');
+        cb(null, `${safeFieldName}-${uniqueSuffix}${ext}`);
     }
 });
 
-// File filter (images only)
-const fileFilter = (req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) {
-        cb(new Error('Only image files are allowed!'), false);
-    } else {
-        cb(null, true);
+/**
+ * Dynamic file filter
+ * - DEFAULT: images only (existing behavior)
+ * - uploads/temp: Excel / CSV (for comps import)
+ */
+const fileFilter = (folder) => (req, file, cb) => {
+
+    // ✅ Allow Excel / CSV ONLY for temp uploads
+    if (folder === 'uploads/temp') {
+        const allowedExt = ['.xlsx', '.xls', '.csv'];
+        const allowedMimeTypes = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
+            'text/csv'
+        ];
+
+        const ext = path.extname(file.originalname).toLowerCase();
+
+        if (allowedExt.includes(ext) && allowedMimeTypes.includes(file.mimetype)) {
+            return cb(null, true);
+        }
+        return cb(new Error('Only Excel or CSV files are allowed!'), false);
     }
+
+    // ✅ DEFAULT (do not break existing image uploads)
+    if (!file.mimetype.startsWith('image/')) {
+        return cb(new Error('Only image files are allowed!'), false);
+    }
+
+    cb(null, true);
 };
 
 /**
- * Generate Multer upload middleware
- * type: 'single' | 'array' | 'fields'
- * fieldName: for single / array
- * maxCount: max files for array
+ * Upload factory (NO breaking changes)
+ * type: single | array | fields
  */
-const uploadFiles = ({ folder = 'uploads', type = 'single', fieldName = 'file', maxCount = 5 }) => {
-    const multerInstance = multer({ storage: storage(folder), fileFilter });
+const uploadFiles = ({
+    folder = 'uploads',
+    type = 'single',
+    fieldName = 'file',
+    maxCount = 5
+}) => {
+
+    const multerInstance = multer({
+        storage: storage(folder),
+        fileFilter: fileFilter(folder)
+    });
 
     switch (type) {
         case 'single':
@@ -46,7 +76,6 @@ const uploadFiles = ({ folder = 'uploads', type = 'single', fieldName = 'file', 
         case 'array':
             return multerInstance.array(fieldName, maxCount);
         case 'fields':
-            // Example: [{ name: 'profile_image', maxCount: 1 }, { name: 'attachments', maxCount: 5 }]
             return multerInstance.fields(fieldName);
         default:
             throw new Error('Invalid upload type. Use single, array, or fields.');

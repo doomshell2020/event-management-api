@@ -15,6 +15,11 @@ const OrderItems = sequelize.define(
             allowNull: false
         },
 
+        createdBy: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
+
         user_id: {
             type: DataTypes.INTEGER,
             allowNull: false
@@ -23,6 +28,10 @@ const OrderItems = sequelize.define(
         event_id: {
             type: DataTypes.INTEGER,
             allowNull: false
+        },
+        committee_user_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
         },
 
         type: {
@@ -33,7 +42,8 @@ const OrderItems = sequelize.define(
                 "appointment",
                 "committesale",
                 "opensale",
-                "ticket_price"
+                "ticket_price",
+                "comps"
             ),
             allowNull: false
         },
