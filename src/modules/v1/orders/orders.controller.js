@@ -923,10 +923,10 @@ module.exports.fulfilOrderFromSnapshot = async ({
             status: "Y",
 
             // new taxes
-            platform_fee_tax: snapshotItemsTax.platform_fee_tax,
-            payment_gateway_tax: snapshotItemsTax.payment_gateway_tax,
-            platform_fee_percent: snapshotItemsTax.platform_fee_percent,
-            payment_gateway_percent: snapshotItemsTax.payment_gateway_percent
+            platform_fee_tax: snapshotItemsTax.platform_fee_tax || 0,
+            payment_gateway_tax: snapshotItemsTax.payment_gateway_tax || 0,
+            platform_fee_percent: snapshotItemsTax.platform_fee_percent || 0,
+            payment_gateway_percent: snapshotItemsTax.payment_gateway_percent || 0
 
         }, { transaction });
 

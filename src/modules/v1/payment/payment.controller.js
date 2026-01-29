@@ -28,7 +28,6 @@ exports.createPaymentIntent = async (req, res) => {
       taxBreakdown
     } = req.body;
 
-    console.log("taxBreakdown", taxBreakdown)
 
     // BASIC VALIDATION
     if (!user_id || !event_id || !grand_total || !Array.isArray(cartData) || cartData.length == 0) {
@@ -203,10 +202,10 @@ exports.createPaymentIntent = async (req, res) => {
         payment_status: "pending",
 
         // new taxes
-        platform_fee_tax: taxBreakdown.platform_fee_tax,
-        payment_gateway_tax: taxBreakdown.payment_gateway_tax,
-        platform_fee_percent: taxBreakdown.platform_fee_percent,
-        payment_gateway_percent: taxBreakdown.payment_gateway_percent
+        platform_fee_tax: taxBreakdown.platform_fee_tax || 0,
+        payment_gateway_tax: taxBreakdown.payment_gateway_tax || 0,
+        platform_fee_percent: taxBreakdown.platform_fee_percent || 0,
+        payment_gateway_percent: taxBreakdown.payment_gateway_percent || 0
 
       }))
     );
