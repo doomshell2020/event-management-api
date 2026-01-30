@@ -1,11 +1,113 @@
 const path = require('path');
 const fs = require('fs');
-const { Op, where } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency, Templates, User ,Orders} = require('../../../models');
+const { Op, where} = require('sequelize');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User, Orders, EventActivationLog, Wellness, WellnessSlots, TicketPricing,sequelize, Package } = require('../../../models');
 const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 const sendEmail = require('../../../common/utils/sendEmail');
+
+module.exports.deleteEvent = async (eventId) => {
+    const transaction = await sequelize.transaction();
+
+    try {
+        // ✅ Find event
+        const event = await Event.findByPk(eventId, { transaction });
+
+        if (!event) {
+            await transaction.rollback();
+            return { success: false, code: "NOT_FOUND", message: "Event not found" };
+        }
+
+        // ❌ Do not delete if orders exist
+        const checkOrderEvent = await Orders.findOne({
+            where: { event_id: eventId },
+            transaction,
+        });
+
+        if (checkOrderEvent) {
+            await transaction.rollback();
+            return {
+                success: false,
+                code: "EVENT_HAS_ORDERS",
+                message: "Event cannot be deleted because orders exist for this event.",
+            };
+        }
+
+        // ✅ Delete image from filesystem
+        if (event.feat_image) {
+            const imagePath = path.join(process.cwd(), "uploads/events", event.feat_image);
+            if (fs.existsSync(imagePath)) {
+                try {
+                    fs.unlinkSync(imagePath);
+                    console.log("🗑️ Deleted image file:", imagePath);
+                } catch (err) {
+                    console.error("Image delete error:", err.message);
+                }
+            }
+        }
+
+        // ===============================
+        // 🔥 WELLNESS → WELLNESS SLOTS
+        // ===============================
+
+        // 1️⃣ Get all wellness IDs for this event
+        const wellnessList = await Wellness.findAll({
+            where: { event_id: eventId },
+            attributes: ["id"],
+            transaction,
+        });
+
+        const wellnessIds = wellnessList.map(w => w.id);
+
+        // 2️⃣ Delete wellness slots first
+        if (wellnessIds.length > 0) {
+            await WellnessSlots.destroy({
+                where: { wellness_id: wellnessIds },
+                transaction,
+            });
+        }
+
+        // 3️⃣ Delete wellness records
+        await Wellness.destroy({
+            where: { event_id: eventId },
+            transaction,
+        });
+
+        // ===============================
+        // 🔥 OTHER CHILD TABLES
+        // ===============================
+
+        await EventActivationLog.destroy({ where: { event_id: eventId }, transaction });
+        await AddonTypes.destroy({ where: { event_id: eventId }, transaction });
+        await TicketPricing.destroy({ where: { event_id: eventId }, transaction });
+        await TicketType.destroy({ where: { eventid: eventId }, transaction });
+        await Package.destroy({ where: { event_id: eventId }, transaction });
+
+        // ===============================
+        // 🔥 DELETE EVENT
+        // ===============================
+        await event.destroy({ transaction });
+
+        await transaction.commit();
+
+        return {
+            success: true,
+            message: "Event deleted successfully",
+            data: { id: eventId },
+        };
+    } catch (error) {
+        await transaction.rollback();
+        console.error("Service error in deleteEvent:", error);
+
+        return {
+            success: false,
+            code: "DB_ERROR",
+            message: "Database error occurred while deleting the event",
+        };
+    }
+};
+
 
 module.exports.searchEvents = async ({ keyword, loginId }) => {
     try {
@@ -52,59 +154,6 @@ module.exports.searchEvents = async ({ keyword, loginId }) => {
             success: false,
             code: 'INTERNAL_ERROR',
             message: 'Something went wrong while searching events'
-        };
-    }
-};
-
-module.exports.deleteEvent = async (eventId) => {
-    try {
-        // ✅ Find the event
-        const event = await Event.findByPk(eventId);
-
-        if (!event) {
-            return { success: false, code: "NOT_FOUND", message: "Event not found" };
-        }
-        // ✅ Check if any order exists for this event
-        const checkOrderEvent = await Orders.findOne({
-            where: { event_id: eventId }
-        });
-
-        // ❌ If order exists, do NOT delete event
-        if (checkOrderEvent) {
-            return {
-                success: false,
-                code: "EVENT_HAS_ORDERS",
-                message: "Event cannot be deleted because orders exist for this event."
-            };
-        }
-
-        // ✅ Delete image from filesystem (if exists)
-        if (event.feat_image) {
-            const imagePath = path.join(process.cwd(), 'uploads/events', event.feat_image);
-            if (fs.existsSync(imagePath)) {
-                try {
-                    fs.unlinkSync(imagePath);
-                    console.log("🗑️ Deleted image file:", imagePath);
-                } catch (err) {
-                    console.error("Error deleting event image:", err.message);
-                }
-            }
-        }
-
-        // ✅ Delete event record
-        await event.destroy();
-
-        return {
-            success: true,
-            message: "Event deleted successfully",
-            data: { id: eventId },
-        };
-    } catch (error) {
-        console.error("Service error in deleteEvent:", error);
-        return {
-            success: false,
-            code: "DB_ERROR",
-            message: "Database error occurred while deleting the event",
         };
     }
 };
@@ -357,7 +406,7 @@ module.exports.publicEventList = async (req, res) => {
         } else if (sale_end) {
             whereCondition.sale_start = { [Op.lte]: new Date(sale_end) };
         }
-        
+
 
         // EXCLUDE expired events (date_to < today)
 
