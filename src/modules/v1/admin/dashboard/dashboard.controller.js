@@ -48,6 +48,30 @@ module.exports.getTicketList = async (req, res) => {
     }
 };
 
+module.exports.getOrdersList = async (req, res) => {
+    try {
+        const result = await dashboardService.getOrdersList(req, res);
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+        return apiResponse.success(
+            res,
+            result.message || 'Event fetched successfully.',
+            { orders: result.data }  // plural naming convention
+        );
+
+    } catch (error) {
+        console.log('Error in getOrdersList controller:', error);
+        return apiResponse.error(res, 'An unexpected error occurred while fetching event.' + error.message, 500);
+    }
+};
+
+
 
 module.exports.getDashboardCounts = async (req, res) => {
     const response = await dashboardService.getDashboardCounts(req, res);

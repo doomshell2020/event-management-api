@@ -680,16 +680,16 @@ exports.handleAction = async (req, res) => {
             });
             await sendEmail(user.email, `${subject} for ${event.name} ${ticket.title}`, html);
 
-            sendEmail(
-                user.email,
-                'Committee Ticket Approved',
-                committeeTicketApprovedTemplate(
-                    user,
-                    event,
-                    ticket,
-                    `${config.clientUrl}`
-                )
-            );
+            // sendEmail(
+            //     user.email,
+            //     'Committee Ticket Approved',
+            //     committeeTicketApprovedTemplate(
+            //         user,
+            //         event,
+            //         ticket,
+            //         `${config.clientUrl}`
+            //     )
+            // );
         }
 
         return apiResponse.success(

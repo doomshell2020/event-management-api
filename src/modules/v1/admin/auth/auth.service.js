@@ -13,7 +13,7 @@ module.exports.loginUser = async ({ email, password }) => {
         attributes: ['email', 'is_email_verified', 'password', 'id', 'role', 'first_name', 'last_name', 'role_id']
     });
     if (!user) {
-        throw new Error('Invalid email or password');
+        throw new Error('Email not registered');
     }
 
     // Check if email is verified
@@ -26,7 +26,7 @@ module.exports.loginUser = async ({ email, password }) => {
     // Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-        throw new Error('Invalid email or password');
+        throw new Error('Incorrect password');
     }
     // Generate JWT token
     const token = jwt.sign(

@@ -25,7 +25,7 @@ router.post(
 
         body('mobile')
             .notEmpty().withMessage('Mobile number is required')
-            .isLength({ min: 8, max: 15 }).withMessage('Mobile number must be valid')
+            .isLength({ min: 10, max: 15 }).withMessage('Mobile number must be between 10 and 15 digits')
     ],
     validate,
     eventOrganizerController.createEventOrganizer
@@ -46,7 +46,7 @@ router.put(
 
         body('mobile')
             .notEmpty().withMessage('Mobile number is required')
-            .isLength({ min: 8, max: 15 }).withMessage('Mobile number must be valid'),
+            .isLength({ min: 10, max: 15 }).withMessage('Mobile number must be between 10 and 15 digits'),
 
         body('auto_approve_events')
             .notEmpty().withMessage('Auto Approve Events field is required')

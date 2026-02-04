@@ -9,9 +9,6 @@ const crypto = require('crypto');
 
 const sendEmail = require('../../../common/utils/sendEmail');
 const { generateVerificationToken, verifyVerificationToken } = require('../../../common/utils/generateToken');
-// const verifyEmailTemplate = require('../../../common/utils/emailTemplates/verifyEmailTemplate');
-// const emailVerifiedTemplate = require('../../../common/utils/emailTemplates/emailVerifiedTemplate');
-// const resetPasswordTemplate = require('../../../common/utils/emailTemplates/resetPasswordTemplate');
 const passwordChangedTemplate = require('../../../common/utils/emailTemplates/passwordChangedTemplate');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 
@@ -222,7 +219,10 @@ module.exports.loginUser = async ({ email, password }) => {
     if (user.is_email_verified !== 'Y') {
         throw new Error('Email not verified. Please verify your email to login.');
     }
-
+    // check user is active and inactive 
+    if (user.status !== 'Y') {
+        throw new Error('Your account is inactive. Please contact support for assistance.');
+    }
     // Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {

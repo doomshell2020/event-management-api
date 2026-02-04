@@ -157,6 +157,73 @@ module.exports.getTicketList = async (req, res) => {
     }
 };
 
+// Get orders List..
+module.exports.getOrdersList = async (req, res) => {
+    try {
+        const adminId = req.user?.id;
+        if (!adminId) {
+            return {
+                success: false,
+                message: 'Unauthorized access. Admin authentication required.',
+                code: 'UNAUTHORIZED'
+            };
+        }
+        const orders = await Orders.findAll({
+            include: [{ model: User, attributes: ['id', 'email', 'first_name', 'last_name', 'mobile'], as: "user" },
+            {
+                model: Event, attributes: ['name'], as: "event", include: {
+                    model: Currency, as: "currencyName", attributes: ['Currency_symbol']
+                }
+            },
+            { model: OrderItems, as: "orderItems", attributes: ['order_id', 'ticket_id', 'count'] }
+
+            ],
+            attributes: [
+                'id',
+                'RRN',
+                'order_uid',
+                'user_id',
+                'event_id',
+                'sub_total',
+                'tax_total',
+                'created',
+                'paymenttype',
+                'grand_total',
+                'platform_fee_tax',
+                'payment_gateway_tax',
+                'discount_amount'
+            ],
+            limit: 5,
+            order: [['id', 'DESC']]
+        });
+        return {
+            success: true,
+            message: 'Orders fetched successfully.',
+            data: orders
+        };
+    } catch (error) {
+        console.error('Error fetching orders:', error);
+        return {
+            success: false,
+            message: 'An unexpected error occurred while fetching event.',
+            code: 'INTERNAL_SERVER_ERROR'
+        };
+    }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // dashboard counts (customers,organizers,events,sales,earning)
 module.exports.getDashboardCounts = async (req, res) => {
     try {

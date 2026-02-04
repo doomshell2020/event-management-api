@@ -1,7 +1,9 @@
 const bcrypt = require('bcryptjs');
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, Orders, Currency } = require('../../../../models');
-
+const { User, Event, Orders, Currency,Templates } = require('../../../../models');
+const config = require('../../../../config/app');
+const { replaceTemplateVariables } = require('../../../../common/utils/helpers');
+const sendEmail = require('../../../../common/utils/sendEmail');
 // Get event organizer List..
 module.exports.getEventOrganizerList = async (req, res) => {
     try {
@@ -115,8 +117,8 @@ module.exports.createEventOrganizer = async (req) => {
         }
 
         // 🔐 Generate password
-        // const plainPassword = Math.random().toString(36).slice(-8); // eg: x9k2mPq1
-        const plainPassword = '123456'; // eg: x9k2mPq1
+        const plainPassword = Math.random().toString(36).slice(-8); // eg: x9k2mPq1
+        // const plainPassword = crypto.randomBytes(6).toString('base64');
         const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
         // ✅ Build Event Organiser object
@@ -128,6 +130,8 @@ module.exports.createEventOrganizer = async (req) => {
             confirm_pass: plainPassword,
             gender: 'Male',
             role_id: 2,
+            status:"Y",
+            is_email_verified:"Y"
         };
         // ✅ Save to DB
         const newOrganizer = await User.create(organizerData);
@@ -138,9 +142,35 @@ module.exports.createEventOrganizer = async (req) => {
                 code: 'CREATION_FAILED'
             };
         }
+
+ /* ================= EMAIL TEMPLATE ================= */
+        const verifyEmailTemplateId = config.emailTemplates.verifyEmail;
+        const templateRecord = await Templates.findOne({
+            where: { id: verifyEmailTemplateId }
+        });
+        if (!templateRecord) {
+            throw new Error('Verify email template not found');
+        }
+        const { subject, description } = templateRecord;
+
+        // 7️⃣ Replace ONLY required variables
+        const html = replaceTemplateVariables(description, {
+            NAME: first_name.trim(),
+            EMAIL: newOrganizer.email || '',
+            PASSWORD: plainPassword || '',
+            SITE_URL: config.clientUrl,
+        });
+
+        // 8️⃣ Send email
+        await sendEmail(
+            newOrganizer.email,
+            subject,
+            html
+        );
+
         return {
             success: true,
-            message: 'Event organiser created successfully.',
+            message: 'Event organizer created successfully and credentials sent via email.',
             data: {
                 id: newOrganizer.id,
                 first_name: newOrganizer.first_name,
