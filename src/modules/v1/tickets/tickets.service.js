@@ -229,7 +229,8 @@ module.exports.importCompsTickets = async ({ rows = [], event_id, createdBy }) =
                     mobile,
                     password: await bcrypt.hash('Welcome@123', 10),
                     confirm_pass: 'Welcome@123',
-                    status: 'Y'
+                    status: 'Y',
+                    role_id: 3
                 });
                 report.created_users++;
             } else {

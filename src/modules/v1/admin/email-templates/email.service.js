@@ -103,7 +103,7 @@ module.exports.getTemplatesList = async (req, res) => {
 // Create Templates  page
 module.exports.createTemplatesPage = async (req) => {
     try {
-        const { description, title, subject,eventId } = req.body;
+        const { description, title, subject, eventId } = req.body;
         const adminId = req.user?.id;
         // 🔐 Auth check
         if (!adminId) {
@@ -127,7 +127,7 @@ module.exports.createTemplatesPage = async (req) => {
             description: description.trim(),
             subject: subject.trim(),
             title: title.trim(),
-            eventId:eventId
+            eventId: eventId
 
         };
 
@@ -230,7 +230,7 @@ module.exports.getTemplatesPageById = async (pageId) => {
         // 🔍 Fetch Templates page
         const pageData = await Templates.findOne({
             where: { id: pageId },
-            attributes: ['title', 'subject', 'description','eventId']
+            attributes: ['title', 'subject', 'description', 'eventId']
         });
 
         if (!pageData) {
@@ -344,13 +344,34 @@ module.exports.searchTemplate = async (req) => {
         }
         const statics = await Templates.findAll({
             where: whereCondition,
+            raw: true,
+            nest: true,
             order: [['id', 'DESC']],
+            include: [
+                {
+                    model: Event,
+                    as: "events",
+                    attributes: ["id", "name"],
+                    required: false, // 👈 important (LEFT JOIN)
+                },
+            ],
         });
-
+        const formattedTemplates = statics.map((tpl) => {
+            if (tpl.eventId === 0) {
+                return {
+                    ...tpl,
+                    events: {
+                        id: 0,
+                        name: "General Template",
+                    },
+                };
+            }
+            return tpl;
+        });
         return {
             success: true,
             message: "Email templates fetched successfully.",
-            data: statics
+            data: formattedTemplates
         };
 
     } catch (error) {

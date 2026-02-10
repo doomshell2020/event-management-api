@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness, EventActivationLog } = require('../../../../models');
+const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness, EventActivationLog, Package, TicketPricing } = require('../../../../models');
 
 // Get event List..
 module.exports.getEventList = async (req, res) => {
@@ -13,10 +13,12 @@ module.exports.getEventList = async (req, res) => {
             };
         }
         const events = await Event.findAll({
-            // where: { role_id: 2 }, // Event Organiser role
             include: [
-                { model: User, attributes: ['id', 'email', 'first_name', 'last_name'], as: "Organizer" },
+                { model: User, attributes: ['id', 'email', 'first_name', 'last_name', 'default_platform_charges'], as: "Organizer" },
                 { model: TicketType, attributes: ['id', 'title', 'type'], as: "tickets" },
+                { model: AddonTypes, attributes: ['id', 'name'], as: "addons" },
+                { model: Package, attributes: ['id', 'name'], as: "package" },
+                { model: Wellness, attributes: ['id', 'name'], as: "wellness" },
                 {
                     model: Orders,
                     as: "orders",
@@ -68,7 +70,7 @@ module.exports.getEventList = async (req, res) => {
                 [Sequelize.fn('SUM', Sequelize.col('orders.grand_total')), 'grand_total']
 
             ],
-            group: ['Event.id', 'Organizer.id', 'tickets.id'],
+            group: ['Event.id', 'Organizer.id', 'tickets.id', 'addons.id', 'package.id', 'wellness.id'],
             order: [['id', 'DESC']]
         });
         return {
@@ -378,7 +380,7 @@ module.exports.getEventStaff = async (req) => {
 // search event details..service
 module.exports.searchEventList = async (req) => {
     try {
-        let { eventName, organizer, fromDate, toDate } = req.query;
+        let { eventName, organizer, fromDate, toDate, status } = req.query;
         const whereCondition = {};
         // ✅ Event name filter
         if (eventName) {
@@ -386,7 +388,9 @@ module.exports.searchEventList = async (req) => {
                 [Op.like]: `%${eventName}%`
             };
         }
-
+        if (status) {
+            whereCondition.status = status; // "Y" or "N"
+        }
         // ✅ Date handling (FULL DAY RANGE)
         const from = fromDate
             ? new Date(new Date(fromDate).setHours(0, 0, 0, 0))
@@ -514,39 +518,16 @@ module.exports.getEventDetailsWithOrderDetails = async (req) => {
                     attributes: ['Currency_symbol', 'Currency']
                 },
                 {
-                    model: OrderItems,
-                    as: "orderItems",
-                    attributes: ['id', 'user_id', 'ticket_id', 'addon_id', 'appointment_id'],
-                    include: [{
-                        model: Orders,
-                        as: "order",
-                        attributes: ['id', 'sub_total', 'tax_total', 'created'],
-                        include: [{ model: User, attributes: ['id', 'email', 'first_name', 'last_name', 'mobile'], as: "user" }]
-                    },
-                    {
-                        model: TicketType,
-                        as: "ticketType",
-                        attributes: ['title']
-                    },
-                    {
-                        model: AddonTypes,
-                        as: "addonType",
-                        attributes: ['name']
-                    },
-                    {
-                        model: WellnessSlots,
-                        as: "appointment",
-                        attributes: ['wellness_id'],
-                        include: {
-                            model: Wellness,
-                            as: 'wellnessList',
-                            attributes: ['name']
-                        }
-                    },
-                    ]
-                }
+                    model: Orders,
+                    as: "orders",
+                    include: [{ model: User, attributes: ['id', 'email', 'first_name', 'last_name', 'mobile'], as: "user" },
+                    { model: OrderItems, as: "orderItems", attributes: ['order_id', 'ticket_id', 'count'] }
+
+                    ],
+                    attributes: ['id', 'RRN', 'order_uid','grand_total', 'user_id', 'event_id', 'sub_total', 'tax_total', 'created', 'paymenttype','payment_gateway_tax','platform_fee_tax'],
+                },
             ],
-            attributes: ['id', 'name', 'date_from', 'date_to', 'location'],
+            attributes: ['id', 'name', 'date_from', 'date_to', 'location', 'created'],
             order: [['id', 'DESC']]
         });
         if (!eventDetails) {
@@ -556,40 +537,10 @@ module.exports.getEventDetailsWithOrderDetails = async (req) => {
                 code: "NOT_FOUND",
             };
         }
-
-
-        // ===============================
-        // 🔹 CALCULATE TOTALS
-        // ===============================
-        let totalSubTotal = 0;
-        let totalTaxTotal = 0;
-
-        const uniqueOrders = new Map();
-        eventDetails.orderItems.forEach(item => {
-            if (item.order && !uniqueOrders.has(item.order.id)) {
-                uniqueOrders.set(item.order.id, {
-                    sub_total: Number(item.order.sub_total || 0),
-                    tax_total: Number(item.order.tax_total || 0)
-                });
-            }
-        });
-
-        for (const order of uniqueOrders.values()) {
-            totalSubTotal += order.sub_total;
-            totalTaxTotal += order.tax_total;
-        }
-
         return {
             success: true,
             message: "Event details fetched successfully.",
-            data: {
-                ...eventDetails.toJSON(),
-                totalSubTotal,
-                totalTaxTotal
-            }
-            // data: eventDetails,
-            // totalSales:totalSubTotal,
-            // totalTax:totalTaxTotal
+            data: eventDetails
         };
 
     } catch (error) {

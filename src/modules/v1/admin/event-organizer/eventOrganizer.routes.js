@@ -84,6 +84,7 @@ router.get(
         param('first_name').optional().isString(),
         param('email').optional().isString(),
         param('mobile').optional().isString(),
+        param('status').optional().isIn(['Y', 'N']),
     ],
     validate,
     eventOrganizerController.searchEventOrganizer

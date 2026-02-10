@@ -78,6 +78,7 @@ router.get('/search',
         param('organizer').optional().isString(),
         param('fromDate').optional().isDate(),
         param('toDate').optional().isDate(),
+        param('status').optional().isIn(['Y', 'N']),
     ],
     validate,
     eventController.searchEventList

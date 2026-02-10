@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, Package, WellnessSlots, Wellness,TicketPricing ,EventSlots} = require('../../../../models');
+const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, Package, WellnessSlots, Wellness, TicketPricing, EventSlots } = require('../../../../models');
 
 
 
@@ -21,10 +21,10 @@ module.exports.getTicketList = async (req, res) => {
                 { model: AddonTypes, as: "addonType", attributes: ["name"] },
                 { model: Package, as: "package", attributes: ["name"] },
                 {
-                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
+                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id",'date','slot_start_time','slot_end_time'],
                     include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
                 },
-                 {
+                {
                     model: TicketPricing, as: 'ticketPricing', required: false, attributes: ["id", "price"],
                     include: [{ model: TicketType, as: "ticket", required: false, attributes: ["title"] },
                     { model: EventSlots, as: "slot", required: false, attributes: ["id", "slot_name"] }
@@ -84,7 +84,8 @@ module.exports.searchTicketList = async (req) => {
             event,
             ticketNumber,
             purchaseFrom,
-            purchaseTo
+            purchaseTo,
+            type
         } = req.query;
 
         const clean = (v) => (v && v.trim() !== "" ? v.trim() : null);
@@ -101,20 +102,24 @@ module.exports.searchTicketList = async (req) => {
         /* ============================
            📅 PURCHASE DATE FILTER
         ============================ */
-        const orderWhere = {};
+        /* ============================
+     📅 PURCHASE DATE FILTER (OrderItems)
+  ============================ */
+        const orderItemWhere = {};
 
-        if (purchaseFrom || purchaseTo) {
-            const from = purchaseFrom
-                ? new Date(new Date(purchaseFrom).setHours(0, 0, 0, 0))
-                : null;
+        const from = purchaseFrom
+            ? new Date(`${purchaseFrom}T00:00:00`)
+            : null;
 
-            const to = purchaseTo
-                ? new Date(new Date(purchaseTo).setHours(23, 59, 59, 999))
-                : null;
-
-            if (from && to) orderWhere.created = { [Op.between]: [from, to] };
-            else if (from) orderWhere.created = { [Op.gte]: from };
-            else if (to) orderWhere.created = { [Op.lte]: to };
+        const to = purchaseTo
+            ? new Date(`${purchaseTo}T23:59:59`)
+            : null;
+        if (from && to) {
+            orderItemWhere.createdAt = { [Op.between]: [from, to] };
+        } else if (from) {
+            orderItemWhere.createdAt = { [Op.gte]: from };
+        } else if (to) {
+            orderItemWhere.createdAt = { [Op.lte]: to };
         }
 
         /* ============================
@@ -129,6 +134,26 @@ module.exports.searchTicketList = async (req) => {
                 { appointment_id: ticketId }
             ];
         }
+
+        /* ============================
+           🧩 TYPE FILTER (ORDER ITEMS)
+        ============================ */
+        const typeWhere = {};
+
+        if (type) {
+            if (type === "ticket") {
+                typeWhere.type = {
+                    [Op.in]: ["ticket", "ticket_price", "comps", "committesale"]
+                };
+            } else {
+                // addon / appointment / package
+                typeWhere.type = type;
+            }
+        }
+
+
+
+
 
         /* ============================
            👤 USER FILTER
@@ -161,13 +186,19 @@ module.exports.searchTicketList = async (req) => {
            🔎 FETCH TICKETS (FIXED)
         ============================ */
         const tickets = await OrderItems.findAll({
-            where: ticketWhere,
+            where: {
+                ...ticketWhere,
+                ...orderItemWhere,   // ✅ DATE FILTER HERE
+                ...typeWhere
+            },
+            // where: ticketWhere,
+            //  ...orderItemWhere   // ✅ DATE FILTER HERE
             include: [
                 { model: TicketType, as: "ticketType", attributes: ["title"] },
                 { model: AddonTypes, as: "addonType", attributes: ["name"] },
                 { model: Package, as: "package", attributes: ["name"] },
                 {
-                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id"],
+                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id",'date','slot_start_time','slot_end_time'],
                     include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
                 },
                 {
@@ -180,8 +211,10 @@ module.exports.searchTicketList = async (req) => {
                     model: Orders,
                     as: "order",
                     attributes: ['sub_total', 'tax_total', 'created'],
-                    where: Object.keys(orderWhere).length ? orderWhere : undefined,
-                    required: !!hasAnyFilter,
+                    // where: Object.keys(orderWhere).length ? orderWhere : undefined,
+                    // required: !!hasAnyFilter,
+                    // required: false,
+                    required: !!event,
                     include: [
                         {
                             model: User,
@@ -232,6 +265,7 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
     try {
         const adminId = req.user?.id;
         const { event_id, type } = req.params;
+        console.log("event_id, type", event_id, type)
 
         if (!adminId) {
             return {
@@ -270,9 +304,18 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
         // ✅ STRICT type + id condition (BUG FIX)
         const typeCondition = {
             ticket: {
-                type: 'ticket',
-                ticket_id: { [Op.ne]: null },
+                type: {
+                    [Op.in]: ['ticket', 'ticket_price', 'comps', 'committesale']
+                },
+                [Op.or]: [
+                    { ticket_id: { [Op.ne]: null } },
+                    { ticket_pricing_id: { [Op.ne]: null } }
+                ]
             },
+            // ticket: {
+            //     type: 'ticket',
+            //     ticket_id: { [Op.ne]: null },
+            // },
             addon: {
                 type: 'addon',
                 addon_id: { [Op.ne]: null },
@@ -285,14 +328,14 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
                 type: 'package',
                 package_id: { [Op.ne]: null },
             },
-            committesale: {
-                type: 'committesale',
-                ticket_id: { [Op.ne]: null },
-            },
-            comps: {
-                type: 'comps',
-                ticket_id: { [Op.ne]: null },
-            },
+            // committesale: {
+            //     type: 'committesale',
+            //     ticket_id: { [Op.ne]: null },
+            // },
+            // comps: {
+            //     type: 'comps',
+            //     ticket_id: { [Op.ne]: null },
+            // },
         };
 
         const tickets = await OrderItems.findAll({
@@ -309,6 +352,7 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
                 'ticket_id',
                 'addon_id',
                 'appointment_id',
+                'ticket_pricing_id',
                 'package_id',
                 'count',
             ],
@@ -331,7 +375,7 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
                 {
                     model: WellnessSlots,
                     as: "appointment",
-                    attributes: ["wellness_id"],
+                    attributes: ["wellness_id",'date','slot_start_time','slot_end_time'],
                     include: [
                         {
                             model: Wellness,

@@ -311,6 +311,12 @@ module.exports.getEventDetailsWithOrderDetails = async (req, res) => {
     }
 };
 
+
+
+
+
+
+
 // controller....
 module.exports.getEventByName = async (req, res) => {
     try {
@@ -341,8 +347,6 @@ module.exports.getEventByName = async (req, res) => {
         );
     }
 };
-
-
 
 // controllers/event.controller.js
 module.exports.getEventById = async (req, res) => {

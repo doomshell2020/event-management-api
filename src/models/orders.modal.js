@@ -108,14 +108,6 @@ const Orders = sequelize.define(
             type: DataTypes.FLOAT,
             defaultValue: 0
         },
-
-
-
-
-
-
-
-
         created: {
             type: DataTypes.DATE,
             allowNull: true

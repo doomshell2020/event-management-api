@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness, EventSlots, TicketPricing, Package } = require('../../../../models');
+const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, WellnessSlots, Wellness, EventSlots, TicketPricing, Package,EventActivationLog } = require('../../../../models');
 
 
 
@@ -212,18 +212,6 @@ module.exports.getOrdersList = async (req, res) => {
 };
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 // dashboard counts (customers,organizers,events,sales,earning)
 module.exports.getDashboardCounts = async (req, res) => {
     try {
@@ -244,7 +232,8 @@ module.exports.getDashboardCounts = async (req, res) => {
             totalActiveEvents,
             totalInActiveEvents,
             totalSales,
-            totalEarnings
+            totalEarnings,
+            totalFreeEventEarnings
         ] = await Promise.all([
 
             // 🧑 Customers
@@ -261,10 +250,15 @@ module.exports.getDashboardCounts = async (req, res) => {
 
             // 🛒 Total Sales (Orders Count)
             Orders.sum('grand_total'),
+            // Orders.unscoped().sum('grand_total'),
             // Orders.count(),
 
-            // 💰 Total Earnings (Sum of Grand Total)
-            Orders.sum('tax_total')
+            // Total Earnings (Sum of Grand Total)
+            Orders.sum('tax_total'),
+
+            // Total Earnings Free Event
+            EventActivationLog.sum('activation_amount')
+
         ]);
 
         return {
@@ -284,7 +278,8 @@ module.exports.getDashboardCounts = async (req, res) => {
                     inactive: totalInActiveEvents
                 },
                 total_sales: totalSales,
-                total_earning: totalEarnings || 0
+                total_earning: totalEarnings || 0,
+                total_free_event_earnings: totalFreeEventEarnings || 0
             }
         };
 

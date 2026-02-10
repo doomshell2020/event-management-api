@@ -19,28 +19,24 @@ const getEventsList = async () => {
   return await Event.findAll({
     attributes: ["id", "name"],
     order: [["name", "ASC"]],
-    where: {
-      is_free: 'N'
-    }
+    // where: {
+    //   is_free: 'N'
+    // }
   });
 };
 
 
 /* ==========   CREATE PAYOUT (ADMIN → ORGANIZER)   ========== */
+
 exports.createPayout = async (req, res) => {
   const transaction = await sequelize.transaction();
   const authId = req.user.id;
 
   try {
-    const {
-      event_id,
-      paid_amount,
-      txn_ref,
-      remarks
-    } = req.body;
+    const { event_id, paid_amount, txn_ref, remarks } = req.body;
 
     if (Number(paid_amount) <= 0) {
-      return apiResponse.validationError(res, "Paid amount must be greater than 0");
+      return apiResponse.validation(res, "Paid amount must be greater than 0");
     }
 
     const eventExists = await Event.findByPk(event_id);
@@ -48,6 +44,34 @@ exports.createPayout = async (req, res) => {
       return apiResponse.notFound(res, "Event not found");
     }
 
+    /* -------- TOTAL ORDER SALES -------- */
+    const orderSummary = await Orders.findOne({
+      attributes: [[fn('SUM', col('grand_total')), 'total_sales']],
+      where: { event_id },
+      raw: true
+    });
+
+    const totalSales = Number(orderSummary?.total_sales || 0);
+
+    /* -------- TOTAL PAID PAYOUTS -------- */
+    const payoutSummary = await Payouts.findOne({
+      attributes: [[fn('SUM', col('paid_amount')), 'total_paid']],
+      where: { event_id },
+      raw: true
+    });
+
+    const totalPaid = Number(payoutSummary?.total_paid || 0);
+
+    const remainingAmount = totalSales - totalPaid;
+
+    if (Number(paid_amount) > remainingAmount) {
+      return apiResponse.validation(
+        res,
+        `Payout amount exceeds remaining balance. Remaining amount is ${remainingAmount}`
+      );
+    }
+
+    /* -------- CREATE PAYOUT -------- */
     await Payouts.create(
       {
         event_id,
@@ -61,15 +85,8 @@ exports.createPayout = async (req, res) => {
 
     await transaction.commit();
 
-    /* ---------- FETCH UPDATED DATA ---------- */
     const payouts = await Payouts.findAll({
-      include: [
-        {
-          model: Event,
-          as: "event",
-          attributes: ["id", "name"]
-        }
-      ],
+      include: [{ model: Event, as: "event", attributes: ["id", "name"] }],
       order: [["createdAt", "DESC"]]
     });
 
@@ -86,6 +103,68 @@ exports.createPayout = async (req, res) => {
     return apiResponse.error(res, "Failed to create payout");
   }
 };
+
+
+
+// exports.createPayout = async (req, res) => {
+//   const transaction = await sequelize.transaction();
+//   const authId = req.user.id;
+
+//   try {
+//     const {
+//       event_id,
+//       paid_amount,
+//       txn_ref,
+//       remarks
+//     } = req.body;
+
+//     if (Number(paid_amount) <= 0) {
+//       return apiResponse.validationError(res, "Paid amount must be greater than 0");
+//     }
+
+//     const eventExists = await Event.findByPk(event_id);
+//     if (!eventExists) {
+//       return apiResponse.notFound(res, "Event not found");
+//     }
+
+//     await Payouts.create(
+//       {
+//         event_id,
+//         paid_amount,
+//         txn_ref,
+//         remarks,
+//         created_by: authId
+//       },
+//       { transaction }
+//     );
+
+//     await transaction.commit();
+
+//     /* ---------- FETCH UPDATED DATA ---------- */
+//     const payouts = await Payouts.findAll({
+//       include: [
+//         {
+//           model: Event,
+//           as: "event",
+//           attributes: ["id", "name"]
+//         }
+//       ],
+//       order: [["createdAt", "DESC"]]
+//     });
+
+//     const events = await getEventsList();
+
+//     return apiResponse.success(res, "Payout created successfully", {
+//       payouts,
+//       events
+//     });
+
+//   } catch (error) {
+//     await transaction.rollback();
+//     console.error("Create payout error:", error);
+//     return apiResponse.error(res, "Failed to create payout");
+//   }
+// };
 
 
 /* ==========   LIST PAYOUTS (ADMIN)   ============ */

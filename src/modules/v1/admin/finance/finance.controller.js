@@ -6,12 +6,245 @@ const { User, Event, TicketType, Orders, Currency, OrderItems, AddonTypes, Packa
 
 
 // find all event details with event_id and without event_id
+// exports.getEventDetails = async (req, res) => {
+//     try {
+
+//         /* ============================
+//            0. Get event_id from query
+//            /event-details?event_id=5
+//         ============================ */
+//         const { event_id } = req.query;
+
+//         /* ============================
+//            1. Fetch Events
+//         ============================ */
+//         const eventWhere = {};
+//         if (event_id) {
+//             eventWhere.id = event_id;
+//         }
+
+//         const events = await Event.findAll({
+//             where: eventWhere,
+//             attributes: ["id", "name", "date_from", "date_to"],
+//             include: [
+//                 {
+//                     model: Currency,
+//                     as: "currencyName",
+//                     attributes: ["Currency_symbol"],
+//                 },
+//             ],
+//             order: [["id", "DESC"]],
+//         });
+
+//         if (!events.length) {
+//             return apiResponse.success(res, "No events found.", { events: [] });
+//         }
+
+//         const eventIds = events.map(e => e.id);
+
+//         /* ============================
+//            2. Orders Summary
+//         ============================ */
+//         const ordersSummary = await Orders.findAll({
+//             attributes: [
+//                 "event_id",
+//                 [fn("COUNT", col("id")), "total_orders"],
+//                 [fn("SUM", col("sub_total")), "sub_total_sum"],
+//                 [fn("SUM", col("tax_total")), "tax_total_sum"],
+//                 [fn("SUM", col("grand_total")), "grand_total_sum"],
+//             ],
+//             where: { event_id: eventIds },
+//             group: ["event_id"],
+//             raw: true,
+//         });
+
+//         /* ============================
+//            3. OrderItems Type Wise Count
+//         ============================ */
+//         const orderItemsSummary = await OrderItems.findAll({
+//             attributes: [
+//                 "event_id",
+//                 // [fn("SUM", literal(`CASE WHEN type='ticket' THEN 1 ELSE 0 END`)), "ticket_count"],
+//                 [fn("SUM",literal(`CASE  WHEN type IN ('ticket', 'ticket_price', 'comps', 'committesale')  THEN 1 ELSE 0 END`)), "ticket_count"],
+//                 [fn("SUM", literal(`CASE WHEN type='addon' THEN 1 ELSE 0 END`)), "addon_count"],
+//                 [fn("SUM", literal(`CASE WHEN type='appointment' THEN 1 ELSE 0 END`)), "appointment_count"],
+//                 [fn("SUM", literal(`CASE WHEN type='package' THEN 1 ELSE 0 END`)), "package_count"],
+//                 // [fn("SUM", literal(`CASE WHEN type='comps' THEN 1 ELSE 0 END`)), "comps_count"],
+//                 // [fn("SUM", literal(`CASE WHEN type='committesale' THEN 1 ELSE 0 END`)), "committee_count"],
+//             ],
+//             where: { event_id: eventIds },
+//             group: ["event_id"],
+//             raw: true,
+//         });
+
+//         /* ============================
+//            4. Cancelled Items Count
+//         ============================ */
+//         const cancelledItemsSummary = await OrderItems.findAll({
+//             attributes: [
+//                 "event_id",
+//                 // [fn("SUM", literal(`CASE WHEN type='ticket' THEN 1 ELSE 0 END`)), "cancel_ticket_count"],
+//                 [fn("SUM",literal(`CASE  WHEN type IN ('ticket', 'ticket_price', 'comps', 'committesale')  THEN 1 ELSE 0 END`)), "ticket_count"],
+//                 [fn("SUM", literal(`CASE WHEN type='addon' THEN 1 ELSE 0 END`)), "cancel_addon_count"],
+//                 [fn("SUM", literal(`CASE WHEN type='appointment' THEN 1 ELSE 0 END`)), "cancel_appointment_count"],
+//                 [fn("SUM", literal(`CASE WHEN type='package' THEN 1 ELSE 0 END`)), "cancel_package_count"],
+//                 [fn("SUM", literal(`CASE WHEN type='comps' THEN 1 ELSE 0 END`)), "cancel_comps_count"],
+//                 [fn("SUM", literal(`CASE WHEN type='committesale' THEN 1 ELSE 0 END`)), "cancel_committesale_count"],
+//             ],
+//             where: {
+//                 event_id: eventIds,
+//                 cancel_status: "cancel",
+//             },
+//             group: ["event_id"],
+//             raw: true,
+//         });
+
+//         /* ============================
+//            5. Cancelled Amount Summary
+//            price WITHOUT tax → add 8%
+//         ============================ */
+//         const cancelledAmountSummary = await OrderItems.findAll({
+//             attributes: [
+//                 "event_id",
+//                 [fn("SUM", col("price")), "cancel_sub_total"],
+//                 [fn("SUM", literal("price * 0.08")), "cancel_tax_amount"],
+//                 [fn("SUM", literal("price * 1.08")), "cancel_grand_total"],
+//             ],
+//             where: {
+//                 event_id: eventIds,
+//                 cancel_status: "cancel",
+//             },
+//             group: ["event_id"],
+//             raw: true,
+//         });
+
+//         /* ============================
+//            6. STAFF COUNT (EVENT WISE)
+//            user.eventId = "1,3,5"
+//         ============================ */
+//         const staffRaw = await User.findAll({
+//             attributes: ["id", "eventId"],
+//             where: {
+//                 [Op.or]: eventIds.map(eventId =>
+//                     Sequelize.where(
+//                         fn("FIND_IN_SET", eventId, col("eventId")),
+//                         { [Op.gt]: 0 }
+//                     )
+//                 )
+//             },
+//             raw: true,
+//         });
+
+//         // const staffSummary = await User.findAll({
+//         //     attributes: [
+//         //         [col("eventId"), "event_id"],
+//         //         [fn("COUNT", col("id")), "staff_count"],
+//         //     ],
+//         //     where: Sequelize.where(
+//         //         fn("FIND_IN_SET", col("eventId"), literal(`'${eventIds.join(",")}'`)),
+//         //         { [Op.gt]: 0 }
+//         //     ),
+//         //     group: ["eventId"],
+//         //     raw: true,
+//         // });
+
+//         /* ============================
+//            7. Create Maps
+//         ============================ */
+//         const ordersMap = {};
+//         ordersSummary.forEach(o => ordersMap[o.event_id] = o);
+
+//         const itemsMap = {};
+//         orderItemsSummary.forEach(i => itemsMap[i.event_id] = i);
+
+//         const cancelMap = {};
+//         cancelledItemsSummary.forEach(c => cancelMap[c.event_id] = c);
+
+//         const cancelAmountMap = {};
+//         cancelledAmountSummary.forEach(c => cancelAmountMap[c.event_id] = c);
+
+//         // const staffMap = {};
+//         // staffSummary.forEach(s => staffMap[s.event_id] = s.staff_count);
+//         const staffMap = {};
+
+//         eventIds.forEach(id => staffMap[id] = 0);
+
+//         staffRaw.forEach(user => {
+//             const userEvents = user.eventId.split(",").map(Number);
+//             userEvents.forEach(eid => {
+//                 if (staffMap[eid] !== undefined) {
+//                     staffMap[eid] += 1;
+//                 }
+//             });
+//         });
+
+
+
+//         /* ============================
+//            8. Merge Final Response
+//         ============================ */
+//         const responseData = events.map(event => {
+//             const orderData = ordersMap[event.id] || {};
+//             const itemData = itemsMap[event.id] || {};
+//             const cancelData = cancelMap[event.id] || {};
+//             const cancelAmountData = cancelAmountMap[event.id] || {};
+
+//             return {
+//                 event_id: event.id,
+//                 event_name: event.name,
+//                 date_from: event.date_from,
+//                 date_to: event.date_to,
+
+//                 currency_symbol: event.currencyName?.Currency_symbol || "",
+
+//                 total_orders: Number(orderData.total_orders || 0),
+//                 sub_total_sum: Number(orderData.sub_total_sum || 0),
+//                 tax_total_sum: Number(orderData.tax_total_sum || 0),
+//                 grand_total_sum: Number(orderData.grand_total_sum || 0),
+
+//                 ticket_count: Number(itemData.ticket_count || 0),
+//                 addon_count: Number(itemData.addon_count || 0),
+//                 appointment_count: Number(itemData.appointment_count || 0),
+//                 package_count: Number(itemData.package_count || 0),
+//                 comps_count: Number(itemData.comps_count || 0),
+//                 committee_count: Number(itemData.committee_count || 0),
+
+//                 cancel_ticket_count: Number(cancelData.cancel_ticket_count || 0),
+//                 cancel_addon_count: Number(cancelData.cancel_addon_count || 0),
+//                 cancel_appointment_count: Number(cancelData.cancel_appointment_count || 0),
+//                 cancel_package_count: Number(cancelData.cancel_package_count || 0),
+//                 cancel_comps_count: Number(cancelData.cancel_comps_count || 0),
+//                 cancel_committesale_count: Number(cancelData.cancel_committesale_count || 0),
+
+//                 // 💰 CANCEL AMOUNTS (8% TAX)
+//                 cancel_sub_total: Number(cancelAmountData.cancel_sub_total || 0),
+//                 cancel_tax_amount: Number(cancelAmountData.cancel_tax_amount || 0),
+//                 cancel_grand_total: Number(cancelAmountData.cancel_grand_total || 0),
+
+//                 // 👤 STAFF
+//                 staff_count: Number(staffMap[event.id] || 0),
+
+//             };
+//         });
+
+//         /* ============================
+//            9. Send Response
+//         ============================ */
+//         return apiResponse.success(res, "Events fetched successfully.", {
+//             events: responseData,
+//         });
+
+//     } catch (error) {
+//         console.error("Error fetching event details:", error);
+//         return apiResponse.error(res, "Internal Server Error");
+//     }
+// };
+
+
 exports.getEventDetails = async (req, res) => {
     try {
-
         /* ============================
            0. Get event_id from query
-           /event-details?event_id=5
         ============================ */
         const { event_id } = req.query;
 
@@ -19,9 +252,7 @@ exports.getEventDetails = async (req, res) => {
            1. Fetch Events
         ============================ */
         const eventWhere = {};
-        if (event_id) {
-            eventWhere.id = event_id;
-        }
+        if (event_id) eventWhere.id = event_id;
 
         const events = await Event.findAll({
             where: eventWhere,
@@ -64,12 +295,16 @@ exports.getEventDetails = async (req, res) => {
         const orderItemsSummary = await OrderItems.findAll({
             attributes: [
                 "event_id",
-                [fn("SUM", literal(`CASE WHEN type='ticket' THEN 1 ELSE 0 END`)), "ticket_count"],
+                [
+                    fn(
+                        "SUM",
+                        literal(`CASE WHEN type IN ('ticket','ticket_price','comps','committesale') THEN 1 ELSE 0 END`)
+                    ),
+                    "ticket_count",
+                ],
                 [fn("SUM", literal(`CASE WHEN type='addon' THEN 1 ELSE 0 END`)), "addon_count"],
                 [fn("SUM", literal(`CASE WHEN type='appointment' THEN 1 ELSE 0 END`)), "appointment_count"],
                 [fn("SUM", literal(`CASE WHEN type='package' THEN 1 ELSE 0 END`)), "package_count"],
-                [fn("SUM", literal(`CASE WHEN type='comps' THEN 1 ELSE 0 END`)), "comps_count"],
-                [fn("SUM", literal(`CASE WHEN type='committesale' THEN 1 ELSE 0 END`)), "committee_count"],
             ],
             where: { event_id: eventIds },
             group: ["event_id"],
@@ -82,7 +317,13 @@ exports.getEventDetails = async (req, res) => {
         const cancelledItemsSummary = await OrderItems.findAll({
             attributes: [
                 "event_id",
-                [fn("SUM", literal(`CASE WHEN type='ticket' THEN 1 ELSE 0 END`)), "cancel_ticket_count"],
+                [
+                    fn(
+                        "SUM",
+                        literal(`CASE WHEN type IN ('ticket','ticket_price','comps','committesale') THEN 1 ELSE 0 END`)
+                    ),
+                    "cancel_ticket_count",
+                ],
                 [fn("SUM", literal(`CASE WHEN type='addon' THEN 1 ELSE 0 END`)), "cancel_addon_count"],
                 [fn("SUM", literal(`CASE WHEN type='appointment' THEN 1 ELSE 0 END`)), "cancel_appointment_count"],
                 [fn("SUM", literal(`CASE WHEN type='package' THEN 1 ELSE 0 END`)), "cancel_package_count"],
@@ -98,15 +339,107 @@ exports.getEventDetails = async (req, res) => {
         });
 
         /* ============================
-           5. Cancelled Amount Summary
-           price WITHOUT tax → add 8%
+           5. ✅ CORRECT CANCELLED AMOUNT
+           Uses actual tax from Orders table
         ============================ */
+        // const cancelledAmountSummary = await OrderItems.findAll({
+        //     attributes: [
+        //         "event_id",
+
+        //         // Base price
+        //         [fn("SUM", col("OrderItems.price")), "cancel_sub_total"],
+
+        //         // Actual tax applied at purchase time
+        //         [
+        //             fn(
+        //                 "SUM",
+        //                 literal(`
+        //                     OrderItems.price *
+        //                     ((order.platform_fee_percent + order.payment_gateway_percent) / 100)
+        //                 `)
+        //             ),
+        //             "cancel_tax_amount",
+        //         ],
+
+        //         // Grand total = price + actual tax
+        //         [
+        //             fn(
+        //                 "SUM",
+        //                 literal(`
+        //                     OrderItems.price +
+        //                     (OrderItems.price *
+        //                     ((order.platform_fee_percent + order.payment_gateway_percent) / 100))
+        //                 `)
+        //             ),
+        //             "cancel_grand_total",
+        //         ],
+        //     ],
+        //     include: [
+        //         {
+        //             model: Orders,
+        //             // attributes: ['platform_fee_percent','payment_gateway_percent'],
+        //             attributes: [],
+        //             as:"order"
+        //         },
+        //     ],
+        //     where: {
+        //         event_id: eventIds,
+        //         cancel_status: "cancel",
+        //     },
+        //     group: ["event_id"],
+        //     raw: true,
+        // });
+
         const cancelledAmountSummary = await OrderItems.findAll({
             attributes: [
                 "event_id",
-                [fn("SUM", col("price")), "cancel_sub_total"],
-                [fn("SUM", literal("price * 0.08")), "cancel_tax_amount"],
-                [fn("SUM", literal("price * 1.08")), "cancel_grand_total"],
+
+                // Base price
+                [fn("SUM", col("OrderItems.price")), "cancel_sub_total"],
+
+                // ✅ Tax = platform fee + payment gateway fee (applied on price + platform fee)
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    (
+                        (OrderItems.price * (order.platform_fee_percent / 100))
+                        +
+                        (
+                            (OrderItems.price + (OrderItems.price * (order.platform_fee_percent / 100)))
+                            * (order.payment_gateway_percent / 100)
+                        )
+                    )
+                `)
+                    ),
+                    "cancel_tax_amount",
+                ],
+
+                // ✅ Grand total = price + total tax
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    OrderItems.price +
+                    (
+                        (OrderItems.price * (order.platform_fee_percent / 100))
+                        +
+                        (
+                            (OrderItems.price + (OrderItems.price * (order.platform_fee_percent / 100)))
+                            * (order.payment_gateway_percent / 100)
+                        )
+                    )
+                `)
+                    ),
+                    "cancel_grand_total",
+                ],
+            ],
+            include: [
+                {
+                    model: Orders,
+                    as: "order",
+                    attributes: [],
+                },
             ],
             where: {
                 event_id: eventIds,
@@ -116,9 +449,9 @@ exports.getEventDetails = async (req, res) => {
             raw: true,
         });
 
+
         /* ============================
-           6. STAFF COUNT (EVENT WISE)
-           user.eventId = "1,3,5"
+           6. STAFF COUNT
         ============================ */
         const staffRaw = await User.findAll({
             attributes: ["id", "eventId"],
@@ -128,58 +461,38 @@ exports.getEventDetails = async (req, res) => {
                         fn("FIND_IN_SET", eventId, col("eventId")),
                         { [Op.gt]: 0 }
                     )
-                )
+                ),
             },
             raw: true,
         });
 
-        // const staffSummary = await User.findAll({
-        //     attributes: [
-        //         [col("eventId"), "event_id"],
-        //         [fn("COUNT", col("id")), "staff_count"],
-        //     ],
-        //     where: Sequelize.where(
-        //         fn("FIND_IN_SET", col("eventId"), literal(`'${eventIds.join(",")}'`)),
-        //         { [Op.gt]: 0 }
-        //     ),
-        //     group: ["eventId"],
-        //     raw: true,
-        // });
+        const staffMap = {};
+        eventIds.forEach(id => (staffMap[id] = 0));
+
+        staffRaw.forEach(user => {
+            const userEvents = user.eventId.split(",").map(Number);
+            userEvents.forEach(eid => {
+                if (staffMap[eid] !== undefined) staffMap[eid] += 1;
+            });
+        });
 
         /* ============================
            7. Create Maps
         ============================ */
         const ordersMap = {};
-        ordersSummary.forEach(o => ordersMap[o.event_id] = o);
+        ordersSummary.forEach(o => (ordersMap[o.event_id] = o));
 
         const itemsMap = {};
-        orderItemsSummary.forEach(i => itemsMap[i.event_id] = i);
+        orderItemsSummary.forEach(i => (itemsMap[i.event_id] = i));
 
         const cancelMap = {};
-        cancelledItemsSummary.forEach(c => cancelMap[c.event_id] = c);
+        cancelledItemsSummary.forEach(c => (cancelMap[c.event_id] = c));
 
         const cancelAmountMap = {};
-        cancelledAmountSummary.forEach(c => cancelAmountMap[c.event_id] = c);
-
-        // const staffMap = {};
-        // staffSummary.forEach(s => staffMap[s.event_id] = s.staff_count);
-        const staffMap = {};
-
-        eventIds.forEach(id => staffMap[id] = 0);
-
-        staffRaw.forEach(user => {
-            const userEvents = user.eventId.split(",").map(Number);
-            userEvents.forEach(eid => {
-                if (staffMap[eid] !== undefined) {
-                    staffMap[eid] += 1;
-                }
-            });
-        });
-
-
+        cancelledAmountSummary.forEach(c => (cancelAmountMap[c.event_id] = c));
 
         /* ============================
-           8. Merge Final Response
+           8. Final Response
         ============================ */
         const responseData = events.map(event => {
             const orderData = ordersMap[event.id] || {};
@@ -204,8 +517,6 @@ exports.getEventDetails = async (req, res) => {
                 addon_count: Number(itemData.addon_count || 0),
                 appointment_count: Number(itemData.appointment_count || 0),
                 package_count: Number(itemData.package_count || 0),
-                comps_count: Number(itemData.comps_count || 0),
-                committee_count: Number(itemData.committee_count || 0),
 
                 cancel_ticket_count: Number(cancelData.cancel_ticket_count || 0),
                 cancel_addon_count: Number(cancelData.cancel_addon_count || 0),
@@ -214,14 +525,12 @@ exports.getEventDetails = async (req, res) => {
                 cancel_comps_count: Number(cancelData.cancel_comps_count || 0),
                 cancel_committesale_count: Number(cancelData.cancel_committesale_count || 0),
 
-                // 💰 CANCEL AMOUNTS (8% TAX)
+                // ✅ Accurate cancel amounts
                 cancel_sub_total: Number(cancelAmountData.cancel_sub_total || 0),
                 cancel_tax_amount: Number(cancelAmountData.cancel_tax_amount || 0),
                 cancel_grand_total: Number(cancelAmountData.cancel_grand_total || 0),
 
-                // 👤 STAFF
                 staff_count: Number(staffMap[event.id] || 0),
-
             };
         });
 
@@ -231,12 +540,21 @@ exports.getEventDetails = async (req, res) => {
         return apiResponse.success(res, "Events fetched successfully.", {
             events: responseData,
         });
-
     } catch (error) {
         console.error("Error fetching event details:", error);
         return apiResponse.error(res, "Internal Server Error");
     }
 };
+
+
+
+
+
+
+
+
+
+
 
 // event sales monthly reports
 exports.eventSalesMonthlyReport = async (req, res) => {

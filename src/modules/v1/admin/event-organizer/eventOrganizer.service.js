@@ -334,7 +334,7 @@ module.exports.getEventOrganizerById = async (userId) => {
 // searching api
 module.exports.searchEventOrganizer = async (req) => {
     try {
-        const { first_name, email, mobile } = req.query;
+        const { first_name, email, mobile,status } = req.query;
         const whereCondition = {
             role_id: 2
         };
@@ -359,6 +359,10 @@ module.exports.searchEventOrganizer = async (req) => {
                 [Op.like]: `%${mobile.trim()}%`
             };
         }
+         // 🔹 Status filter
+        if (status) {
+            whereCondition.status = status; // "Y" or "N"
+        }
 
         const users = await User.findAll({
             where: whereCondition,
@@ -371,7 +375,8 @@ module.exports.searchEventOrganizer = async (req) => {
                 "profile_image",
                 "status",
                 "is_email_verified",
-                "is_suspend"
+                "is_suspend",
+                'createdAt'
             ],
             include: [
                 {
