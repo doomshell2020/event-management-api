@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Coupons, Event, Currency, Orders, Cart, WellnessSlots, TicketType, Package, AddonTypes,TicketPricing, sequelize } = require('../../../models');
+const { Coupons, Event, Currency, Orders, Cart, WellnessSlots, TicketType, Package, AddonTypes, TicketPricing, sequelize } = require('../../../models');
 const { Op, fn, col, literal } = require("sequelize");
 
 // exports.applyCoupon = async (req, res) => {
@@ -192,6 +192,7 @@ exports.applyCoupon = async (req, res) => {
         /* ---------- Date Validation ---------- */
         if (coupon.validity_period === "specified_date") {
             const today = new Date();
+
             if (
                 (coupon.specific_date_from && new Date(coupon.specific_date_from) > today) ||
                 (coupon.specific_date_to && new Date(coupon.specific_date_to) < today)
@@ -209,10 +210,7 @@ exports.applyCoupon = async (req, res) => {
             where: { discount_code: coupon_code },
         });
 
-        if (
-            coupon.max_redeems &&
-            redeemedCount >= Number(coupon.max_redeems)
-        ) {
+        if (coupon.max_redeems && redeemedCount >= Number(coupon.max_redeems)) {
             return apiResponse.conflict(
                 res,
                 "Coupon redemption limit reached",
@@ -227,9 +225,9 @@ exports.applyCoupon = async (req, res) => {
                 ? (amount * discountValue) / 100
                 : discountValue;
 
-        let applicableAmount = null; // 👈 IMPORTANT
+        let applicableAmount = null;
 
-        /* ---------- STRICT Applicable Logic ---------- */
+        /* ---------- STRICT Applicability ---------- */
         switch (coupon.applicable_for) {
 
             case "package": {
@@ -251,29 +249,26 @@ exports.applyCoupon = async (req, res) => {
             }
 
             case "ticket": {
-                // Try normal ticket first
                 let cart = await Cart.findOne({
                     where: { user_id: userId, ticket_type: "ticket" },
                     include: [{ model: TicketType }],
                 });
 
-                if (cart && cart.TicketType) {
+                if (cart?.TicketType) {
                     applicableAmount = Number(cart.TicketType.price);
                     break;
                 }
 
-                // Fallback to ticket_price
                 cart = await Cart.findOne({
                     where: { user_id: userId, ticket_type: "ticket_price" },
                     include: [{ model: TicketPricing }],
                 });
 
-                if (cart && cart.TicketPricing) {
+                if (cart?.TicketPricing) {
                     applicableAmount = Number(cart.TicketPricing.price);
                     break;
                 }
 
-                // Nothing found
                 return apiResponse.conflict(
                     res,
                     "Coupon valid only when ticket is in cart",
@@ -281,33 +276,11 @@ exports.applyCoupon = async (req, res) => {
                 );
             }
 
-
-
-            // case "ticket": {
-            //     const cart = await Cart.findOne({
-            //         where: { user_id: userId, ticket_type: "ticket" },
-            //         include: [{ model: TicketType }],
-            //     });
-
-            //     if (!cart || !cart.TicketType) {
-            //         return apiResponse.conflict(
-            //             res,
-            //             "Coupon valid only when ticket is in cart",
-            //             "TICKET_NOT_IN_CART"
-            //         );
-            //     }
-
-            //     applicableAmount = Number(cart.TicketType.price);
-            //     break;
-            // }
-
             case "addon": {
                 const cart = await Cart.findOne({
                     where: { user_id: userId, ticket_type: "addon" },
                     include: [{ model: AddonTypes }],
                 });
-
-                // console.log("cart",cart.AddonType)
 
                 if (!cart || !cart.AddonType) {
                     return apiResponse.conflict(
@@ -351,27 +324,46 @@ exports.applyCoupon = async (req, res) => {
                 );
         }
 
-        /* ---------- Discount ---------- */
+        /* ---------- 🚨 STRICT DISCOUNT VALIDATION ---------- */
         let discount = calculateDiscount(applicableAmount);
 
-        if (discount > applicableAmount) {
-            discount = applicableAmount;
+        // ❌ Flat discount >= item price
+        if (coupon.discount_type === "flat" && discount >= applicableAmount) {
+            return apiResponse.conflict(
+                res,
+                "Coupon discount cannot be equal or greater than item price",
+                "INVALID_DISCOUNT_AMOUNT"
+            );
+        }
+
+        // ❌ Percentage >= 100
+        if (coupon.discount_type === "percentage" && discount >= applicableAmount) {
+            return apiResponse.conflict(
+                res,
+                "Invalid discount percentage",
+                "INVALID_DISCOUNT_PERCENTAGE"
+            );
         }
 
         const finalAmount = cartTotal - discount;
 
-        /* ---------- Success ---------- */
-        return apiResponse.success(
-            res,
-            "Coupon applied successfully",
-            {
-                coupon_code,
-                original_amount: cartTotal,
-                applicable_on: applicableAmount,
-                discount,
-                final_amount: finalAmount,
-            }
-        );
+        // ❌ Final safety net
+        if (finalAmount <= 0) {
+            return apiResponse.conflict(
+                res,
+                "Coupon cannot make order free",
+                "FREE_ORDER_NOT_ALLOWED"
+            );
+        }
+
+        /* ---------- SUCCESS ---------- */
+        return apiResponse.success(res, "Coupon applied successfully", {
+            coupon_code,
+            original_amount: cartTotal,
+            applicable_on: applicableAmount,
+            discount,
+            final_amount: finalAmount,
+        });
 
     } catch (error) {
         console.error("Apply coupon error:", error);
@@ -384,6 +376,7 @@ exports.applyCoupon = async (req, res) => {
         );
     }
 };
+
 
 
 

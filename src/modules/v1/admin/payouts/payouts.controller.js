@@ -176,11 +176,23 @@ exports.listPayouts = async (req, res) => {
 
     if (event_id) where.event_id = event_id;
 
+    // if (from && to) {
+    //   where.createdAt = {
+    //     [Op.between]: [from, to]
+    //   };
+    // }
     if (from && to) {
+      const fromDate = new Date(from);
+      fromDate.setHours(0, 0, 0, 0);
+
+      const toDate = new Date(to);
+      toDate.setHours(23, 59, 59, 999);
+
       where.createdAt = {
-        [Op.between]: [from, to]
+        [Op.between]: [fromDate, toDate]
       };
     }
+
 
     // console.log('where :', where);
     const payouts = await Payouts.findAll({

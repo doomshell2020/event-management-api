@@ -1309,42 +1309,64 @@ exports.createAppointmentOrder = async (req, res) => {
     try {
         const user_id = req.user.id;
         const user = req.user;
-        const { event_id, payment_method, discount_code } = req.body;
 
-        if (!event_id)
-            return apiResponse.error(res, "Event ID is required", 400);
+        let event_id;
+        let payment_method = "Online";
+        let discount_code = null;
+        let discount_type = null;
+        let isFreeOrder = false;
+        let cartList = [];
 
-        // Base URL for images
+        /* ================= FREE TICKET FLOW ================= */
+        if (req.body.key === "free_ticket") {
+            isFreeOrder = true;
+
+            if (!req.body.data || !req.body.data.cart?.length) {
+                return apiResponse.error(res, "Invalid free ticket data", 400);
+            }
+
+            cartList = req.body.data.cart;
+            event_id = cartList[0].event_id;
+            payment_method = "FREE";
+
+            discount_code = req.body.data.couponDetails?.code || null;
+            discount_type = req.body.data.couponDetails?.discount_type || null;
+        }
+
+        /* ================= NORMAL FLOW ================= */
+        else {
+            event_id = req.body.event_id;
+            payment_method = req.body.payment_method;
+            discount_code = req.body.discount_code || null;
+
+            if (!event_id) {
+                return apiResponse.error(res, "Event ID is required", 400);
+            }
+
+            cartList = await Cart.findAll({
+                where: { user_id, event_id, ticket_type: "appointment" },
+                include: [{ model: WellnessSlots, as: "appointments" }]
+            });
+
+            if (!cartList.length) {
+                return apiResponse.error(res, "Your cart is empty!", 400);
+            }
+        }
+
+        /* ================= FETCH EVENT ================= */
+        const event = await Event.findOne({ where: { id: event_id }, raw: true });
+        if (!event) {
+            return apiResponse.error(res, "Event not found", 404);
+        }
+
+        /* ================= FORMAT EVENT (EMAIL) ================= */
         const baseUrl = config.baseUrl || "http://localhost:5000";
         const imagePath = "uploads/events";
-
-        // Fetch Event Details
-        const event = await Event.findOne({
-            raw: true,
-            nest: true,
-            where: { id: event_id },
-            attributes: [
-                "id",
-                "name",
-                "date_from",
-                "date_to",
-                "feat_image",
-                "location",
-                "event_timezone"
-            ]
-        });
-
-        if (!event)
-            return apiResponse.error(res, "Event not found", 404);
-
         const timezone = event.event_timezone || "UTC";
 
-        // Convert to user-friendly readable format
         const formatDateReadable = (dateStr, timezone) => {
             if (!dateStr) return "";
-
             const date = new Date(dateStr);
-
             return date.toLocaleString("en-US", {
                 timeZone: timezone,
                 weekday: "long",
@@ -1357,91 +1379,61 @@ exports.createAppointmentOrder = async (req, res) => {
             });
         };
 
-        // Prepare formatted event for email
         const formattedEvent = {
             id: event.id,
             name: event.name,
             location: event.location,
-
-            // Correct image URL
             feat_image: event.feat_image
                 ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${event.feat_image}`
                 : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
-
-            // Correct readable dates
             date_from: formatDateReadable(event.date_from, timezone),
             date_to: formatDateReadable(event.date_to, timezone),
-
-            // Keep timezone for email
             timezone
         };
-        // console.log('formattedEvent :', formattedEvent); return
 
-        // FETCH CART
-        let where = { user_id, event_id, ticket_type: "appointment" };
-        const cartList = await Cart.findAll({
-            where,
-            raw: true,
-            nest: true,
-            order: [["id", "DESC"]],
-            include: [
-                {
-                    model: WellnessSlots,
-                    as: 'appointments',
-                    // attributes: ["id", "title", "price"]
-                    include: [{ model: Wellness, as: 'wellnessList' }]
-                }
-            ]
-        });
-
-        if (!cartList.length) {
-            return apiResponse.error(res, "Your cart is empty!", 400);
-        }
-        // CALCULATE TOTAL
+        /* ================= TOTAL AMOUNT ================= */
         let totalAmount = 0;
-        cartList.forEach(item => {
-            if (item.ticket_type == 'appointment')
-                totalAmount += Number(item.appointments.price || 0);
-        });
-        // CREATE ORDER
-        const order_uid = generateUniqueOrderId();
+        if (!isFreeOrder) {
+            cartList.forEach(item => {
+                totalAmount += Number(
+                    item.appointments?.price ||
+                    item.raw?.appointments?.price ||
+                    0
+                );
+            });
+        }
+
+        /* ================= CREATE ORDER ================= */
         const order = await Orders.create({
-            order_uid,
+            order_uid: generateUniqueOrderId(),
             user_id,
             event_id,
             grand_total: totalAmount,
             paymenttype: payment_method,
-            discount_code: discount_code || null,
-            created: new Date(),
-            status: 'Y'
+            discount_code,
+            discount_type,
+            status: "Y"
         });
 
-        let qrResults = [];
-        let attachments = [];
-        // CREATE ORDER ITEMS + QR
+        /* ================= ORDER ITEMS + QR ================= */
+        const qrResults = [];
+        const attachments = [];
+
         for (const item of cartList) {
-            let price = 0;
-            if (item.ticket_type == 'appointment')
-                price = item.appointments.price || 0;
-            // CREATE ORDER ITEM
+            const appointment =
+                item.appointments || item.raw?.appointments;
+
             const orderItem = await OrderItems.create({
                 order_id: order.id,
                 user_id,
-                event_id: item.event_id,
-                type: item.ticket_type,
-                ticket_id: item.ticket_id || null,
-                addon_id: item.addons_id || null,
-                package_id: item.package_id || null,
-                ticket_pricing_id: item.ticket_price_id || null,
-                appointment_id: item.appointment_id || null,
-                count: item.no_tickets || 1,
-                price,
-                slot_id: item.TicketPricing?.event_slot_id || null
+                event_id,
+                type: "appointment",
+                appointment_id: appointment?.id,
+                count: item.count || item.no_tickets || 1,
+                price: isFreeOrder ? 0 : appointment?.price || 0
             });
 
-            // GENERATE QR
             const qr = await generateQRCode(orderItem);
-
             if (qr) {
                 await orderItem.update({
                     qr_image: qr.qrImageName,
@@ -1454,41 +1446,243 @@ exports.createAppointmentOrder = async (req, res) => {
                     qr_image: qr.qrImageName,
                     qr_data: qr.qrData
                 });
+
                 attachments.push({
                     filename: qr.qrImageName,
-                    path: path.join(__dirname, "../../../uploads/qr_codes/", qr.qrImageName)
+                    path: path.join(
+                        __dirname,
+                        "../../../uploads/qr_codes/",
+                        qr.qrImageName
+                    )
                 });
             }
         }
 
-        // CLEAR CART
-        await Cart.destroy({ where });
-        // SEND EMAIL
+        /* ================= CLEAR CART ================= */
+        await Cart.destroy({
+            where: { user_id, event_id, ticket_type: "appointment" }
+        });
+
+        /* ================= SEND EMAIL ================= */
         try {
             await sendEmail(
                 user.email,
                 `Your Appointment Order – ${event.name}`,
-                appointmentConfirmationTemplateWithQR(user, order, cartList, qrResults, formattedEvent),
+                appointmentConfirmationTemplateWithQR(
+                    user,
+                    order,
+                    cartList,
+                    qrResults,
+                    formattedEvent
+                ),
                 attachments
             );
         } catch (emailError) {
             console.log("Email sending failed:", emailError);
         }
 
+        /* ================= RESPONSE ================= */
         return apiResponse.success(res, "Appointment Order created successfully", {
-            order_uid,
+            free_order: isFreeOrder,
             order_id: order.id,
-            event: formattedEvent,
+            event_id,
             grand_total: totalAmount,
-            items: cartList.length,
             qr_codes: qrResults
         });
 
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return apiResponse.error(res, "Error creating order", 500);
     }
 };
+
+
+
+
+// exports.createAppointmentOrder = async (req, res) => {
+//     try {
+//         const user_id = req.user.id;
+//         const user = req.user;
+//         const { event_id, payment_method, discount_code } = req.body;
+
+//         if (!event_id)
+//             return apiResponse.error(res, "Event ID is required", 400);
+
+//         // Base URL for images
+//         const baseUrl = config.baseUrl || "http://localhost:5000";
+//         const imagePath = "uploads/events";
+
+//         // Fetch Event Details
+//         const event = await Event.findOne({
+//             raw: true,
+//             nest: true,
+//             where: { id: event_id },
+//             attributes: [
+//                 "id",
+//                 "name",
+//                 "date_from",
+//                 "date_to",
+//                 "feat_image",
+//                 "location",
+//                 "event_timezone"
+//             ]
+//         });
+
+//         if (!event)
+//             return apiResponse.error(res, "Event not found", 404);
+
+//         const timezone = event.event_timezone || "UTC";
+
+//         // Convert to user-friendly readable format
+//         const formatDateReadable = (dateStr, timezone) => {
+//             if (!dateStr) return "";
+
+//             const date = new Date(dateStr);
+
+//             return date.toLocaleString("en-US", {
+//                 timeZone: timezone,
+//                 weekday: "long",
+//                 month: "long",
+//                 day: "2-digit",
+//                 year: "numeric",
+//                 hour: "2-digit",
+//                 minute: "2-digit",
+//                 hour12: true
+//             });
+//         };
+
+//         // Prepare formatted event for email
+//         const formattedEvent = {
+//             id: event.id,
+//             name: event.name,
+//             location: event.location,
+
+//             // Correct image URL
+//             feat_image: event.feat_image
+//                 ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${event.feat_image}`
+//                 : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
+//             // Correct readable dates
+//             date_from: formatDateReadable(event.date_from, timezone),
+//             date_to: formatDateReadable(event.date_to, timezone),
+
+//             // Keep timezone for email
+//             timezone
+//         };
+//         // console.log('formattedEvent :', formattedEvent); return
+
+//         // FETCH CART
+//         let where = { user_id, event_id, ticket_type: "appointment" };
+//         const cartList = await Cart.findAll({
+//             where,
+//             raw: true,
+//             nest: true,
+//             order: [["id", "DESC"]],
+//             include: [
+//                 {
+//                     model: WellnessSlots,
+//                     as: 'appointments',
+//                     // attributes: ["id", "title", "price"]
+//                     include: [{ model: Wellness, as: 'wellnessList' }]
+//                 }
+//             ]
+//         });
+
+//         if (!cartList.length) {
+//             return apiResponse.error(res, "Your cart is empty!", 400);
+//         }
+//         // CALCULATE TOTAL
+//         let totalAmount = 0;
+//         cartList.forEach(item => {
+//             if (item.ticket_type == 'appointment')
+//                 totalAmount += Number(item.appointments.price || 0);
+//         });
+//         // CREATE ORDER
+//         const order_uid = generateUniqueOrderId();
+//         const order = await Orders.create({
+//             order_uid,
+//             user_id,
+//             event_id,
+//             grand_total: totalAmount,
+//             paymenttype: payment_method,
+//             discount_code: discount_code || null,
+//             created: new Date(),
+//             status: 'Y'
+//         });
+
+//         let qrResults = [];
+//         let attachments = [];
+//         // CREATE ORDER ITEMS + QR
+//         for (const item of cartList) {
+//             let price = 0;
+//             if (item.ticket_type == 'appointment')
+//                 price = item.appointments.price || 0;
+//             // CREATE ORDER ITEM
+//             const orderItem = await OrderItems.create({
+//                 order_id: order.id,
+//                 user_id,
+//                 event_id: item.event_id,
+//                 type: item.ticket_type,
+//                 ticket_id: item.ticket_id || null,
+//                 addon_id: item.addons_id || null,
+//                 package_id: item.package_id || null,
+//                 ticket_pricing_id: item.ticket_price_id || null,
+//                 appointment_id: item.appointment_id || null,
+//                 count: item.no_tickets || 1,
+//                 price,
+//                 slot_id: item.TicketPricing?.event_slot_id || null
+//             });
+
+//             // GENERATE QR
+//             const qr = await generateQRCode(orderItem);
+
+//             if (qr) {
+//                 await orderItem.update({
+//                     qr_image: qr.qrImageName,
+//                     qr_data: JSON.stringify(qr.qrData),
+//                     secure_hash: qr.secureHash
+//                 });
+
+//                 qrResults.push({
+//                     order_item_id: orderItem.id,
+//                     qr_image: qr.qrImageName,
+//                     qr_data: qr.qrData
+//                 });
+//                 attachments.push({
+//                     filename: qr.qrImageName,
+//                     path: path.join(__dirname, "../../../uploads/qr_codes/", qr.qrImageName)
+//                 });
+//             }
+//         }
+
+//         // CLEAR CART
+//         await Cart.destroy({ where });
+//         // SEND EMAIL
+//         try {
+//             await sendEmail(
+//                 user.email,
+//                 `Your Appointment Order – ${event.name}`,
+//                 appointmentConfirmationTemplateWithQR(user, order, cartList, qrResults, formattedEvent),
+//                 attachments
+//             );
+//         } catch (emailError) {
+//             console.log("Email sending failed:", emailError);
+//         }
+
+//         return apiResponse.success(res, "Appointment Order created successfully", {
+//             order_uid,
+//             order_id: order.id,
+//             event: formattedEvent,
+//             grand_total: totalAmount,
+//             items: cartList.length,
+//             qr_codes: qrResults
+//         });
+
+//     } catch (error) {
+//         console.log(error);
+//         return apiResponse.error(res, "Error creating order", 500);
+//     }
+// };
 
 // LIST ALL USER ORDERS WITH ITEMS + QR IMAGE URL
 exports.listOrders = async (req, res) => {
