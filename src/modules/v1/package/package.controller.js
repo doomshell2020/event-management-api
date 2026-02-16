@@ -3,8 +3,72 @@ const { body } = require('express-validator');
 const { Package,OrderItems, PackageDetails, Event, AddonTypes, TicketType } = require('../../../models');
 const { Op, fn, col } = require("sequelize");
 
+// module.exports.createPackage = async (req, res) => {
+//     const t = await Package.sequelize.transaction(); // ✅ transaction start
+
+//     try {
+//         const {
+//             event_id,
+//             name,
+//             package_limit,
+//             discount_percentage,
+//             total,
+//             discount_amt,
+//             grandtotal,
+//             hidden,
+//             ticketType,
+//             total_package
+//         } = req.body;
+
+//         // ✅ Basic validation
+//         if (!event_id || !name || !package_limit || !hidden) {
+//             return apiResponse.validation(res, [], 'Required fields are missing');
+//         }
+
+//         // ✅ Create package
+//         const newPackage = await Package.create(
+//             {
+//                 event_id,
+//                 name,
+//                 package_limit,
+//                 discount_percentage: discount_percentage || 0,
+//                 total,
+//                 total_package,
+//                 discount_amt: discount_amt || 0,
+//                 grandtotal,
+//                 hidden,
+//                 status: 'Y'
+//             },
+//             { transaction: t }
+//         );
+
+//         // ✅ Validate and insert ticket/addon details
+//         if (Array.isArray(ticketType) && ticketType.length > 0) {
+//             const detailsData = ticketType.map((item) => ({
+//                 package_id: newPackage.id,
+//                 ticket_type_id: item.type == 'ticket' ? item.id : null,
+//                 addon_id: item.type == 'addon' ? item.id : null,
+//                 qty: item.count,
+//                 price: item.price || 0,
+//                 status: 'Y'
+//             }));
+
+//             await PackageDetails.bulkCreate(detailsData, { transaction: t });
+//         }
+
+//         await t.commit();
+
+//         return apiResponse.success(res, 'Package created successfully', newPackage);
+//     } catch (error) {
+//         console.error('Error in createPackage:', error);
+//         await t.rollback();
+//         return apiResponse.error(res, 'Internal Server Error', 500);
+//     }
+// };
+
+// new api with count validation check...
 module.exports.createPackage = async (req, res) => {
-    const t = await Package.sequelize.transaction(); // ✅ transaction start
+    const t = await Package.sequelize.transaction();
 
     try {
         const {
@@ -25,7 +89,71 @@ module.exports.createPackage = async (req, res) => {
             return apiResponse.validation(res, [], 'Required fields are missing');
         }
 
-        // ✅ Create package
+        if (!Array.isArray(ticketType) || ticketType.length === 0) {
+            return apiResponse.validation(res, [], 'Package items are required');
+        }
+
+        // ===============================
+        // ✅ CHECK AVAILABILITY FIRST
+        // ===============================
+
+        for (const item of ticketType) {
+
+            if (!item.id || !item.type || !item.count) {
+                await t.rollback();
+                return apiResponse.validation(res, [], 'Invalid package item data');
+            }
+
+            if (item.type === "ticket") {
+
+                const ticket = await TicketType.findOne({
+                    where: { id: item.id, eventid:event_id },
+                    transaction: t,
+                    lock: t.LOCK.UPDATE // 🔒 prevent race condition
+                });
+
+                if (!ticket) {
+                    await t.rollback();
+                    return apiResponse.validation(res, [], 'Ticket not found');
+                }
+
+                if (item.count > ticket.count) {
+                    await t.rollback();
+                    return apiResponse.validation(
+                        res,
+                        [],
+                        `Only ${ticket.count} tickets available for ${ticket.title}`
+                    );
+                }
+
+            } else if (item.type === "addon") {
+
+                const addon = await AddonTypes.findOne({
+                    where: { id: item.id, event_id },
+                    transaction: t,
+                    lock: t.LOCK.UPDATE
+                });
+
+                if (!addon) {
+                    await t.rollback();
+                    return apiResponse.validation(res, [], 'Addon not found');
+                }
+
+                if (item.count > addon.count) {
+                    await t.rollback();
+                    return apiResponse.validation(
+                        res,
+                        [],
+                        `Only ${addon.count} addons available for ${addon.name}`
+                    );
+                }
+            }
+        }
+
+        // ===============================
+        // ✅ CREATE PACKAGE
+        // ===============================
+
         const newPackage = await Package.create(
             {
                 event_id,
@@ -42,29 +170,36 @@ module.exports.createPackage = async (req, res) => {
             { transaction: t }
         );
 
-        // ✅ Validate and insert ticket/addon details
-        if (Array.isArray(ticketType) && ticketType.length > 0) {
-            const detailsData = ticketType.map((item) => ({
-                package_id: newPackage.id,
-                ticket_type_id: item.type == 'ticket' ? item.id : null,
-                addon_id: item.type == 'addon' ? item.id : null,
-                qty: item.count,
-                price: item.price || 0,
-                status: 'Y'
-            }));
+        // ===============================
+        // ✅ INSERT PACKAGE DETAILS
+        // ===============================
 
-            await PackageDetails.bulkCreate(detailsData, { transaction: t });
-        }
+        const detailsData = ticketType.map((item) => ({
+            package_id: newPackage.id,
+            ticket_type_id: item.type === 'ticket' ? item.id : null,
+            addon_id: item.type === 'addon' ? item.id : null,
+            qty: item.count,
+            price: item.price || 0,
+            status: 'Y'
+        }));
+
+        await PackageDetails.bulkCreate(detailsData, { transaction: t });
 
         await t.commit();
 
         return apiResponse.success(res, 'Package created successfully', newPackage);
+
     } catch (error) {
         console.error('Error in createPackage:', error);
         await t.rollback();
         return apiResponse.error(res, 'Internal Server Error', 500);
     }
 };
+
+
+
+
+
 
 // ✅ Update Package (name, hidden, limit — any or all)
 module.exports.updatePackage = async (req, res) => {

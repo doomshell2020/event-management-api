@@ -132,6 +132,8 @@ module.exports.searchEvents = async ({ keyword, loginId }) => {
         const events = await Event.findAll({
             where: {
                 event_org_id: loginId, // ✅ now safe
+                is_free:"N",
+                entry_type:"event",
                 [Op.or]: [
                     { name: { [Op.like]: `%${searchText}%` } },
                     { desp: { [Op.like]: `%${searchText}%` } },

@@ -311,7 +311,7 @@ module.exports = {
                             {
                                 model: TicketType,
                                 as: 'ticket',
-                                attributes: ['id', 'title', 'access_type', 'type', 'price']
+                                attributes: ['id', 'title', 'access_type', 'type', 'price','hidden']
                             },
                             {
                                 model: EventSlots,
@@ -372,7 +372,7 @@ module.exports = {
                                     model: TicketType,
                                     as: "ticket",
                                     required: false,
-                                    attributes: ["id", "count", "title", "access_type"],
+                                    attributes: ["id", "count", "title", "access_type","hidden"],
                                 },
                                 {
                                     model: EventSlots,
@@ -448,7 +448,41 @@ module.exports = {
                         {
                             model: Package,
                             as: "package",
-                            attributes: { exclude: ["CreatedAt", "UpdatedAt"] },
+                            attributes: {
+                                exclude: ["CreatedAt", "UpdatedAt"],
+                                include: [
+
+                                    // ✅ 1. sales_count
+                                    [
+                                        Sequelize.literal(`(
+                    SELECT COALESCE(SUM(oi.count), 0)
+                    FROM tbl_order_items AS oi
+                    WHERE 
+                        oi.package_id = package.id
+                        AND oi.event_id = ${Number(ev)}
+                )`),
+                                        "sales_count"
+                                    ],
+
+                                    // ✅ 2. sold_out flag
+                                    [
+                                        Sequelize.literal(`(
+                    CASE 
+                        WHEN (
+                            SELECT COALESCE(SUM(oi.count), 0)
+                            FROM tbl_order_items AS oi
+                            WHERE 
+                                oi.package_id = package.id
+                                AND oi.event_id = ${Number(ev)}
+                        ) >= package.total_package
+                        THEN 'Y'
+                        ELSE 'N'
+                    END
+                )`),
+                                        "sold_out"
+                                    ]
+                                ]
+                            },
                             include: [
                                 {
                                     model: PackageDetails,
@@ -461,6 +495,23 @@ module.exports = {
                                 },
                             ]
                         },
+
+                        // {
+                        //     model: Package,
+                        //     as: "package",
+                        //     attributes: { exclude: ["CreatedAt", "UpdatedAt"] },
+                        //     include: [
+                        //         {
+                        //             model: PackageDetails,
+                        //             as: "details",
+                        //             attributes: { exclude: ["CreatedAt", "UpdatedAt"] },
+                        //             include: [
+                        //                 { model: AddonTypes, as: "addonType", attributes: { exclude: ["createdAt", "updatedAt"] } },
+                        //                 { model: TicketType, as: "ticketType", attributes: { exclude: ["createdAt", "updatedAt"] } }
+                        //             ]
+                        //         },
+                        //     ]
+                        // },
                         {
                             model: Company,
                             as: "companyInfo",

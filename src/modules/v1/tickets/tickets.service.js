@@ -1,5 +1,5 @@
 
-const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates } = require('../../../models/index');
+const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates,TicketPricing } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
 const { Op } = require('sequelize');
 const path = require('path');
@@ -1029,23 +1029,52 @@ module.exports.listTicketsByEvent = async (event_id) => {
         // });
 
         // ✅ Fetch tickets with sold count
+        // const tickets = await TicketType.findAll({
+        //     where: { eventid: event_id },
+        //     attributes: {
+        //         include: [
+        //             [
+        //                 // 🔥 Subquery to calculate sold count
+        //                 literal(`(
+        //                 SELECT COALESCE(SUM(oi.count), 0)
+        //                 FROM tbl_order_items AS oi
+        //                 WHERE oi.ticket_id = TicketType.id
+        //                 AND oi.event_id = ${event_id}
+        //                 AND oi.type IN ('ticket', 'committesale','comps')
+        //                 )`),
+        //                 "sold_count",
+        //             ]
+        //         ],
+        //     },
+        //     order: [["createdAt", "DESC"]],
+        // });
         const tickets = await TicketType.findAll({
             where: { eventid: event_id },
+
             attributes: {
                 include: [
                     [
-                        // 🔥 Subquery to calculate sold count
                         literal(`(
-                        SELECT COALESCE(SUM(oi.count), 0)
-                        FROM tbl_order_items AS oi
-                        WHERE oi.ticket_id = TicketType.id
-                        AND oi.event_id = ${event_id}
-                        AND oi.type IN ('ticket', 'committesale','comps')
-                        )`),
+                    SELECT COALESCE(SUM(oi.count), 0)
+                    FROM tbl_order_items AS oi
+                    WHERE oi.ticket_id = TicketType.id
+                    AND oi.event_id = ${event_id}
+                    AND oi.type IN ('ticket', 'committesale','comps')
+                )`),
                         "sold_count",
                     ]
-                ],
+                ]
             },
+
+            include: [
+                {
+                    model: TicketPricing,
+                    as: "pricings",
+                    required: false, // ✅ important (LEFT JOIN)
+                    attributes:['price']
+                }
+            ],
+
             order: [["createdAt", "DESC"]],
         });
 

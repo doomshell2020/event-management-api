@@ -1,5 +1,5 @@
 
-const { Wellness, Event, WellnessSlots,Currency } = require('../../../models/index');
+const { Wellness, Event, WellnessSlots, Currency,OrderItems } = require('../../../models/index');
 
 const { Op } = require('sequelize');
 const path = require('path');
@@ -123,56 +123,12 @@ module.exports.updateWellness = async (req) => {
 
 
 
-module.exports.deleteWellness = async (req) => {
-    try {
-        const wellnessId = req.params.id;
-
-        // ✅ Find existing wellness record
-        const existingWellness = await Wellness.findByPk(wellnessId);
-        if (!existingWellness) {
-            return {
-                success: false,
-                message: 'Wellness not found',
-                code: 'WELLNESS_NOT_FOUND'
-            };
-        }
-        // ✅ Remove associated image if it exists
-        if (existingWellness.Image) {
-            const uploadFolder = path.join(process.cwd(), 'uploads/wellness');
-            const imagePath = path.join(uploadFolder, existingWellness.Image);
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
-                console.log('🧹 Wellness image deleted:', imagePath);
-            }
-        }
-        // ✅ Delete all related slots (by wellness_id)
-        const deletedSlotsCount = await WellnessSlots.destroy({
-            where: { wellness_id: wellnessId }
-        });
-        console.log(`🧹 Deleted ${deletedSlotsCount} related wellness slots.`);
-        // ✅ Delete main wellness record
-        await existingWellness.destroy();
-        return {
-            success: true,
-            message: `Wellness and ${deletedSlotsCount} related slot(s) deleted successfully`
-        };
-    } catch (error) {
-        console.error('Error deleting wellness:', error);
-        return {
-            success: false,
-            message: 'Internal server error: ' + error.message,
-            code: 'DB_ERROR'
-        };
-    }
-};
-
 // module.exports.deleteWellness = async (req) => {
 //     try {
-//         const ticketId = req.params.id;
-//         // const user_id = req.user?.id || null;
+//         const wellnessId = req.params.id;
 
-//         // ✅ Find existing ticket
-//         const existingWellness = await Wellness.findByPk(ticketId);
+//         // ✅ Find existing wellness record
+//         const existingWellness = await Wellness.findByPk(wellnessId);
 //         if (!existingWellness) {
 //             return {
 //                 success: false,
@@ -180,35 +136,26 @@ module.exports.deleteWellness = async (req) => {
 //                 code: 'WELLNESS_NOT_FOUND'
 //             };
 //         }
-
-//         // ✅ Optional: Check if the user is the ticket owner (if applicable)
-//         // if (user_id && existingWellness.userid && existingWellness.userid !== user_id) {
-//         //     return {
-//         //         success: false,
-//         //         message: 'You are not authorized to delete this ticket',
-//         //         code: 'FORBIDDEN'
-//         //     };
-//         // }
-
-//         // ✅ Remove associated image if exists
+//         // ✅ Remove associated image if it exists
 //         if (existingWellness.Image) {
 //             const uploadFolder = path.join(process.cwd(), 'uploads/wellness');
 //             const imagePath = path.join(uploadFolder, existingWellness.Image);
-
 //             if (fs.existsSync(imagePath)) {
 //                 fs.unlinkSync(imagePath);
-//                 console.log('🧹 Ticket image deleted:', imagePath);
+//                 console.log('🧹 Wellness image deleted:', imagePath);
 //             }
 //         }
-
-//         // ✅ Delete ticket record
+//         // ✅ Delete all related slots (by wellness_id)
+//         const deletedSlotsCount = await WellnessSlots.destroy({
+//             where: { wellness_id: wellnessId }
+//         });
+//         console.log(`🧹 Deleted ${deletedSlotsCount} related wellness slots.`);
+//         // ✅ Delete main wellness record
 //         await existingWellness.destroy();
-
 //         return {
 //             success: true,
-//             message: 'Wellness deleted successfully'
+//             message: `Wellness and ${deletedSlotsCount} related slot(s) deleted successfully`
 //         };
-
 //     } catch (error) {
 //         console.error('Error deleting wellness:', error);
 //         return {
@@ -219,13 +166,99 @@ module.exports.deleteWellness = async (req) => {
 //     }
 // };
 
+
 // wellness lists
+
+module.exports.deleteWellness = async (req) => {
+    try {
+        const wellnessId = req.params.id;
+        // ✅ Find existing wellness record
+        const existingWellness = await Wellness.findByPk(wellnessId);
+        if (!existingWellness) {
+            return {
+                success: false,
+                message: 'Wellness not found',
+                code: 'WELLNESS_NOT_FOUND'
+            };
+        }
+
+        // ✅ Get all slots of this wellness
+        const wellnessSlots = await WellnessSlots.findAll({
+            where: { wellness_id: wellnessId },
+            attributes: ['id']
+        });
+
+        const slotIds = wellnessSlots.map(slot => slot.id);
+
+        // ✅ Check if any OrderItems exist with these slot ids
+        if (slotIds.length > 0) {
+            const existingOrder = await OrderItems.findOne({
+                where: {
+                    appointment_id: {
+                        [Op.in]: slotIds
+                    }
+                }
+            });
+
+            if (existingOrder) {
+                return {
+                    success: false,
+                    message: 'Cannot delete appointment. Orders already exist for this appointment.',
+                    code: 'WELLNESS_HAS_ORDERS'
+                };
+            }
+        }
+
+
+        // ✅ Remove associated image if it exists
+        if (existingWellness.Image) {
+            const uploadFolder = path.join(process.cwd(), 'uploads/wellness');
+            const imagePath = path.join(uploadFolder, existingWellness.Image);
+            if (fs.existsSync(imagePath)) {
+                fs.unlinkSync(imagePath);
+                console.log('🧹 Wellness image deleted:', imagePath);
+            }
+        }
+
+        // ✅ Delete all related slots
+        const deletedSlotsCount = await WellnessSlots.destroy({
+            where: { wellness_id: wellnessId }
+        });
+
+        console.log(`🧹 Deleted ${deletedSlotsCount} related wellness slots.`);
+
+        // ✅ Delete main wellness record
+        await existingWellness.destroy();
+
+        return {
+            success: true,
+            message: `Wellness and ${deletedSlotsCount} related slot(s) deleted successfully`
+        };
+
+    } catch (error) {
+        console.error('Error deleting wellness:', error);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'DB_ERROR'
+        };
+    }
+};
+
+
+
+
+
+
+
+
+
 module.exports.wellnessList = async (req, res) => {
     try {
-        const { id } = req.params; 
+        const { id } = req.params;
         const wellness = await Wellness.findAll({
             where: { event_id: id },
-            include: [{ model: Event, as: 'eventList' , attributes:['name'] }],
+            include: [{ model: Event, as: 'eventList', attributes: ['name'] }],
             order: [['id', 'DESC']]
         });
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
@@ -350,14 +383,14 @@ module.exports.createWellnessSlots = async (req) => {
 // view all wellness..
 module.exports.wellnessSlotsList = async (req, res) => {
     try {
-           const baseUrl = process.env.BASE_URL || "http://localhost:5000";
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
         const imagePath = "uploads/wellness";
         const wellness = await WellnessSlots.findAll({
-            include: [{ model: Wellness, as: 'wellnessList', attributes: ['name', 'location','Image','currency'] }],
-            attributes: ['id','wellness_id', 'date', "slot_start_time", 'slot_end_time', 'price', 'slot_location', 'count'],
+            include: [{ model: Wellness, as: 'wellnessList', attributes: ['name', 'location', 'Image', 'currency'] }],
+            attributes: ['id', 'wellness_id', 'date', "slot_start_time", 'slot_end_time', 'price', 'slot_location', 'count'],
             order: [['id', 'DESC']]
         });
-         // ✅ Format the image URL for each record
+        // ✅ Format the image URL for each record
         const formattedSlots = wellness.map((slot) => {
             const data = slot.toJSON();
             const wellness = data.wellnessList || {};
@@ -366,7 +399,7 @@ module.exports.wellnessSlotsList = async (req, res) => {
             const imageUrl = wellness.Image
                 ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${wellness.Image}`
                 : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`;
-                    return {
+            return {
                 ...data,
                 wellnessList: {
                     ...wellness,
@@ -399,10 +432,10 @@ module.exports.getWellnessSlotById = async (req, res) => {
 
         const wellness = await WellnessSlots.findOne({
             where: { id: id },
-            include: [{ model: Wellness, as: 'wellnessList', attributes: ['name', 'location','Image','currency','hidden'], include: [{ model: Event, as: 'eventList' , attributes:['name','is_sale_start','ServiceFee','MexicanVAT','AccommodationTax','OndalindaFee','strip_fee','ticket_platform_fee_percentage','ticket_stripe_fee_percentage','ticket_bank_fee_percentage','ticket_processing_fee_percentage','accommodation_stripe_fee_percentage','accommodation_bank_fee_percentage','accommodation_processing_fee_percentage'] }], }],
-            attributes: ['wellness_id', 'date', "slot_start_time", 'slot_end_time', 'price', 'slot_location', 'count','hidden'],
+            include: [{ model: Wellness, as: 'wellnessList', attributes: ['name', 'location', 'Image', 'currency', 'hidden'], include: [{ model: Event, as: 'eventList', attributes: ['name', 'is_sale_start', 'ServiceFee', 'MexicanVAT', 'AccommodationTax', 'OndalindaFee', 'strip_fee', 'ticket_platform_fee_percentage', 'ticket_stripe_fee_percentage', 'ticket_bank_fee_percentage', 'ticket_processing_fee_percentage', 'accommodation_stripe_fee_percentage', 'accommodation_bank_fee_percentage', 'accommodation_processing_fee_percentage'] }], }],
+            attributes: ['wellness_id', 'date', "slot_start_time", 'slot_end_time', 'price', 'slot_location', 'count', 'hidden'],
         });
-         const data = wellness.toJSON();
+        const data = wellness.toJSON();
 
         // Add full image URL
         const updatedData = {
@@ -813,7 +846,7 @@ module.exports.eventList = async (req, res) => {
         // ✅ Fetch events with filters applied
         const events = await Event.findAll({
             where: whereCondition,
-            attributes:['name','id'],
+            attributes: ['name', 'id'],
             order: [["date_from", "DESC"]],
         });
 

@@ -850,7 +850,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
             transaction
         });
         if (existingOrder) {
-         
+
             await transaction.rollback();
             return { order: existingOrder, duplicated: true };
         }
@@ -1037,8 +1037,11 @@ module.exports.fulfilOrderFromSnapshot = async ({
                         <td>${getItemTitle(item)}</td>
                         <td align="center">${item.quantity}</td>
                         <td align="right">
-                        ${formattedEvent.currency_symbol}${formatPrice(item.price)}
-                        </td>
+                        ${formattedEvent.currency_symbol}${formatPrice(
+                    parseFloat(item.price || 0) * parseInt(item.quantity || 0)
+                )}
+                  </td>
+
                     </tr>
                     `).join("")}
                 </tbody>
@@ -1868,56 +1871,216 @@ exports.getOrderDetails = async (req, res) => {
 };
 
 //..cancel appointment..kamal
+
 exports.cancelAppointment = async (req, res) => {
     try {
-        const { id: orderId } = req.params;
+        const { id } = req.params;
 
-        if (!orderId) {
-            return res.json({
+        if (!id) {
+            return res.status(400).json({
                 success: false,
-                message: "Order ID is required",
-                code: "ORDER_ID_MISSING"
+                message: "Appointment ID is required",
+                code: "ID_MISSING"
             });
         }
 
-        // Find order by ID
-        const order = await OrderItems.findByPk(orderId);
+        const order = await OrderItems.findByPk(id, {
+            include: [
+                { model: User, as: "user", attributes: ["first_name", "last_name", "email"] },
+                { model: Event, as: "event", attributes: ["name"] },
+                { model: WellnessSlots, as: "appointment", attributes: ["date", "slot_start_time", "slot_end_time"] }
+            ]
+        });
 
         if (!order) {
-            return res.json({
+            return res.status(404).json({
                 success: false,
-                message: "Order not found",
-                code: "ORDER_NOT_FOUND"
+                message: "Appointment not found",
+                code: "NOT_FOUND"
             });
         }
 
-        // Already cancelled check
-        if (order.cancel_status == "cancel") {
-            return res.json({
+        if (order.cancel_status === "cancel") {
+            return res.status(400).json({
                 success: false,
-                message: "This appointment is already cancelled",
+                message: "Appointment already cancelled",
                 code: "ALREADY_CANCELLED"
             });
         }
 
-        // Update cancel status & date
+        if (req.user && req.user.id !== order.user_id) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not authorized to cancel this appointment",
+                code: "UNAUTHORIZED"
+            });
+        }
+
         await order.update({
             cancel_status: "cancel",
             cancel_date: new Date()
         });
 
-        return res.json({
+        // ===== FORMAT DATE =====
+        let formattedDate = "";
+        if (order.appointment?.date) {
+            const dateObj = new Date(order.appointment.date);
+            formattedDate = dateObj.toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+            });
+        }
+
+        // ===== FORMAT TIME =====
+        let formattedTime = "";
+        if (order.appointment?.slot_start_time && order.appointment?.slot_end_time) {
+
+            const start = new Date(`1970-01-01T${order.appointment.slot_start_time}`);
+            const end = new Date(`1970-01-01T${order.appointment.slot_end_time}`);
+
+            const startTime = start.toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+            });
+
+            const endTime = end.toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+            });
+
+            formattedTime = `${startTime} - ${endTime}`;
+        }
+
+        // ===== SEND EMAIL =====
+        const templateId = config.emailTemplates.cancelAppointment;
+
+        const template = await Templates.findOne({
+            where: { id: templateId }
+        });
+
+        if (template) {
+            const html = replaceTemplateVariables(template.description, {
+                UserName: `${order.user.first_name} ${order.user.last_name}`,
+                EventName: order.event?.name || "",
+                SITE_URL: config.clientUrl,
+                AppointmentDate: formattedDate,
+                AppointmentTime: formattedTime
+            });
+
+            const finalSubject = `${template.subject} ${order.event?.name || ""}`;
+
+            await sendEmail(order.user.email, finalSubject, html);
+        }
+
+        return res.status(200).json({
             success: true,
-            message: "Your appointment has been cancelled successfully",
-            // data: order
+            message: "Appointment cancelled successfully"
         });
 
     } catch (error) {
-        return res.json({
+        console.error("Cancel Appointment Error:", error);
+        return res.status(500).json({
             success: false,
             message: "Something went wrong",
-            error: error.message,
-            code: "DB_ERROR"
+            error: error.message
         });
     }
 };
+
+
+
+
+
+
+
+
+
+
+// exports.cancelAppointment = async (req, res) => {
+//     try {
+//         const { id: orderId } = req.params;
+
+//         if (!orderId) {
+//             return res.json({
+//                 success: false,
+//                 message: "Order ID is required",
+//                 code: "ORDER_ID_MISSING"
+//             });
+//         }
+
+//         // Find order by ID
+//         const order = await OrderItems.findByPk(orderId);
+
+//         if (!order) {
+//             return res.json({
+//                 success: false,
+//                 message: "Order not found",
+//                 code: "ORDER_NOT_FOUND"
+//             });
+//         }
+
+//         // Already cancelled check
+//         if (order.cancel_status == "cancel") {
+//             return res.json({
+//                 success: false,
+//                 message: "This appointment is already cancelled",
+//                 code: "ALREADY_CANCELLED"
+//             });
+//         }
+
+//         // Update cancel status & date
+//         await order.update({
+//             cancel_status: "cancel",
+//             cancel_date: new Date()
+//         });
+//         // ===== EMAIL TEMPLATE FETCH =====
+//         // const templateId = config.emailTemplates.addStaffForEvent;
+
+//         // const templateRecord = await Templates.findOne({
+//         //     where: { id: templateId }
+//         // });
+
+//         // if (!templateRecord) {
+//         //     throw new Error('Add staff email template not found');
+//         // }
+
+//         // const { subject, description } = templateRecord;
+
+
+//         // const html = replaceTemplateVariables(description, {
+//         //     Name: `${existingUser.first_name} ${existingUser.last_name}`,
+//         //     Email: existingUser.email,
+//         //     Password: "Your existing password remains unchanged",
+//         //     EventName: eventNames,
+//         //     AddedBy: `${req.user.firstName} ${req.user.lastName}`,
+//         //     SITE_URL: config.clientUrl
+//         // });
+
+//         // const finalSubject = `${subject} ${eventNames}`;
+
+//         // await sendEmail(existingUser.email, finalSubject, html);
+
+
+
+
+
+
+
+//         return res.json({
+//             success: true,
+//             message: "Your appointment has been cancelled successfully",
+//             // data: order
+//         });
+
+//     } catch (error) {
+//         return res.json({
+//             success: false,
+//             message: "Something went wrong",
+//             error: error.message,
+//             code: "DB_ERROR"
+//         });
+//     }
+// };

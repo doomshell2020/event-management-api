@@ -5,6 +5,8 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
 const { sequelize } = require("../../../models");
+const Sequelize = require('sequelize');
+const { Op } = Sequelize;
 const config = require('../../../config/app');
 const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType, Templates } = require('../../../models');
 const { pushFromCommitteeCompsTicket } = require('../tickets/tickets.service');
@@ -872,7 +874,101 @@ exports.requestList = async (req, res) => {
     }
 };
 
+// exports.updateAssignedTickets = async (req, res) => {
+//     try {
+//         const { event_id, user_id, tickets, commission } = req.body;
+
+//         /* ================= VALIDATE MEMBER ================= */
+//         const member = await CommitteeMembers.findOne({
+//             where: {
+//                 event_id,
+//                 user_id,
+//                 status: 'Y'
+//             }
+//         });
+
+//         if (!member) {
+//             return apiResponse.error(
+//                 res,
+//                 "Committee member not found for this event",
+//                 404
+//             );
+//         }
+
+//         /* ================= UPDATE COMMISSION ================= */
+
+//         if (commission !== undefined) {
+//             await member.update({
+//                 commission: commission
+//             });
+//         }
+
+//         /* ================= PROCESS TICKETS ================= */
+//         for (const ticket_id of Object.keys(tickets)) {
+//             const count = parseInt(tickets[ticket_id]) || 0;
+
+//             const existing = await CommitteeAssignTickets.findOne({
+//                 where: {
+//                     event_id,
+//                     user_id,
+//                     ticket_id
+//                 }
+//             });
+
+//             // 👉 If count is 0 → delete row
+//             if (count == 0) {
+//                 if (existing) {
+//                     await existing.destroy();
+//                 }
+//                 continue;
+//             }
+
+//             // 👉 Update existing
+//             if (existing) {
+//                 // 🔒 Prevent lowering below used tickets
+//                 if (existing.usedticket > count) {
+//                     return apiResponse.error(
+//                         res,
+//                         `Cannot reduce tickets below used count for ticket ${ticket_id}`,
+//                         400
+//                     );
+//                 }
+
+//                 await existing.update({
+//                     count
+//                 });
+//             }
+//             // 👉 Create new
+//             else {
+//                 await CommitteeAssignTickets.create({
+//                     event_id,
+//                     user_id,
+//                     ticket_id,
+//                     count,
+//                     usedticket: 0,
+//                     status: 'Y'
+//                 });
+//             }
+//         }
+
+//         return apiResponse.success(
+//             res,
+//             "Committee tickets and commission updated successfully"
+//         );
+
+//     } catch (error) {
+//         console.error("updateAssignedTickets error:", error);
+//         return apiResponse.error(
+//             res,
+//             "Failed to update committee tickets",
+//             500
+//         );
+//     }
+// };
+
+
 exports.updateAssignedTickets = async (req, res) => {
+    const transaction = await sequelize.transaction();
     try {
         const { event_id, user_id, tickets, commission } = req.body;
 
@@ -886,6 +982,7 @@ exports.updateAssignedTickets = async (req, res) => {
         });
 
         if (!member) {
+            await transaction.rollback();
             return apiResponse.error(
                 res,
                 "Committee member not found for this event",
@@ -894,11 +991,11 @@ exports.updateAssignedTickets = async (req, res) => {
         }
 
         /* ================= UPDATE COMMISSION ================= */
-
         if (commission !== undefined) {
-            await member.update({
-                commission: commission
-            });
+            await member.update(
+                { commission },
+                { transaction }
+            );
         }
 
         /* ================= PROCESS TICKETS ================= */
@@ -906,25 +1003,64 @@ exports.updateAssignedTickets = async (req, res) => {
             const count = parseInt(tickets[ticket_id]) || 0;
 
             const existing = await CommitteeAssignTickets.findOne({
-                where: {
-                    event_id,
-                    user_id,
-                    ticket_id
-                }
+                where: { event_id, user_id, ticket_id },
+                transaction
             });
 
-            // 👉 If count is 0 → delete row
-            if (count == 0) {
+            /* ---------- DELETE IF ZERO ---------- */
+            if (count === 0) {
                 if (existing) {
-                    await existing.destroy();
+                    await existing.destroy({ transaction });
                 }
                 continue;
             }
 
-            // 👉 Update existing
+            /* ---------- FETCH TICKET TYPE ---------- */
+            const ticketType = await TicketType.findByPk(ticket_id, {
+                transaction
+            });
+
+            if (!ticketType) {
+                await transaction.rollback();
+                return apiResponse.error(
+                    res,
+                    `Ticket type ${ticket_id} not found`,
+                    404
+                );
+            }
+
+            /* ---------- TOTAL ASSIGNED (OTHER MEMBERS) ---------- */
+            const assignedSummary = await CommitteeAssignTickets.findOne({
+                attributes: [
+                    [Sequelize.fn('SUM', Sequelize.col('count')), 'total_assigned']
+                ],
+                where: {
+                    event_id,
+                    ticket_id,
+                    user_id: { [Op.ne]: user_id }
+                },
+                raw: true,
+                transaction
+            });
+
+            const alreadyAssigned = Number(assignedSummary?.total_assigned || 0);
+
+            /* ---------- VALIDATE AVAILABLE TICKETS ---------- */
+            if (alreadyAssigned + count > ticketType.count) {
+                await transaction.rollback();
+                return apiResponse.error(
+                    res,
+                    `Cannot assign ${count} tickets. Only ${
+                        ticketType.count - alreadyAssigned
+                    } tickets available for this ticket..`,
+                    400
+                );
+            }
+
+            /* ---------- UPDATE EXISTING ---------- */
             if (existing) {
-                // 🔒 Prevent lowering below used tickets
                 if (existing.usedticket > count) {
+                    await transaction.rollback();
                     return apiResponse.error(
                         res,
                         `Cannot reduce tickets below used count for ticket ${ticket_id}`,
@@ -932,22 +1068,28 @@ exports.updateAssignedTickets = async (req, res) => {
                     );
                 }
 
-                await existing.update({
-                    count
-                });
+                await existing.update(
+                    { count },
+                    { transaction }
+                );
             }
-            // 👉 Create new
+            /* ---------- CREATE NEW ---------- */
             else {
-                await CommitteeAssignTickets.create({
-                    event_id,
-                    user_id,
-                    ticket_id,
-                    count,
-                    usedticket: 0,
-                    status: 'Y'
-                });
+                await CommitteeAssignTickets.create(
+                    {
+                        event_id,
+                        user_id,
+                        ticket_id,
+                        count,
+                        usedticket: 0,
+                        status: 'Y'
+                    },
+                    { transaction }
+                );
             }
         }
+
+        await transaction.commit();
 
         return apiResponse.success(
             res,
@@ -955,6 +1097,7 @@ exports.updateAssignedTickets = async (req, res) => {
         );
 
     } catch (error) {
+        await transaction.rollback();
         console.error("updateAssignedTickets error:", error);
         return apiResponse.error(
             res,
@@ -963,6 +1106,16 @@ exports.updateAssignedTickets = async (req, res) => {
         );
     }
 };
+
+
+
+
+
+
+
+
+
+
 
 /* 🔁 COMMON FUNCTION */
 const fetchMemberList = async (event_id) => {
@@ -1115,16 +1268,40 @@ exports.changeMemberStatus = async (req, res) => {
     }
 };
 
+
+
 exports.deleteMember = async (req, res) => {
     try {
         const { id } = req.params;
 
+        if (!id) {
+            return apiResponse.validation(res, [], "Member ID is required");
+        }
+
+        // 🔎 Find member
         const member = await CommitteeMembers.findByPk(id);
 
         if (!member) {
             return apiResponse.error(res, "Committee member not found", 404);
         }
 
+        // 🔎 Check if tickets assigned to this member
+        const assignedTicket = await CommitteeAssignTickets.findOne({
+            where: {
+                user_id: member.user_id,
+                event_id: member.event_id
+            }
+        });
+
+        if (assignedTicket) {
+            return apiResponse.validation(
+                res,
+                [],
+                "This member cannot be deleted because tickets are assigned to them"
+            );
+        }
+
+        // ✅ Safe to delete
         await member.destroy();
 
         return apiResponse.success(res, "Member removed successfully", {
@@ -1132,7 +1309,29 @@ exports.deleteMember = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error("Delete Member Error:", error);
         return apiResponse.error(res, "Failed to delete member", 500);
     }
 };
+
+// exports.deleteMember = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+
+//         const member = await CommitteeMembers.findByPk(id);
+
+//         if (!member) {
+//             return apiResponse.error(res, "Committee member not found", 404);
+//         }
+
+//         await member.destroy();
+
+//         return apiResponse.success(res, "Member removed successfully", {
+//             member_id: id
+//         });
+
+//     } catch (error) {
+//         console.error(error);
+//         return apiResponse.error(res, "Failed to delete member", 500);
+//     }
+// };
