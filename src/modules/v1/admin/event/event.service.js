@@ -606,7 +606,7 @@ module.exports.getEventById = async (req) => {
 
         const event = await Event.findOne({
             where: { id: eventId },
-            attributes: ['id', 'name','is_free'],
+            attributes: ['id', 'name','is_free','entry_type'],
         });
 
         if (!event) {
