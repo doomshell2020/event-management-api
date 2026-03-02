@@ -192,18 +192,44 @@ exports.applyCoupon = async (req, res) => {
         /* ---------- Date Validation ---------- */
         if (coupon.validity_period === "specified_date") {
             const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const fromDate = coupon.specific_date_from
+                ? new Date(coupon.specific_date_from)
+                : null;
+
+            const toDate = coupon.specific_date_to
+                ? new Date(coupon.specific_date_to)
+                : null;
+
+            if (fromDate) fromDate.setHours(0, 0, 0, 0);
+            if (toDate) toDate.setHours(23, 59, 59, 999); // 🔥 full day valid
 
             if (
-                (coupon.specific_date_from && new Date(coupon.specific_date_from) > today) ||
-                (coupon.specific_date_to && new Date(coupon.specific_date_to) < today)
+                (fromDate && today < fromDate) ||
+                (toDate && today > toDate)
             ) {
                 return apiResponse.conflict(
                     res,
-                    "Coupon is expired",
+                    "This coupon is not valid today.",
                     "COUPON_EXPIRED"
                 );
             }
         }
+        // if (coupon.validity_period === "specified_date") {
+        //     const today = new Date();
+
+        //     if (
+        //         (coupon.specific_date_from && new Date(coupon.specific_date_from) > today) ||
+        //         (coupon.specific_date_to && new Date(coupon.specific_date_to) < today)
+        //     ) {
+        //         return apiResponse.conflict(
+        //             res,
+        //             "Coupon is expired",
+        //             "COUPON_EXPIRED"
+        //         );
+        //     }
+        // }
 
         /* ---------- Redeem Count ---------- */
         const redeemedCount = await Orders.count({
@@ -340,7 +366,7 @@ exports.applyCoupon = async (req, res) => {
         if (coupon.discount_type === "percentage" && discount >= applicableAmount) {
             return apiResponse.conflict(
                 res,
-                "Invalid discount percentage",
+                "A full discount isn’t allowed with this order.",
                 "INVALID_DISCOUNT_PERCENTAGE"
             );
         }
@@ -351,7 +377,7 @@ exports.applyCoupon = async (req, res) => {
         if (finalAmount <= 0) {
             return apiResponse.conflict(
                 res,
-                "Coupon cannot make order free",
+                "A full discount isn’t allowed with this coupon.",
                 "FREE_ORDER_NOT_ALLOWED"
             );
         }

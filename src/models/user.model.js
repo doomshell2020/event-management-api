@@ -210,6 +210,16 @@ const User = sequelize.define(
       type: DataTypes.STRING(100),
       allowNull: true,
     },
+    // new keys expire reset password token..(18-02-2026)
+    reset_password_token: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    reset_password_expires: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+
     updateAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

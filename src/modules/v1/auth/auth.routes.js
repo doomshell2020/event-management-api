@@ -49,6 +49,13 @@ router.get('/me', authenticate, authController.getUserInfo);
 
 router.get('/verify-email', authController.verifyEmail);
 
+// new api validate Reset token..
+router.get('/validate-reset-token', authController.validateResetToken);
+
+
+
+
+
 router.patch('/update-profile',
   authenticate,
   [
@@ -108,7 +115,16 @@ router.post('/reset-password',
   authController.resetPassword
 );
 
-router.get('/:id',authController.getUserById);
+router.get('/:id', authController.getUserById);
 
+router.post('/resend-verification',
+  [
+    body('email')
+      .notEmpty().withMessage('Email is required')
+      .isEmail().withMessage('Invalid email format'),
+  ],
+  validate,
+  authController.resendVerification
+);
 
 module.exports = router;

@@ -199,6 +199,42 @@ module.exports.resetPassword = async (req, res) => {
     }
 };
 
+// new api validate Reset token..
+module.exports.validateResetToken = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return apiResponse.validation(
+        res,
+        [],
+        "Password reset token is required"
+      );
+    }
+
+    const result = await authService.validateResetToken(token);
+
+    if (result.success) {
+      return apiResponse.success(
+        res,
+        result.message || "Password reset token is valid"
+      );
+    }
+
+    return apiResponse.error(
+      res,
+      result.message || "Password reset link is expired or already used"
+    );
+
+  } catch (error) {
+    console.error("Validate reset token error:", error);
+    return apiResponse.error(
+      res,
+      "Server error while validating password reset token"
+    );
+  }
+};
+
 
 // user fetch profile
 module.exports.getUserById = async (req, res) => {
@@ -221,5 +257,26 @@ module.exports.getUserById = async (req, res) => {
     } catch (error) {
         console.log('Error in userFindOne controller:', error);
         return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
+
+
+
+module.exports.resendVerification = async (req, res) => {
+    try {
+        // ✅ Get POST data from request body
+        const { email } = req.body;
+        // Validation
+        if (!email ) {
+            return apiResponse.validation(res, [], ' Email is required');
+        }
+        // Call service to create user
+        const user = await authService.resendVerification({email });
+
+        // Return standardized response
+        return apiResponse.success(res, 'Verification email sent successfully.', { user });
+
+    } catch (error) {
+        return apiResponse.error(res, error.message, 400);
     }
 };

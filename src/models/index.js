@@ -83,6 +83,7 @@ Orders.belongsTo(User, { foreignKey: "user_id", as: "user" });
 EventActivationLog.belongsTo(Event, {foreignKey: 'event_id',as: 'event' });
 Event.hasMany(EventActivationLog, {foreignKey: 'event_id',as: 'eventActivationLogs' });
 Event.hasMany(CommitteeAssignTickets, { foreignKey: 'event_id', as: 'assignedTickets' });
+Event.hasMany(CommitteeMembers, { foreignKey: 'event_id', as: 'committeeMembers' });
 Event.belongsTo(User, { foreignKey: 'event_org_id', as: 'Organizer' })
 Event.hasMany(Orders, { foreignKey: "event_id", as: "orders" });
 Event.hasMany(Package, { foreignKey: 'event_id', as: 'packages' });

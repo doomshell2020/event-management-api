@@ -255,10 +255,18 @@ module.exports = {
                 where: { id: 1 },
                 attributes: ["id", "payment_gateway_charges", "default_platform_charges"]
             });
+
+            const eventOrgFind = await Event.findOne({
+                where: { id: event_id },
+                attributes: ['event_org_id']
+            })
+
             const authProfile = await User.findOne({
-                where: { id: user_id },
+                // where: { id: user_id },
+                where: { id: eventOrgFind?.event_org_id },
                 attributes: ['default_platform_charges']
             })
+            // console.log("authProfile", authProfile)
 
             const platformCharges =
                 authProfile?.default_platform_charges != null &&
@@ -311,7 +319,7 @@ module.exports = {
                             {
                                 model: TicketType,
                                 as: 'ticket',
-                                attributes: ['id', 'title', 'access_type', 'type', 'price','hidden']
+                                attributes: ['id', 'title', 'access_type', 'type', 'price', 'hidden']
                             },
                             {
                                 model: EventSlots,
@@ -372,7 +380,7 @@ module.exports = {
                                     model: TicketType,
                                     as: "ticket",
                                     required: false,
-                                    attributes: ["id", "count", "title", "access_type","hidden"],
+                                    attributes: ["id", "count", "title", "access_type", "hidden","sold_out"],
                                 },
                                 {
                                     model: EventSlots,
@@ -441,6 +449,22 @@ module.exports = {
                                             AND oi.event_id = ${ev}
                                         )`),
                                         "sales_count"
+                                    ],
+                                    [
+                                        Sequelize.literal(`(
+                    CASE 
+                        WHEN (
+                            SELECT COALESCE(SUM(oi.count), 0)
+                            FROM tbl_order_items AS oi
+                            WHERE 
+                                oi.addon_id = addons.id
+                                AND oi.event_id = ${Number(ev)}
+                        ) >= addons.count
+                        THEN 'Y'
+                        ELSE 'N'
+                    END
+                )`),
+                                        "sold_out"
                                     ]
                                 ]
                             }
@@ -490,7 +514,7 @@ module.exports = {
                                     attributes: { exclude: ["CreatedAt", "UpdatedAt"] },
                                     include: [
                                         { model: AddonTypes, as: "addonType", attributes: { exclude: ["createdAt", "updatedAt"] } },
-                                        { model: TicketType, as: "ticketType", attributes: { exclude: ["createdAt", "updatedAt"] } }
+                                        { model: TicketType, as: "ticketType", include: { model: TicketPricing, as: "pricings", attributes: ['price'] }, attributes: { exclude: ["createdAt", "updatedAt"] } }
                                     ]
                                 },
                             ]

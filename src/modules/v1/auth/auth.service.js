@@ -6,7 +6,7 @@ const config = require('../../../config/app');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-
+const { Op } = require("sequelize");
 const sendEmail = require('../../../common/utils/sendEmail');
 const { generateVerificationToken, verifyVerificationToken } = require('../../../common/utils/generateToken');
 const passwordChangedTemplate = require('../../../common/utils/emailTemplates/passwordChangedTemplate');
@@ -24,8 +24,21 @@ module.exports.initiatePasswordReset = async (email) => {
             };
         }
 
-        // 2️⃣ Generate reset token & link
-        const resetToken = generateVerificationToken(email);
+
+        // Generate random token (NOT jwt)
+        const resetToken = crypto.randomBytes(32).toString("hex");
+
+        //  1 hour expiry
+        const expires = new Date(Date.now() + 60 * 60 * 1000);
+
+        // Save in DB
+        user.reset_password_token = resetToken;
+        user.reset_password_expires = expires;
+        await user.save();
+
+        // return false
+        // 2️⃣ Generate reset token & link (jwt comment minor issue create reset password)-18-02-2026
+        // const resetToken = generateVerificationToken(email);
         const resetLink = `${config.clientUrl}/reset-password?token=${resetToken}`;
 
         // 3️⃣ Get FORGOT PASSWORD template ID
@@ -206,6 +219,7 @@ module.exports.verifyEmailToken = async (token) => {
         };
     }
 };
+
 
 module.exports.loginUser = async ({ email, password }) => {
     // Find user by email
@@ -440,29 +454,48 @@ module.exports.updateUserProfile = async (userId, updates, uploadFolder = null) 
 module.exports.resetPassword = async (token, password) => {
     try {
         // 1️⃣ Verify reset token
-        const decoded = verifyVerificationToken(token);
-        if (!decoded) {
-            return {
-                success: false,
-                message: 'Invalid or expired password reset link'
-            };
-        }
+        // const decoded = verifyVerificationToken(token);
+        // if (!decoded) {
+        //     return {
+        //         success: false,
+        //         message: 'Invalid or expired password reset link'
+        //     };
+        // }
 
-        // 2️⃣ Find user
+        // 🔍 Find user by token
         const user = await User.findOne({
-            where: { email: decoded.email }
+            where: {
+                reset_password_token: token,
+                reset_password_expires: {
+                    [Op.gt]: new Date(), // not expired
+                },
+            },
         });
 
         if (!user) {
             return {
                 success: false,
-                message: 'User not found'
+                message: "Invalid or expired password reset link",
             };
         }
+
+        // // 2️⃣ Find user
+        // const user = await User.findOne({
+        //     where: { email: decoded.email }
+        // });
+        // if (!user) {
+        //     return {
+        //         success: false,
+        //         message: 'User not found'
+        //     };
+        // }
 
         // 3️⃣ Hash & update password
         const hashedPassword = await bcrypt.hash(password, 10);
         user.password = hashedPassword;
+        user.reset_password_token = null;
+        user.reset_password_expires = null;
+        user.confirm_pass = password;
         await user.save();
 
         /* ================= EMAIL TEMPLATE ================= */
@@ -513,6 +546,50 @@ module.exports.resetPassword = async (token, password) => {
     }
 };
 
+// new api validate Reset token..
+module.exports.validateResetToken = async (token) => {
+    console.log("token", token);
+    try {
+        if (!token) {
+            return {
+                success: false,
+                message: "Invalid password reset link",
+            };
+        }
+
+        const user = await User.findOne({
+            where: {
+                reset_password_token: token,
+                reset_password_expires: {
+                    [Op.gt]: new Date(), // not expired
+                },
+            },
+        });
+
+        if (!user) {
+            return {
+                success: false,
+                message: "Password reset link is expired or already used",
+            };
+        }
+
+        return {
+            success: true,
+            message: "Token is valid",
+        };
+    } catch (error) {
+        console.log("error", error.message)
+        return {
+            success: false,
+            message: "Failed to validate reset token",
+        };
+    }
+};
+
+
+
+
+
 // User detail fetch api
 module.exports.getUserById = async (req, res) => {
     try {
@@ -535,3 +612,57 @@ module.exports.getUserById = async (req, res) => {
         };
     }
 }
+
+
+
+// REsend Email Api new (26-02-2026)
+module.exports.resendVerification = async ({ email }) => {
+    // User must exist
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+        throw new Error('User not found');
+    }
+    // If already verified, block resend
+    if (user.is_email_verified === 'Y') {
+        throw new Error('Email already verified');
+    }
+    // Get email template ID
+    const registerEmailTemplateId = config.emailTemplates.register;
+    // Fetch template from DB
+    const templateRecord = await Templates.findOne({
+        where: { id: registerEmailTemplateId }
+    });
+    if (!templateRecord) {
+        throw new Error('Registration email template not found');
+    }
+
+    const { subject, description, fromemail } = templateRecord;
+
+    // User full name
+    const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+
+    //  Generate verification token & link
+    const token = generateVerificationToken(user.email);
+    const verifyLink = `${config.clientUrl}/verify-email?token=${token}`;
+
+    // Replace template variables
+    const html = replaceTemplateVariables(description, {
+        NAME: fullName || 'User',
+        SITE_URL: config.clientUrl,
+        VERIFY_LINK: verifyLink,
+        CONTACT_EMAIL: fromemail || config.email.user
+    });
+
+    // 8️⃣ Send email
+    await sendEmail(
+        user.email,
+        subject,
+        html
+    );
+
+    // 9️⃣ Return clean response
+    return {
+        message: 'Verification email sent successfully',
+        email: user.email
+    };
+};

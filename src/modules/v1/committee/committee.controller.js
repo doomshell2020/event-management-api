@@ -974,11 +974,8 @@ exports.updateAssignedTickets = async (req, res) => {
 
         /* ================= VALIDATE MEMBER ================= */
         const member = await CommitteeMembers.findOne({
-            where: {
-                event_id,
-                user_id,
-                status: 'Y'
-            }
+            where: { event_id, user_id, status: 'Y' },
+            transaction
         });
 
         if (!member) {
@@ -992,10 +989,7 @@ exports.updateAssignedTickets = async (req, res) => {
 
         /* ================= UPDATE COMMISSION ================= */
         if (commission !== undefined) {
-            await member.update(
-                { commission },
-                { transaction }
-            );
+            await member.update({ commission }, { transaction });
         }
 
         /* ================= PROCESS TICKETS ================= */
@@ -1006,14 +1000,6 @@ exports.updateAssignedTickets = async (req, res) => {
                 where: { event_id, user_id, ticket_id },
                 transaction
             });
-
-            /* ---------- DELETE IF ZERO ---------- */
-            if (count === 0) {
-                if (existing) {
-                    await existing.destroy({ transaction });
-                }
-                continue;
-            }
 
             /* ---------- FETCH TICKET TYPE ---------- */
             const ticketType = await TicketType.findByPk(ticket_id, {
@@ -1029,7 +1015,7 @@ exports.updateAssignedTickets = async (req, res) => {
                 );
             }
 
-            /* ---------- TOTAL ASSIGNED (OTHER MEMBERS) ---------- */
+            /* ---------- ASSIGNED TO OTHER USERS ---------- */
             const assignedSummary = await CommitteeAssignTickets.findOne({
                 attributes: [
                     [Sequelize.fn('SUM', Sequelize.col('count')), 'total_assigned']
@@ -1043,45 +1029,99 @@ exports.updateAssignedTickets = async (req, res) => {
                 transaction
             });
 
-            const alreadyAssigned = Number(assignedSummary?.total_assigned || 0);
+            const assignedToOthers = Number(assignedSummary?.total_assigned || 0);
 
-            /* ---------- VALIDATE AVAILABLE TICKETS ---------- */
-            if (alreadyAssigned + count > ticketType.count) {
+            /* ---------- SOLD BY THIS MEMBER ---------- */
+            const soldByMemberSummary = await OrderItems.findOne({
+                attributes: [
+                    [Sequelize.fn('SUM', Sequelize.col('count')), 'total_sold']
+                ],
+                where: {
+                    event_id,
+                    ticket_id,
+                    committee_user_id: user_id
+                },
+                raw: true,
+                transaction
+            });
+
+            const soldByThisMember = Number(
+                soldByMemberSummary?.total_sold || 0
+            );
+
+            /* ---------- SOLD TOTAL ---------- */
+            const soldSummary = await OrderItems.findOne({
+                attributes: [
+                    [Sequelize.fn('SUM', Sequelize.col('count')), 'total_sold']
+                ],
+                where: { event_id, ticket_id },
+                raw: true,
+                transaction
+            });
+
+            const soldTickets = Number(soldSummary?.total_sold || 0);
+
+            /* ---------- REMAINING TICKETS ---------- */
+            const remainingTickets =
+                ticketType.count - soldTickets - assignedToOthers;
+
+            if (remainingTickets < 0) {
                 await transaction.rollback();
                 return apiResponse.error(
                     res,
-                    `Cannot assign ${count} tickets. Only ${
-                        ticketType.count - alreadyAssigned
-                    } tickets available for this ticket..`,
+                    `No tickets remaining for ticket ${ticket_id}`,
                     400
                 );
             }
 
-            /* ---------- UPDATE EXISTING ---------- */
-            if (existing) {
-                if (existing.usedticket > count) {
+            /* ---------- DELETE CONDITION (FINAL FIX) ---------- */
+            if (count === 0) {
+                if (soldByThisMember > 0) {
                     await transaction.rollback();
                     return apiResponse.error(
                         res,
-                        `Cannot reduce tickets below used count for ticket ${ticket_id}`,
+                        `Cannot remove assignment. ${soldByThisMember} ticket(s) already sold.`,
                         400
                     );
                 }
 
-                await existing.update(
-                    { count },
-                    { transaction }
+                if (existing) {
+                    await existing.destroy({ transaction });
+                }
+                continue;
+            }
+
+            /* ---------- VALIDATE MAX ---------- */
+            if (count > remainingTickets) {
+                await transaction.rollback();
+                return apiResponse.error(
+                    res,
+                    `Cannot assign ${count} tickets. Only ${remainingTickets} tickets remaining.`,
+                    400
                 );
             }
-            /* ---------- CREATE NEW ---------- */
-            else {
+
+            /* ---------- VALIDATE MIN ---------- */
+            if (count < soldByThisMember) {
+                await transaction.rollback();
+                return apiResponse.error(
+                    res,
+                    `Cannot reduce tickets below ${soldByThisMember} because tickets are already sold.`,
+                    400
+                );
+            }
+
+            /* ---------- UPDATE / CREATE ---------- */
+            if (existing) {
+                await existing.update({ count }, { transaction });
+            } else {
                 await CommitteeAssignTickets.create(
                     {
                         event_id,
                         user_id,
                         ticket_id,
                         count,
-                        usedticket: 0,
+                        usedticket: soldByThisMember,
                         status: 'Y'
                     },
                     { transaction }

@@ -1,6 +1,6 @@
 const apiResponse = require('../../../common/utils/apiResponse');
 const { body } = require('express-validator');
-const { Package,OrderItems, PackageDetails, Event, AddonTypes, TicketType } = require('../../../models');
+const { Package,OrderItems, PackageDetails, Event, AddonTypes, TicketType,TicketPricing } = require('../../../models');
 const { Op, fn, col } = require("sequelize");
 
 // module.exports.createPackage = async (req, res) => {
@@ -250,6 +250,7 @@ module.exports.getAllPackages = async (req, res) => {
                         model: TicketType,
                         as: "ticketType",
                         attributes: ["id", "title", "price", "ticket_image"],
+                        include: {model:TicketPricing,as:"pricings"}
                     },
                     {
                         model: AddonTypes,

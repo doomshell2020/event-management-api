@@ -8,82 +8,143 @@ module.exports.getEventList = async (req, res) => {
         if (!adminId) {
             return {
                 success: false,
-                message: 'Unauthorized access. Admin authentication required.',
-                code: 'UNAUTHORIZED'
+                message: "Unauthorized access. Admin authentication required.",
+                code: "UNAUTHORIZED"
             };
         }
+        const adminInfo = await User.findOne({
+            where: { id: 1 },
+            attributes: ["id", "payment_gateway_charges", "default_platform_charges"]
+        });
+        // console.log("adminInfo",adminInfo.payment_gateway_charges)
         const events = await Event.findAll({
             include: [
-                { model: User, attributes: ['id', 'email', 'first_name', 'last_name', 'default_platform_charges'], as: "Organizer" },
-                { model: TicketType, attributes: ['id', 'title', 'type'], as: "tickets" },
-                { model: AddonTypes, attributes: ['id', 'name'], as: "addons" },
-                { model: Package, attributes: ['id', 'name'], as: "package" },
-                { model: Wellness, attributes: ['id', 'name'], as: "wellness" },
+                {
+                    model: User,
+                    as: "Organizer",
+                    attributes: [
+                        "id",
+                        "email",
+                        "first_name",
+                        "last_name",
+                        "default_platform_charges"
+                    ]
+                },
+                {
+                    model: TicketType,
+                    as: "tickets",
+                    attributes: ["id", "title", "type"]
+                },
+                {
+                    model: AddonTypes,
+                    as: "addons",
+                    attributes: ["id", "name"]
+                },
+                {
+                    model: Package,
+                    as: "package",
+                    attributes: ["id", "name"]
+                },
+                {
+                    model: Wellness,
+                    as: "wellness",
+                    attributes: ["id", "name"]
+                },
                 {
                     model: Orders,
                     as: "orders",
-                    attributes: []
+                    attributes: [] // required for aggregation
                 },
                 {
                     model: Currency,
                     as: "currencyName",
-                    attributes: ['Currency_symbol']
+                    attributes: ["Currency_symbol"]
                 },
                 {
                     model: EventActivationLog,
-                    as: 'eventActivationLogs',
+                    as: "eventActivationLogs",
                     separate: true,
                     limit: 1,
-                    order: [['createdAt', 'DESC']],
+                    order: [["createdAt", "DESC"]],
                     attributes: [
-                        'id',
-                        'status',
-                        'activation_date',
-                        'activation_amount',
-                        'activation_remarks',
-                        'activated_by',
-                        'createdAt'
+                        "id",
+                        "status",
+                        "activation_date",
+                        "activation_amount",
+                        "activation_remarks",
+                        "activated_by",
+                        "createdAt"
                     ]
                 }
-
             ],
+
             attributes: [
-                'id',
-                'name',
-                'location',
-                'event_org_id',
-                'date_from',
-                'date_to',
-                'status',
-                'featured',
-                'video_url',
-                'slug',
-                'is_free',
+                "id",
+                "name",
+                "location",
+                "event_org_id",
+                "date_from",
+                "date_to",
+                "status",
+                "featured",
+                "video_url",
+                "slug",
+                "is_free",
 
                 // 🔥 TOTAL SALES
-                [Sequelize.fn('SUM', Sequelize.col('orders.sub_total')), 'total_sales'],
+                [Sequelize.fn("SUM", Sequelize.col("orders.sub_total")), "total_sales"],
 
                 // 🔥 TOTAL TAX
-                [Sequelize.fn('SUM', Sequelize.col('orders.tax_total')), 'total_tax'],
+                [Sequelize.fn("SUM", Sequelize.col("orders.tax_total")), "total_tax"],
 
-                // 🔥 GRAND TOTAL (optional)
-                [Sequelize.fn('SUM', Sequelize.col('orders.grand_total')), 'grand_total']
+                // 🔥 GRAND TOTAL
+                [Sequelize.fn("SUM", Sequelize.col("orders.grand_total")), "grand_total"],
 
+                // 🔥 PLATFORM FEE TAX
+                [
+                    Sequelize.fn("SUM", Sequelize.col("orders.platform_fee_tax")),
+                    "platform_fee_tax"
+                ],
+
+                // 🔥 PAYMENT GATEWAY TAX
+                [
+                    Sequelize.fn("SUM", Sequelize.col("orders.payment_gateway_tax")),
+                    "payment_gateway_tax"
+                ]
             ],
-            group: ['Event.id', 'Organizer.id', 'tickets.id', 'addons.id', 'package.id', 'wellness.id'],
-            order: [['id', 'DESC']]
+
+            group: [
+                "Event.id",
+                "Organizer.id",
+                "tickets.id",
+                "addons.id",
+                "package.id",
+                "wellness.id",
+                "currencyName.id"
+            ],
+
+            order: [["id", "DESC"]],
+            subQuery: false
         });
+
+        const formattedEvents = events.map(event => ({
+            ...event.toJSON(),
+            admin_payment_gateway_charges: adminInfo?.payment_gateway_charges || 0
+        }));
+
+
         return {
             success: true,
-            message: 'Events fetched successfully.',
-            data: events
+            message: "Events fetched successfully.",
+            // data: events
+            data: formattedEvents
         };
     } catch (error) {
-        console.error('Error fetching event:', error);
+        console.error("Error fetching event:", error);
         return {
             success: false,
-            message: 'An unexpected error occurred while fetching event.',
-            code: 'INTERNAL_SERVER_ERROR'
+            message: "An unexpected error occurred while fetching event.",
+            code: "INTERNAL_SERVER_ERROR"
         };
     }
 };
@@ -524,7 +585,7 @@ module.exports.getEventDetailsWithOrderDetails = async (req) => {
                     { model: OrderItems, as: "orderItems", attributes: ['order_id', 'ticket_id', 'count'] }
 
                     ],
-                    attributes: ['id', 'RRN', 'order_uid','grand_total', 'user_id', 'event_id', 'sub_total', 'tax_total', 'created', 'paymenttype','payment_gateway_tax','platform_fee_tax'],
+                    attributes: ['id', 'RRN', 'order_uid', 'grand_total', 'user_id', 'event_id', 'sub_total', 'tax_total', 'created', 'paymenttype', 'payment_gateway_tax', 'platform_fee_tax'],
                 },
             ],
             attributes: ['id', 'name', 'date_from', 'date_to', 'location', 'created'],
@@ -606,7 +667,7 @@ module.exports.getEventById = async (req) => {
 
         const event = await Event.findOne({
             where: { id: eventId },
-            attributes: ['id', 'name','is_free','entry_type'],
+            attributes: ['id', 'name', 'is_free', 'entry_type'],
         });
 
         if (!event) {

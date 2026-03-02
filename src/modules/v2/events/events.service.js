@@ -502,7 +502,7 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
 
         await User.update(
             { role_id: config.ORGANIZER_ROLE },
-            { where: { id:  user.id } }
+            { where: { id: user.id } }
         );
 
         return { success: true, event: existingEvent };
@@ -1234,12 +1234,32 @@ module.exports.getSelectedWellnessSlots = async (req, res) => {
             };
         }
 
+        const adminInfo = await User.findOne({
+            where: { id: 1 },
+            attributes: ["id", "payment_gateway_charges", "default_platform_charges"]
+        });
+        
+        const authProfile = await User.findOne({
+            where: { id: event?.event_org_id },
+            attributes: ['default_platform_charges']
+        })
+        const platformCharges =
+            authProfile?.default_platform_charges != null &&
+                authProfile?.default_platform_charges != ""
+                ? authProfile.default_platform_charges
+                : adminInfo?.default_platform_charges || 0;
+
+        const gatewayCharges = adminInfo?.payment_gateway_charges || 0;
         const data = event.toJSON();
 
         // Step 2️⃣ Format event image
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
         const formattedEvent = {
             ...data,
+             charges: {
+                platform_fee_percent: platformCharges,
+                payment_gateway_percent: gatewayCharges
+            },
             feat_image: data.feat_image
                 ? `${baseUrl}uploads/events/${data.feat_image}`
                 : `${baseUrl}/uploads/events/default.jpg`
@@ -1260,7 +1280,8 @@ module.exports.getSelectedWellnessSlots = async (req, res) => {
         return {
             success: true,
             message: "Event & appointment slot details fetched successfully",
-            data: formattedEvent
+            data: formattedEvent,
+           
         };
 
     } catch (error) {

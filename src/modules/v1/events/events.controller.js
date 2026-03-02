@@ -6,7 +6,7 @@ const fs = require('fs');
 module.exports.searchEvents = async (req, res) => {
     try {
         const loginId = req.user.id;
-        const { keyword } = req.query;
+        const { keyword ,currentEventId } = req.query;
 
         // ✅ Keyword is required
         if (!keyword || !keyword.trim()) {
@@ -18,7 +18,7 @@ module.exports.searchEvents = async (req, res) => {
         }
 
         // ✅ Call service
-        const result = await eventService.searchEvents({ keyword: keyword.trim(), loginId });
+        const result = await eventService.searchEvents({ keyword: keyword.trim(), loginId ,currentEventId });
 
         if (!result.success) {
             switch (result.code) {
@@ -359,3 +359,22 @@ module.exports.deleteEvent = async (req, res) => {
         return apiResponse.error(res, "Internal Server Error", 500);
     }
 };
+
+
+// event list show in calendar...
+module.exports.calendarEvents = async (req, res) => {
+    try {
+        const result = await eventService.calendarEvents(req, res);
+        if (!result.success) {
+            return apiResponse.error(res, result.message); // 500
+        }
+        return apiResponse.success(
+            res,
+            result.message || 'Event list fetched successfully!',
+            { events: result.events }
+        );
+    } catch (error) {
+        console.error('Error in event list controller:', error);
+        return apiResponse.error(res, 'Internal server error', 500);
+    }
+}

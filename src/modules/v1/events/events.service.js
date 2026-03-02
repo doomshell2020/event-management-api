@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
-const { Op, where} = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency, Templates, User, Orders, EventActivationLog, Wellness, WellnessSlots, TicketPricing,sequelize, Package } = require('../../../models');
+const { Op, where } = require('sequelize');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User, Orders, EventActivationLog, Wellness, WellnessSlots, TicketPricing, sequelize, Package, CommitteeMembers } = require('../../../models');
 const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
@@ -109,7 +109,7 @@ module.exports.deleteEvent = async (eventId) => {
 };
 
 
-module.exports.searchEvents = async ({ keyword, loginId }) => {
+module.exports.searchEvents = async ({ keyword, loginId, currentEventId }) => {
     try {
         if (!loginId) {
             return {
@@ -132,17 +132,30 @@ module.exports.searchEvents = async ({ keyword, loginId }) => {
         const events = await Event.findAll({
             where: {
                 event_org_id: loginId, // ✅ now safe
-                is_free:"N",
-                entry_type:"event",
+                is_free: "N",
+                entry_type: "event",
+
+                ...(currentEventId && {
+                    id: { [Op.ne]: currentEventId }   // 🔥 yehi condition hai
+                }),
                 [Op.or]: [
                     { name: { [Op.like]: `%${searchText}%` } },
                     { desp: { [Op.like]: `%${searchText}%` } },
                     { location: { [Op.like]: `%${searchText}%` } }
                 ]
             },
+            include: [
+                {
+                    model: CommitteeMembers,
+                    attributes: [],
+                    as: 'committeeMembers',
+                    required: true
+                }
+            ],
             order: [['created', 'DESC']],
             limit: 10,
-            attributes: ['id', 'name', 'location', 'date_from']
+            attributes: ['id', 'name', 'location', 'date_from', 'created'],
+            distinct: true
         });
 
         return {
@@ -159,6 +172,9 @@ module.exports.searchEvents = async ({ keyword, loginId }) => {
         };
     }
 };
+
+
+
 
 module.exports.eventList = async (req, res) => {
     try {
@@ -440,18 +456,48 @@ module.exports.publicEventList = async (req, res) => {
 
 
         // Format and Convert Dates
+        // const formattedEvents = events.map((event) => {
+        //     const data = event.toJSON();
+        //     const tz = data.event_timezone || "UTC";
+        //     const adminStatus = data.admineventstatus || "N";
+        //     const eventStatus = data.status || "N";
+        //     let status = null;
+        //     // For public listing, show only events that are approved by admin and active
+        //     if (adminStatus !== "Y" || eventStatus !== "Y") {
+        //         status = "N";
+        //     } else {
+        //         status = "Y";
+        //     }
+
+        //     const formatDate = (date) =>
+        //         date
+        //             ? {
+        //                 utc: date,
+        //                 local: convertUTCToLocal(date, tz),
+        //                 timezone: tz,
+        //             }
+        //             : null;
+
+        //     return {
+        //         ...data,
+        //         feat_image: data.feat_image
+        //             ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
+        //             : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+        //         date_from: formatDate(data.date_from),
+        //         date_to: formatDate(data.date_to),
+        //         sale_start: formatDate(data.sale_start),
+        //         sale_end: formatDate(data.sale_end),
+        //         date_from_in_db: (data.date_from),
+        //         date_to_in_db: (data.date_to),
+        //         sale_start_in_db: (data.sale_start),
+        //         sale_end_in_db: (data.sale_end),
+        //     };
+        // });
+
+
         const formattedEvents = events.map((event) => {
             const data = event.toJSON();
             const tz = data.event_timezone || "UTC";
-            const adminStatus = data.admineventstatus || "N";
-            const eventStatus = data.status || "N";
-            let status = null;
-            // For public listing, show only events that are approved by admin and active
-            if (adminStatus !== "Y" || eventStatus !== "Y") {
-                status = "N";
-            } else {
-                status = "Y";
-            }
 
             const formatDate = (date) =>
                 date
@@ -462,19 +508,43 @@ module.exports.publicEventList = async (req, res) => {
                     }
                     : null;
 
+            const tickets = data.tickets || [];
+            const addons = data.addons || [];
+
+            const isTicketsEmpty = tickets.length === 0;
+            const isAddonsEmpty = addons.length === 0;
+
+            // 👇 ONLY complimentary ticket check
+            const hasOnlyCompsTicket =
+                tickets.length === 1 &&
+                tickets[0].type === "comps" &&
+                Number(tickets[0].price) === 0;
+
+            // 👇 FINAL DECISION
+            const is_empty_event =
+                (isTicketsEmpty && isAddonsEmpty) ||
+                    (hasOnlyCompsTicket && isAddonsEmpty)
+                    ? "Y"
+                    : "N";
+
             return {
                 ...data,
                 feat_image: data.feat_image
                     ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
                     : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
                 date_from: formatDate(data.date_from),
                 date_to: formatDate(data.date_to),
                 sale_start: formatDate(data.sale_start),
                 sale_end: formatDate(data.sale_end),
-                date_from_in_db: (data.date_from),
-                date_to_in_db: (data.date_to),
-                sale_start_in_db: (data.sale_start),
-                sale_end_in_db: (data.sale_end),
+
+                date_from_in_db: data.date_from,
+                date_to_in_db: data.date_to,
+                sale_start_in_db: data.sale_start,
+                sale_end_in_db: data.sale_end,
+
+                // ✅ UPDATED LOGIC
+                is_empty_event
             };
         });
 
@@ -962,6 +1032,29 @@ module.exports.companyList = async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching company list:', error);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'INTERNAL_ERROR'
+        };
+    }
+
+}
+
+
+// event list show in calendar...
+module.exports.calendarEvents = async (req, res) => {
+    try {
+        const events = await Event.findAll({
+           attributes:["id","slug",'name','date_from','date_to',"status"]
+        });
+        return {
+            success: true,
+            message: 'Event list fetched successfully',
+            events: events
+        };
+    } catch (error) {
+        console.error('Error fetching events list:', error);
         return {
             success: false,
             message: 'Internal server error: ' + error.message,

@@ -171,6 +171,11 @@ router.get('/company-list',
     eventController.companyList
 );
 
+
+router.get('/calendar/event-list',
+    eventController.calendarEvents
+);
+
 router.post('/event-list',
     authenticate,
     [
@@ -185,6 +190,8 @@ router.post('/event-list',
     validate,
     eventController.eventList
 )
+
+
 
 // ✅ Public Event List (No Authentication)
 router.post('/public-event-list',

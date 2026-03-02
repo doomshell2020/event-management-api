@@ -441,32 +441,32 @@ module.exports.getEventAppointmentsDetails = async (req, res) => {
     }
 };
 
-//controller...  new api.. get event details and appointments slots  function..
+// controllers/events.controller.js
 module.exports.getSelectedWellnessSlots = async (req, res) => {
     try {
-        const result = await eventService.getSelectedWellnessSlots(req, res);
+        const result = await eventService.getSelectedWellnessSlots(req);
 
         if (!result.success) {
             switch (result.code) {
                 case 'VALIDATION_FAILED':
-                    return apiResponse.validation(res, [], result.message);
                 case 'EVENT_NOT_FOUND':
                     return apiResponse.validation(res, [], result.message);
+
                 case 'DB_ERROR':
-                    return apiResponse.validation(res, [], result.message);
+                    return apiResponse.error(res, result.message);
+
                 default:
                     return apiResponse.error(res, result.message);
             }
         }
-
         return apiResponse.success(
             res,
-            result.message || 'Event & Appointment details fetched successfully',
-            result.data // singular for single event
+            result.message,
+            result.data
         );
 
     } catch (error) {
-        console.log('Error in getEvent Appointment Details controller:', error);
-        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+        console.error('Controller Error:', error);
+        return apiResponse.error(res, 'Internal server error', 500);
     }
 };
