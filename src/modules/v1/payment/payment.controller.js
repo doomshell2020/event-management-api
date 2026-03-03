@@ -1,5 +1,5 @@
 const Stripe = require("stripe");
-const { Payment, Orders, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons, WellnessSlots, Wellness } = require("../../../models");
+const { Payment, Orders, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons, WellnessSlots, Wellness, PackageDetails } = require("../../../models");
 const apiResponse = require("../../../common/utils/apiResponse");
 const config = require("../../../config/app");
 const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
@@ -471,7 +471,23 @@ exports.stripeWebhook = async (req, res) => {
         include: [
           { model: TicketType, as: "ticketType", required: false },
           { model: AddonTypes, as: "addonType", required: false },
-          { model: Package, as: "packageType", required: false },
+          // { model: Package, as: "packageType", required: false },
+          {
+            model: Package,
+            as: "packageType",
+            include: [
+              {
+                model: PackageDetails,
+                as: "details",
+                include: [
+                  { model: TicketType, as: "ticketType" },
+                  { model: AddonTypes, as: "addonType" }
+                ]
+              }
+            ],
+            required: false
+          },
+
           {
             model: TicketPricing, as: "ticketPricing",
             required: false,
@@ -607,7 +623,7 @@ exports.manualWebhook = async (req, res) => {
       include: [
         { model: TicketType, as: "ticketType", required: false },
         { model: AddonTypes, as: "addonType", required: false },
-        { model: Package, as: "packageType", required: false },
+        { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType" }, { model: AddonTypes, as: "addonType" }] } },
         {
           model: TicketPricing, as: "ticketPricing",
           required: false,
@@ -654,8 +670,8 @@ exports.manualWebhook = async (req, res) => {
 
     const payment = await Payment.create({
       user_id: 6450,
-      event_id: 346,
-      amount: 500 || 0,
+      event_id: 365,
+      amount: 546 || 0,
       payment_intent: 'pi_3Sp3sWCwP2xM68Rm1wkQ3rRR',
       payment_status: "paid",
 
@@ -670,7 +686,7 @@ exports.manualWebhook = async (req, res) => {
     const order = await fulfilOrderFromSnapshot({
       meta_data: { discount_amount: 0, grand_total: 540, snapshot_ids: req.body.snapshot_ids, sub_total: 500, tax_total: 40 },
       user_id: 6450,
-      event_id: 346,
+      event_id: 365,
       payment,
       snapshotItems,
       payment_method: "stripe",

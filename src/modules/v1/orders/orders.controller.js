@@ -1020,32 +1020,141 @@ module.exports.fulfilOrderFromSnapshot = async ({
         try {
             const template = await Templates.findByPk(config.emailTemplates.orderConfirmationWithQR);
 
+            const renderPackageDetails = (packageDetails = []) => {
+
+                if (!Array.isArray(packageDetails) || !packageDetails.length) {
+                    return "";
+                }
+
+                return packageDetails.map(detail => {
+
+                    // Sequelize instance safe access
+                    const data = detail?.dataValues || detail;
+
+                    const quantity = Number(data.qty || 0);
+                    const price = Number(data.price || 0);
+
+                    const ticketName = data.ticketType?.name;
+                    const addonName = data.addonType?.name;
+
+                    if (ticketName) {
+                        return `
+                <tr>
+                    <td style="padding-left:25px;">
+                        🎟 ${ticketName}
+                    </td>
+                    <td align="center">${quantity}</td>
+                    <td align="right">
+                        ${formattedEvent.currency_symbol}${formatPrice(price * quantity)}
+                    </td>
+                </tr>
+            `;
+                    }
+
+                    if (addonName) {
+                        return `
+                <tr>
+                    <td style="padding-left:25px;">
+                        ➕ ${addonName}
+                    </td>
+                    <td align="center">${quantity}</td>
+                    <td align="right">
+                        ${formattedEvent.currency_symbol}${formatPrice(price * quantity)}
+                    </td>
+                </tr>
+            `;
+                    }
+
+                    return "";
+                }).join("");
+            };
+
+
             if (template) {
                 // ORDER ITEMS TABLE (UNCHANGED)
                 const orderItemsTable = `
-                <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">
-                <thead>
-                    <tr style="background:#f0f2f6;">
-                    <th align="left">Item</th>
-                    <th align="center">Qty</th>
-                    <th align="right">Price</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${snapshotItems.map(item => `
-                    <tr>
-                        <td>${getItemTitle(item)}</td>
-                        <td align="center">${item.quantity}</td>
-                        <td align="right">
-                        ${formattedEvent.currency_symbol}${formatPrice(
-                    parseFloat(item.price || 0) * parseInt(item.quantity || 0)
-                )}
-                  </td>
+<table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">
+<thead>
+    <tr style="background:#f0f2f6;">
+        <th align="left">Item</th>
+        <th align="center">Qty</th>
+        <th align="right">Price</th>
+    </tr>
+</thead>
+<tbody>
 
-                    </tr>
-                    `).join("")}
-                </tbody>
-                </table>`;
+                  ${snapshotItems.map(item => {
+
+                    const data = item?.dataValues || item;
+
+                    const itemType = data.item_type;
+                    const quantity = Number(data.quantity || 0);
+                    const price = Number(data.price || 0);
+
+                    //  PACKAGE
+                    if (itemType === "package") {
+
+                        const packageDetails = data.packageType?.details || [];
+
+                        return `
+            <tr>
+                <td colspan="3">
+                    <strong> ${getItemTitle(item)}</strong>
+                </td>
+            </tr>
+
+            ${renderPackageDetails(packageDetails)}
+
+            <tr>
+                <td></td>
+                <td align="center"><strong>${quantity}</strong></td>
+                <td align="right">
+                    <strong>
+                        ${formattedEvent.currency_symbol}${formatPrice(price * quantity)}
+                    </strong>
+                </td>
+            </tr>
+        `;
+                    }
+                    return `
+        <tr>
+            <td>${getItemTitle(item)}</td>
+            <td align="center">${quantity}</td>
+            <td align="right">
+                ${formattedEvent.currency_symbol}${formatPrice(price * quantity)}
+            </td>
+        </tr>
+    `;
+
+                }).join("")}
+
+</tbody>
+</table>
+`;
+                // const orderItemsTable = `
+                // <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">
+                // <thead>
+                //     <tr style="background:#f0f2f6;">
+                //     <th align="left">Item</th>
+                //     <th align="center">Qty</th>
+                //     <th align="right">Price</th>
+                //     </tr>
+                // </thead>
+                // <tbody>
+                //     ${snapshotItems.map(item => `
+                //     <tr>
+                //         <td>${getItemTitle(item)}</td>
+                //         <td align="center">${item.quantity}</td>
+                //         <td align="right">
+                //         ${formattedEvent.currency_symbol}${formatPrice(
+                //     parseFloat(item.price || 0) * parseInt(item.quantity || 0)
+                // )}
+                //   </td>
+
+                //     </tr>
+                //     `).join("")}
+                // </tbody>
+                // </table>`;
 
                 const qrCodesHtml = qrResults.map(qr => `
                 <div style="text-align:center; margin:15px 0;">

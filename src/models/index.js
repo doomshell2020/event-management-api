@@ -40,6 +40,7 @@ const Coupons = require('./coupons.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
+CommitteeMembers.hasMany(OrderItems, {foreignKey: "committee_user_id",sourceKey: "user_id",as: 'order_items'});
 
 
 CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -107,6 +108,7 @@ OrderItems.belongsTo(EventSlots, { foreignKey: "slot_id", as: "slot" });
 OrderItems.belongsTo(WellnessSlots, { foreignKey: "appointment_id", as: "appointment" });
 OrderItems.belongsTo(User, { foreignKey: "user_id", as: "user" });
 OrderItems.hasMany(QuestionsBook, { foreignKey: "ticketdetail_id", sourceKey: "id", as: "questionsBook" });
+OrderItems.belongsTo(CommitteeMembers, { foreignKey: "committee_user_id", targetKey: "user_id",  as: "committeeMembers" });
 
 Questions.hasMany(QuestionItems, { foreignKey: 'question_id', as: 'questionItems', onDelete: 'CASCADE' });
 QuestionItems.belongsTo(Questions, { foreignKey: 'question_id', as: 'question' });

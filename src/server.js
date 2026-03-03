@@ -37,6 +37,7 @@ const usersRoutesV1 = require('./modules/v1/users/users.routes');
 const payoutsRoutesV1 = require('./modules/v1/payouts/payouts.routes');
 const couponsRoutesV1 = require('./modules/v1/coupons/coupons.route');
 const companyRoutesV1 = require('./modules/v1/company/company.routes');
+const dashboardRoutesV1 = require('./modules/v1/dashboard/dashboard.route');
 
 
 const eventsRoutesV2 = require('./modules/v2/events/events.routes');
@@ -106,6 +107,7 @@ app.use('/api/v1/users',usersRoutesV1);
 app.use('/api/v1/payouts',payoutsRoutesV1);
 app.use('/api/v1/coupons',couponsRoutesV1);
 app.use('/api/v1/company',companyRoutesV1);
+app.use('/api/v1/dashboard',dashboardRoutesV1);
 
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);
 // app.use('/api/v1/api-keys', apiKeysRoutesV1);
