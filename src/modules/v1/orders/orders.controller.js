@@ -829,6 +829,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
     coupon_details,
     snapshotItemsTax // new keys
 }) => {
+
     const transaction = await sequelize.transaction();
     try {
         const {
@@ -1028,18 +1029,17 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
                 return packageDetails.map(detail => {
 
-                    // Sequelize instance safe access
                     const data = detail?.dataValues || detail;
-
                     const quantity = Number(data.qty || 0);
-                    const price = Number(data.price || 0);
 
-                    const ticketName = data.ticketType?.title;
-                    const ticketPrice = data.ticketType?.price;
-                    const addonName = data.addonType?.name;
-                    const addonPrice = data.addonType?.price;
+                    // 🎟 TICKET
+                    if (data.ticket_type_id) {
 
-                    if (ticketName) {
+                        const ticket = data.ticketType?.dataValues || data.ticketType || {};
+
+                        const ticketName = ticket.title || "Ticket";
+                        const ticketPrice = Number(ticket.price || 0);
+
                         return `
                 <tr>
                     <td style="padding-left:25px;">
@@ -1047,13 +1047,20 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     </td>
                     <td align="center">${quantity}</td>
                     <td align="right">
-                        ${formattedEvent.currency_symbol}${formatPrice(ticketPrice * quantity)}
+                        ${formatPrice(ticketPrice * quantity)}
                     </td>
                 </tr>
             `;
                     }
 
-                    if (addonName) {
+                    // ➕ ADDON
+                    if (data.addon_id) {
+
+                        const addon = data.addonType?.dataValues || data.addonType || {};
+
+                        const addonName = addon.name || "Addon";
+                        const addonPrice = Number(addon.price || 0);
+
                         return `
                 <tr>
                     <td style="padding-left:25px;">
@@ -1061,13 +1068,14 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     </td>
                     <td align="center">${quantity}</td>
                     <td align="right">
-                        ${formattedEvent.currency_symbol}${formatPrice(addonPrice * quantity)}
+                        ${formatPrice(addonPrice * quantity)}
                     </td>
                 </tr>
             `;
                     }
 
                     return "";
+
                 }).join("");
             };
 
