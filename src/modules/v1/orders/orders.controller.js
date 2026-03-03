@@ -1038,34 +1038,32 @@ module.exports.fulfilOrderFromSnapshot = async ({
                         const ticket = data.ticketType?.dataValues || data.ticketType || {};
                         const name = ticket.title || "Ticket";
 
-                        // ✅ PRICE LOGIC
-                        let unitPrice = Number(ticket.price || 0);
+                        let unitPrice = Number(ticket.price);
 
-                        // 🔥 Fallback from TicketPricing (PaymentSnapshotItems level)
-                        if (!unitPrice && parentItem.ticketPricing) {
-                            const pricing =
-                                parentItem.ticketPricing?.dataValues ||
-                                parentItem.ticketPricing ||
-                                {};
-
-                            unitPrice = Number(pricing.price || 0);
+                        // 🔥 If ticket price is 0 → take from TicketPricing
+                        if (!unitPrice) {
+                            unitPrice = Number(
+                                parentItem.ticketPricing?.price ||
+                                parentItem.ticketPricing?.dataValues?.price ||
+                                0
+                            );
                         }
 
                         const total = unitPrice * quantity;
 
                         return `
-                <tr>
-                    <td style="padding-left:25px;">
-                        🎟 ${name}
-                    </td>
-                    <td align="center">
-                        ${quantity} x ${formatPrice(unitPrice)}
-                    </td>
-                    <td align="right">
-                        ${formatPrice(total)}
-                    </td>
-                </tr>
-            `;
+        <tr>
+            <td style="padding-left:25px;">
+                🎟 ${name}
+            </td>
+            <td align="center">
+                ${quantity} x ${formatPrice(unitPrice)}
+            </td>
+            <td align="right">
+                ${formatPrice(total)}
+            </td>
+        </tr>
+    `;
                     }
 
                     // ➕ ADDON CASE
