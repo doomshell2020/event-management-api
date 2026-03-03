@@ -1021,7 +1021,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
         try {
             const template = await Templates.findByPk(config.emailTemplates.orderConfirmationWithQR);
 
-            const renderPackageDetails = (packageDetails = []) => {
+            const renderPackageDetails = (packageDetails = [], parentItem = {}) => {
 
                 if (!Array.isArray(packageDetails) || !packageDetails.length) {
                     return "";
@@ -1032,12 +1032,25 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     const data = detail?.dataValues || detail;
                     const quantity = Number(data.qty || 0);
 
-                    // 🎟 Ticket
+                    // 🎟 TICKET CASE
                     if (data.ticket_type_id) {
 
                         const ticket = data.ticketType?.dataValues || data.ticketType || {};
                         const name = ticket.title || "Ticket";
-                        const unitPrice = Number(ticket.price || 0);
+
+                        // ✅ PRICE LOGIC
+                        let unitPrice = Number(ticket.price || 0);
+
+                        // 🔥 Fallback from TicketPricing (PaymentSnapshotItems level)
+                        if (!unitPrice && parentItem.ticketPricing) {
+                            const pricing =
+                                parentItem.ticketPricing?.dataValues ||
+                                parentItem.ticketPricing ||
+                                {};
+
+                            unitPrice = Number(pricing.price || 0);
+                        }
+
                         const total = unitPrice * quantity;
 
                         return `
@@ -1055,7 +1068,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
             `;
                     }
 
-                    // ➕ Addon
+                    // ➕ ADDON CASE
                     if (data.addon_id) {
 
                         const addon = data.addonType?.dataValues || data.addonType || {};
@@ -1122,7 +1135,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
             </td>
         </tr>
 
-        ${renderPackageDetails(packageDetails)}
+        ${renderPackageDetails(packageDetails, data)}
 
         <tr>
             <td colspan="2" align="right">Subtotal</td>
@@ -1132,7 +1145,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
         </tr>
 
         <tr>
-            <td colspan="2" align="right">Discount</td>
+            <td colspan="2" align="right">Package Discount</td>
             <td align="right" style="color:red;">
                 -${formattedEvent.currency_symbol}${formatPrice(discount)}
             </td>
