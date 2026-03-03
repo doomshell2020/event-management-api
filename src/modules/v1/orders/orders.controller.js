@@ -1032,43 +1032,47 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     const data = detail?.dataValues || detail;
                     const quantity = Number(data.qty || 0);
 
-                    // 🎟 TICKET
+                    // 🎟 Ticket
                     if (data.ticket_type_id) {
 
                         const ticket = data.ticketType?.dataValues || data.ticketType || {};
-
-                        const ticketName = ticket.title || "Ticket";
-                        const ticketPrice = Number(ticket.price || 0);
+                        const name = ticket.title || "Ticket";
+                        const unitPrice = Number(ticket.price || 0);
+                        const total = unitPrice * quantity;
 
                         return `
                 <tr>
                     <td style="padding-left:25px;">
-                        🎟 ${ticketName}
+                        🎟 ${name}
                     </td>
-                    <td align="center">${quantity}</td>
+                    <td align="center">
+                        ${quantity} x ${formatPrice(unitPrice)}
+                    </td>
                     <td align="right">
-                        ${formatPrice(ticketPrice * quantity)}
+                        ${formatPrice(total)}
                     </td>
                 </tr>
             `;
                     }
 
-                    // ➕ ADDON
+                    // ➕ Addon
                     if (data.addon_id) {
 
                         const addon = data.addonType?.dataValues || data.addonType || {};
-
-                        const addonName = addon.name || "Addon";
-                        const addonPrice = Number(addon.price || 0);
+                        const name = addon.name || "Addon";
+                        const unitPrice = Number(addon.price || 0);
+                        const total = unitPrice * quantity;
 
                         return `
                 <tr>
                     <td style="padding-left:25px;">
-                        ➕ ${addonName}
+                        ➕ ${name}
                     </td>
-                    <td align="center">${quantity}</td>
+                    <td align="center">
+                        ${quantity} x ${formatPrice(unitPrice)}
+                    </td>
                     <td align="right">
-                        ${formatPrice(addonPrice * quantity)}
+                        ${formatPrice(total)}
                     </td>
                 </tr>
             `;
@@ -1105,26 +1109,44 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     if (itemType === "package") {
 
                         const packageDetails = data.packageType?.details || [];
+                        const packageObj = data.packageType?.dataValues || data.packageType || {};
+
+                        const subtotal = Number(packageObj.total || 0);
+                        const discount = Number(packageObj.discount_amt || 0);
+                        const grandTotal = Number(packageObj.grandtotal || 0);
 
                         return `
-            <tr>
-                <td colspan="3">
-                    <strong> ${getItemTitle(item)}</strong>
-                </td>
-            </tr>
+        <tr>
+            <td colspan="3">
+                <strong>${getItemTitle(item)}</strong>
+            </td>
+        </tr>
 
-            ${renderPackageDetails(packageDetails)}
+        ${renderPackageDetails(packageDetails)}
 
-            <tr>
-                <td></td>
-                <td align="center"><strong>${quantity}</strong></td>
-                <td align="right">
-                    <strong>
-                        ${formattedEvent.currency_symbol}${formatPrice(price * quantity)}
-                    </strong>
-                </td>
-            </tr>
-        `;
+        <tr>
+            <td colspan="2" align="right">Subtotal</td>
+            <td align="right">
+                ${formattedEvent.currency_symbol}${formatPrice(subtotal)}
+            </td>
+        </tr>
+
+        <tr>
+            <td colspan="2" align="right">Discount</td>
+            <td align="right" style="color:red;">
+                -${formattedEvent.currency_symbol}${formatPrice(discount)}
+            </td>
+        </tr>
+
+        <tr>
+            <td colspan="2" align="right"><strong>Total</strong></td>
+            <td align="right">
+                <strong>
+                    ${formattedEvent.currency_symbol}${formatPrice(grandTotal)}
+                </strong>
+            </td>
+        </tr>
+    `;
                     }
                     return `
         <tr>
