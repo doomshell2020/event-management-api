@@ -1034,8 +1034,10 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     const quantity = Number(data.qty || 0);
                     const price = Number(data.price || 0);
 
-                    const ticketName = data.ticketType?.name;
+                    const ticketName = data.ticketType?.title;
+                    const ticketPrice = data.ticketType?.price;
                     const addonName = data.addonType?.name;
+                    const addonPrice = data.addonType?.price;
 
                     if (ticketName) {
                         return `
@@ -1045,7 +1047,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     </td>
                     <td align="center">${quantity}</td>
                     <td align="right">
-                        ${formattedEvent.currency_symbol}${formatPrice(price * quantity)}
+                        ${formattedEvent.currency_symbol}${formatPrice(ticketPrice * quantity)}
                     </td>
                 </tr>
             `;
@@ -1059,7 +1061,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     </td>
                     <td align="center">${quantity}</td>
                     <td align="right">
-                        ${formattedEvent.currency_symbol}${formatPrice(price * quantity)}
+                        ${formattedEvent.currency_symbol}${formatPrice(addonPrice * quantity)}
                     </td>
                 </tr>
             `;
