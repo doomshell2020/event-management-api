@@ -829,7 +829,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
     coupon_details,
     snapshotItemsTax // new keys
 }) => {
-
     const transaction = await sequelize.transaction();
     try {
         const {
@@ -1043,9 +1042,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                         // 🔥 If ticket price is 0 → take from TicketPricing
                         if (!unitPrice) {
                             unitPrice = Number(
-                                parentItem.ticketPricing?.price ||
-                                parentItem.ticketPricing?.dataValues?.price ||
-                                0
+                                ticket.pricings?.[0]?.price || 0
                             );
                         }
 

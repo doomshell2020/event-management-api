@@ -472,21 +472,7 @@ exports.stripeWebhook = async (req, res) => {
           { model: TicketType, as: "ticketType", required: false },
           { model: AddonTypes, as: "addonType", required: false },
           // { model: Package, as: "packageType", required: false },
-          {
-            model: Package,
-            as: "packageType",
-            include: [
-              {
-                model: PackageDetails,
-                as: "details",
-                include: [
-                  { model: TicketType, as: "ticketType" },
-                  { model: AddonTypes, as: "addonType" }
-                ]
-              }
-            ],
-            required: false
-          },
+          { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType" ,include:[{model:TicketPricing , as:"pricings"}] }, { model: AddonTypes, as: "addonType" }] } },
 
           {
             model: TicketPricing, as: "ticketPricing",
@@ -623,7 +609,7 @@ exports.manualWebhook = async (req, res) => {
       include: [
         { model: TicketType, as: "ticketType", required: false },
         { model: AddonTypes, as: "addonType", required: false },
-        { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType" }, { model: AddonTypes, as: "addonType" }] } },
+        { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType" ,include:[{model:TicketPricing , as:"pricings"}] }, { model: AddonTypes, as: "addonType" }] } },
         {
           model: TicketPricing, as: "ticketPricing",
           required: false,
@@ -671,7 +657,7 @@ exports.manualWebhook = async (req, res) => {
     const payment = await Payment.create({
       user_id: 6450,
       event_id: 365,
-      amount: 546 || 0,
+      amount: 500 || 0,
       payment_intent: 'pi_3Sp3sWCwP2xM68Rm1wkQ3rRR',
       payment_status: "paid",
 
