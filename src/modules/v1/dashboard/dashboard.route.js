@@ -19,4 +19,31 @@ router.get('/event/:event_id',
     validate,
     dashboardController.getEventDetails
 );
+
+router.get('/organizer/event/:event_id',
+    authenticate,
+    [
+        param('event_id')
+            .notEmpty()
+            .withMessage('event_id is required')
+            .isInt()
+            .withMessage('event_id must be a number'),
+    ],
+    validate,
+    dashboardController.getOrganizerEventDashboardByEventId
+);
+
+router.get('/organizer',
+    authenticate,
+    dashboardController.getOrganizersEvent
+);
+
+
+router.get('/organizer/all-events',
+    authenticate,
+    dashboardController.OrganizersAllEvents
+);
+
+
+
 module.exports = router;
