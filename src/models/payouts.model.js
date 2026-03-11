@@ -41,6 +41,16 @@ const Payouts = sequelize.define(
             allowNull: false
         },
 
+        // new key added (10-03-2026)
+        committee_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+        },
+        user_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+        },
+
         createdAt: {
             type: DataTypes.DATE,
             allowNull: false,

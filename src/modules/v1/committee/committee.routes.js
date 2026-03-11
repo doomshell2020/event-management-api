@@ -204,6 +204,22 @@ router.get('/ticket/assign-list/:event_id',
     committeeController.assignTicketList
 );
 
+/* LIST COMMITTEE MEMBERS */
+router.get('/committee-members/list/:event_id',
+    authenticate,
+    [
+        param('event_id').isInt().withMessage('Event ID required')
+    ],
+    validate,
+    committeeController.listCommitteeMembers
+);
+
+router.get('/committee-payouts',
+    authenticate,
+    committeeController.getUserPayouts
+);
+
+
 router.post('/ticket/update',
     authenticate,
     [
@@ -218,7 +234,7 @@ router.post('/ticket/update',
         body('tickets')
             .isObject()
             .withMessage('Tickets must be an object'),
-            
+
         body('commission')
             .optional()
             .isFloat({ min: 0 })
@@ -227,5 +243,48 @@ router.post('/ticket/update',
     validate,
     committeeController.updateAssignedTickets
 );
+
+
+
+/* ==============   CREATE PAYOUT (Admin → Organizer - 11-03-2025)   =================== */
+router.post('/create-pay',
+    authenticate,
+    [
+        body('event_id')
+            .notEmpty()
+            .isInt()
+            .withMessage('Event ID is required'),
+
+        body('user_id')
+            .notEmpty()
+            .isInt()
+            .withMessage('User ID is required'),
+
+        body('paid_amount')
+            .notEmpty()
+            .isFloat({ gt: 0 })
+            .withMessage('Paid amount must be greater than 0'),
+
+        body('txn_ref')
+            .notEmpty()
+            .trim()
+            .withMessage('Transaction reference is required'),
+
+        body('remarks')
+            .optional()
+            .trim()
+    ],
+    validate,
+    committeeController.createPayoutCommitteeMember
+);
+
+
+
+
+
+
+
+
+
 
 module.exports = router;

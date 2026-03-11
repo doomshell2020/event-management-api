@@ -63,7 +63,9 @@ exports.listPayouts = async (req, res) => {
 
     /* ---------- PAYOUT WHERE ---------- */
     const payoutWhere = {};
-
+    //  NEW CONDITION ADD
+    payoutWhere.committee_id = { [Op.is]: null };
+    payoutWhere.user_id = { [Op.is]: null };
     if (event_id) {
       payoutWhere.event_id = event_id;
     }

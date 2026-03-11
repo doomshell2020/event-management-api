@@ -8,7 +8,7 @@ const { sequelize } = require("../../../models");
 const Sequelize = require('sequelize');
 const { Op } = Sequelize;
 const config = require('../../../config/app');
-const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType, Templates } = require('../../../models');
+const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType, Templates, Payouts } = require('../../../models');
 const { pushFromCommitteeCompsTicket } = require('../tickets/tickets.service');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 
@@ -1354,24 +1354,265 @@ exports.deleteMember = async (req, res) => {
     }
 };
 
-// exports.deleteMember = async (req, res) => {
-//     try {
-//         const { id } = req.params;
 
-//         const member = await CommitteeMembers.findByPk(id);
 
-//         if (!member) {
-//             return apiResponse.error(res, "Committee member not found", 404);
-//         }
+// 10-03-2025 - (kamal new functionality......)
+/* ================= LIST Committee Members ================= */
+exports.listCommitteeMembers = async (req, res) => {
+    try {
+        const { event_id } = req.params;
 
-//         await member.destroy();
+        const events = await Event.findOne({
+            where: { id: event_id },
+            attributes: ["id"],
+            include: { model: Currency, as: "currencyName" }
+        })
 
-//         return apiResponse.success(res, "Member removed successfully", {
-//             member_id: id
-//         });
+    
+        // 🔹 1. Committee Members Fetch
+        const members = await CommitteeMembers.findAll({
+            where: { event_id },
+            include: [{
+                model: User,
+                as: 'user',
+                attributes: ['id', 'first_name', 'last_name', 'email', 'mobile']
+            }],
+            attributes: ['id', 'status', 'commission', 'createdAt'],
+            order: [['id', 'DESC']]
+        });
+        // 🔹 2. Sales Data (OrderItems se)
+        const salesData = await OrderItems.findAll({
+            where: {
+                event_id,
+                committee_user_id: { [Op.ne]: null }
+            },
+            attributes: [
+                'committee_user_id',
+                [Sequelize.fn('SUM', Sequelize.col('price')), 'total_sales']
+            ],
+            group: ['committee_user_id'],
+            raw: true
+        });
+        // 🔹 3. Sales Map
+        const salesMap = {};
+        salesData.forEach(item => {
+            salesMap[item.committee_user_id] = Number(item.total_sales);
+        });
+        // 🔹 4. Payouts Data (Paid Amount)
+        const payoutData = await Payouts.findAll({
+            where: { event_id },
+            attributes: [
+                'user_id',
+                [Sequelize.fn('SUM', Sequelize.col('paid_amount')), 'total_paid']
+            ],
+            group: ['user_id'],
+            raw: true
+        });
+        // 🔹 5. Payout Map
+        const payoutMap = {};
+        payoutData.forEach(item => {
+            payoutMap[item.user_id] = Number(item.total_paid);
+        });
+        // 🔹 6. Final Response Build
+        const membersWithSales = members.map(member => {
 
-//     } catch (error) {
-//         console.error(error);
-//         return apiResponse.error(res, "Failed to delete member", 500);
-//     }
-// };
+            const data = member.toJSON();
+
+            const userId = data?.user?.id;
+
+            const totalSales = salesMap[userId] || 0;
+
+            const totalPaid = payoutMap[userId] || 0;
+
+            const totalCommission = Number(((totalSales * data.commission) / 100).toFixed(2));
+
+            const balance = totalCommission - totalPaid;
+
+            data.total_sales = totalSales;
+
+            data.total_commission = totalCommission;
+
+            data.total_paid = totalPaid;
+
+            data.balance = balance;
+
+            let payoutStatus = "Pending";
+
+            if (totalSales === 0) {
+                payoutStatus = "No Sales";
+            } else if (balance <= 0) {
+                payoutStatus = "Completed";
+            }
+
+            data.payout_status = payoutStatus;
+
+            data.currency = events?.currencyName?.Currency_symbol;
+
+            return data;
+        });
+
+        return apiResponse.success(res, "Committee members fetched", membersWithSales);
+
+    } catch (error) {
+
+        console.error(error);
+
+        return apiResponse.error(res, "Failed to fetch members", 500);
+    }
+};
+
+
+/* ==========   CREATE PAYOUT (ORGANIZER → COMMITTEE MEMBER)   ========== */
+
+exports.createPayoutCommitteeMember = async (req, res) => {
+
+    const transaction = await sequelize.transaction();
+    const authId = req.user.id;
+
+    try {
+
+        const { event_id, user_id, paid_amount, txn_ref, remarks } = req.body;
+
+        if (Number(paid_amount) <= 0) {
+            return apiResponse.validation(res, "Paid amount must be greater than 0");
+        }
+
+        /* -------- EVENT CHECK -------- */
+        const eventExists = await Event.findByPk(event_id);
+        if (!eventExists) {
+            return apiResponse.notFound(res, "Event not found");
+        }
+
+        /* -------- COMMITTEE MEMBER CHECK -------- */
+        const committeeMember = await CommitteeMembers.findOne({
+            where: { event_id, user_id }
+        });
+
+        if (!committeeMember) {
+            return apiResponse.notFound(res, "Committee member not found");
+        }
+
+        const commissionPercent = committeeMember.commission;
+        const committee_id = committeeMember.id;
+
+        /* -------- TOTAL SALES -------- */
+        const salesData = await OrderItems.findOne({
+            attributes: [[Sequelize.fn('SUM', Sequelize.col('price')), 'total_sales']],
+            where: {
+                event_id,
+                committee_user_id: user_id
+            },
+            raw: true
+        });
+
+        const totalSales = Number(salesData?.total_sales || 0);
+
+        const totalCommission = (totalSales * commissionPercent) / 100;
+
+        /* -------- EXISTING PAYOUT -------- */
+        const existingPayout = await Payouts.findOne({
+            where: { event_id, user_id }
+        });
+
+        let totalPaid = 0;
+
+        if (existingPayout) {
+            totalPaid = Number(existingPayout.paid_amount || 0);
+        }
+
+        const remainingAmount = totalCommission - totalPaid;
+
+        if (Number(paid_amount) > remainingAmount) {
+            return apiResponse.validation(
+                res,
+                `Payout exceeds remaining balance. Remaining amount is ${remainingAmount}`
+            );
+        }
+
+        /* -------- UPDATE OR CREATE -------- */
+
+        if (existingPayout) {
+
+            const updatedAmount = totalPaid + Number(paid_amount);
+
+            await existingPayout.update({
+                paid_amount: updatedAmount,
+                txn_ref,
+                remarks
+            }, { transaction });
+
+        } else {
+
+            await Payouts.create({
+                event_id,
+                user_id,
+                paid_amount,
+                txn_ref,
+                remarks,
+                committee_id,
+                created_by: authId
+            }, { transaction });
+
+        }
+
+        await transaction.commit();
+
+        return apiResponse.success(res, "Payout processed successfully");
+
+    } catch (error) {
+
+        await transaction.rollback();
+
+        console.error("Create payout error:", error);
+
+        return apiResponse.error(res, "Failed to process payout");
+    }
+};
+
+
+
+
+/* =========== USER PAYOUT LIST (ALL EVENTS) ============= */
+
+exports.getUserPayouts = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        if (!userId) {
+            return apiResponse.validation(res, "User id is required");
+        }
+        const payouts = await Payouts.findAll({
+            where: { user_id: userId },
+            include: [
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ["id", "name"],
+                    include: [{
+                        model: Currency,
+                        as: "currencyName",
+                        attributes: ["id", "Currency_symbol"],
+                    }]
+                }
+            ],
+            attributes: [
+                "id",
+                "event_id",
+                "user_id",
+                "paid_amount",
+                "txn_ref",
+                "remarks",
+                "createdAt"
+            ],
+            order: [["createdAt", "DESC"]]
+        });
+
+        return apiResponse.success(res, "User payouts fetched successfully", payouts);
+
+    } catch (error) {
+
+        console.error("User payout error:", error);
+
+        return apiResponse.error(res, "Failed to fetch user payouts");
+    }
+};
+

@@ -41,6 +41,7 @@ const Coupons = require('./coupons.model');
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
 CommitteeMembers.hasMany(OrderItems, {foreignKey: "committee_user_id",sourceKey: "user_id",as: 'order_items'});
+CommitteeMembers.hasOne(Payouts,  {foreignKey: 'committee_id', as: 'payouts' });
 
 
 CommitteeAssignTickets.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
