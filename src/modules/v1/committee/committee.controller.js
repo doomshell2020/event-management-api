@@ -1360,27 +1360,30 @@ exports.deleteMember = async (req, res) => {
 /* ================= LIST Committee Members ================= */
 exports.listCommitteeMembers = async (req, res) => {
     try {
+
         const { event_id } = req.params;
 
         const events = await Event.findOne({
             where: { id: event_id },
             attributes: ["id"],
             include: { model: Currency, as: "currencyName" }
-        })
+        });
 
-    
         // 🔹 1. Committee Members Fetch
         const members = await CommitteeMembers.findAll({
             where: { event_id },
-            include: [{
-                model: User,
-                as: 'user',
-                attributes: ['id', 'first_name', 'last_name', 'email', 'mobile']
-            }],
-            attributes: ['id', 'status', 'commission', 'createdAt'],
+            include: [
+                {
+                    model: User,
+                    as: 'user',
+                    attributes: ['id', 'first_name', 'last_name', 'email', 'mobile']
+                }
+            ],
+            attributes: ['id', 'status', 'commission', 'createdAt', 'user_id', 'event_id'],
             order: [['id', 'DESC']]
         });
-        // 🔹 2. Sales Data (OrderItems se)
+
+        // 🔹 2. Sales Data
         const salesData = await OrderItems.findAll({
             where: {
                 event_id,
@@ -1393,12 +1396,14 @@ exports.listCommitteeMembers = async (req, res) => {
             group: ['committee_user_id'],
             raw: true
         });
+
         // 🔹 3. Sales Map
         const salesMap = {};
         salesData.forEach(item => {
             salesMap[item.committee_user_id] = Number(item.total_sales);
         });
-        // 🔹 4. Payouts Data (Paid Amount)
+
+        // 🔹 4. Payouts Data
         const payoutData = await Payouts.findAll({
             where: { event_id },
             attributes: [
@@ -1408,12 +1413,38 @@ exports.listCommitteeMembers = async (req, res) => {
             group: ['user_id'],
             raw: true
         });
+
         // 🔹 5. Payout Map
         const payoutMap = {};
         payoutData.forEach(item => {
             payoutMap[item.user_id] = Number(item.total_paid);
         });
-        // 🔹 6. Final Response Build
+
+        // 🔹 6. Ticket Assign Data
+        const ticketData = await CommitteeAssignTickets.findAll({
+            where: { event_id },
+            attributes: [
+                'user_id',
+                'event_id',
+                [Sequelize.fn('SUM', Sequelize.col('count')), 'total_assigned'],
+                [Sequelize.fn('SUM', Sequelize.col('usedticket')), 'total_sold']
+            ],
+            group: ['user_id', 'event_id'],
+            raw: true
+        });
+
+        // 🔹 7. Ticket Map
+        const ticketMap = {};
+        ticketData.forEach(item => {
+            const key = `${item.user_id}_${item.event_id}`;
+
+            ticketMap[key] = {
+                assigned: Number(item.total_assigned) || 0,
+                sold: Number(item.total_sold) || 0
+            };
+        });
+
+        // 🔹 8. Final Response Build
         const membersWithSales = members.map(member => {
 
             const data = member.toJSON();
@@ -1428,6 +1459,10 @@ exports.listCommitteeMembers = async (req, res) => {
 
             const balance = totalCommission - totalPaid;
 
+            const key = `${userId}_${event_id}`;
+
+            const ticketInfo = ticketMap[key] || { assigned: 0, sold: 0 };
+
             data.total_sales = totalSales;
 
             data.total_commission = totalCommission;
@@ -1435,6 +1470,10 @@ exports.listCommitteeMembers = async (req, res) => {
             data.total_paid = totalPaid;
 
             data.balance = balance;
+
+            data.total_assigned_tickets = ticketInfo.assigned;
+
+            data.total_sold_tickets = ticketInfo.sold;
 
             let payoutStatus = "Pending";
 
@@ -1448,7 +1487,10 @@ exports.listCommitteeMembers = async (req, res) => {
 
             data.currency = events?.currencyName?.Currency_symbol;
 
+            data.member_commission = data.commission;
+
             return data;
+
         });
 
         return apiResponse.success(res, "Committee members fetched", membersWithSales);
@@ -1458,6 +1500,7 @@ exports.listCommitteeMembers = async (req, res) => {
         console.error(error);
 
         return apiResponse.error(res, "Failed to fetch members", 500);
+
     }
 };
 
