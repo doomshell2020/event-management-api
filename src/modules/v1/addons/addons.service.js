@@ -1,4 +1,4 @@
-const { AddonTypes, Event, OrderItems } = require('../../../models');
+const { AddonTypes, Event, OrderItems, PackageDetails } = require('../../../models');
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
@@ -265,6 +265,21 @@ module.exports.deleteAddon = async (req) => {
                 message: 'This addon has already been booked and cannot be deleted'
             };
         }
+
+
+        /* ---------- CHECK IF TICKET USED IN PACKAGE ---------- */
+        const isUsedInPackage = await PackageDetails.findOne({
+            where: { addon_id: addonId }
+        });
+
+        if (isUsedInPackage) {
+            return {
+                success: false,
+                message: "This addons is used in a package and cannot be deleted.",
+                code: "ADDONS_USED_IN_PACKAGE"
+            };
+        }
+
 
         // ✅ Remove addon image
         if (addon.image) {

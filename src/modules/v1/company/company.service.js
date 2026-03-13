@@ -1,4 +1,4 @@
-const { Company } = require('../../../models');
+const { Company ,Event} = require('../../../models');
 
 module.exports.companyDetail = async (req, res) => {
     try {
@@ -112,7 +112,6 @@ module.exports.updateCompany = async (id, name) => {
 
 module.exports.deleteCompany = async (companyId) => {
     try {
-        // Validation
         if (!companyId) {
             return {
                 success: false,
@@ -132,6 +131,19 @@ module.exports.deleteCompany = async (companyId) => {
             };
         }
 
+        // Check if company used in Event
+        const eventExists = await Event.findOne({
+            where: { company_id: companyId }
+        });
+
+        if (eventExists) {
+            return {
+                success: false,
+                code: "COMPANY_IN_USE",
+                message: "Company is assigned to an event and cannot be deleted",
+            };
+        }
+
         // Delete company
         await company.destroy();
 
@@ -140,6 +152,7 @@ module.exports.deleteCompany = async (companyId) => {
             message: "Company deleted successfully",
             data: { id: companyId },
         };
+
     } catch (error) {
         console.error("deleteCompany service error:", error);
 

@@ -1,5 +1,5 @@
 
-const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates,TicketPricing } = require('../../../models/index');
+const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing,PackageDetails } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
 const { Op } = require('sequelize');
 const path = require('path');
@@ -969,6 +969,20 @@ module.exports.deleteTicket = async (req) => {
         }
 
 
+        /* ---------- CHECK IF TICKET USED IN PACKAGE ---------- */
+        const isUsedInPackage = await PackageDetails.findOne({
+            where: { ticket_type_id: ticketId }
+        });
+
+        if (isUsedInPackage) {
+            return {
+                success: false,
+                message: "This ticket is used in a package and cannot be deleted.",
+                code: "TICKET_USED_IN_PACKAGE"
+            };
+        }
+
+
 
         // ✅ Optional: Check if the user is the ticket owner (if applicable)
         // if (user_id && existingTicket.userid && existingTicket.userid !== user_id) {
@@ -1071,7 +1085,7 @@ module.exports.listTicketsByEvent = async (event_id) => {
                     model: TicketPricing,
                     as: "pricings",
                     required: false, // ✅ important (LEFT JOIN)
-                    attributes:['price']
+                    attributes: ['price']
                 }
             ],
 

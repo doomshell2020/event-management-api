@@ -249,6 +249,7 @@ module.exports = {
     getCart: async (req, res) => {
         try {
             const user_id = req.user.id;
+
             const { event_id, item_type } = req.query;
 
             const adminInfo = await User.findOne({
@@ -256,21 +257,45 @@ module.exports = {
                 attributes: ["id", "payment_gateway_charges", "default_platform_charges"]
             });
 
-            const eventOrgFind = await Event.findOne({
-                where: { id: event_id },
-                attributes: ['event_org_id']
-            })
+            let authProfile = null;
 
-            const authProfile = await User.findOne({
-                // where: { id: user_id },
-                where: { id: eventOrgFind?.event_org_id },
-                attributes: ['default_platform_charges']
-            })
+            if (event_id) {
+
+                const eventOrgFind = await Event.findOne({
+                    where: { id: event_id },
+                    attributes: ['event_org_id']
+                });
+
+                if (eventOrgFind?.event_org_id) {
+                    authProfile = await User.findOne({
+                        where: { id: eventOrgFind.event_org_id },
+                        attributes: ['default_platform_charges']
+                    });
+                }
+
+            }
+
+
+            // const eventOrgFind = await Event.findOne({
+            //     where: { id: event_id },
+            //     attributes: ['event_org_id']
+            // })
+
+            // const authProfile = await User.findOne({
+            //     // where: { id: user_id },
+            //     where: { id: eventOrgFind?.event_org_id },
+            //     attributes: ['default_platform_charges']
+            // })
             // console.log("authProfile", authProfile)
 
+            // const platformCharges =
+            //     authProfile?.default_platform_charges != null &&
+            //         authProfile?.default_platform_charges != ""
+            //         ? authProfile.default_platform_charges
+            //         : adminInfo?.default_platform_charges || 0;
             const platformCharges =
                 authProfile?.default_platform_charges != null &&
-                    authProfile?.default_platform_charges != ""
+                    authProfile?.default_platform_charges !== ""
                     ? authProfile.default_platform_charges
                     : adminInfo?.default_platform_charges || 0;
 
@@ -380,7 +405,7 @@ module.exports = {
                                     model: TicketType,
                                     as: "ticket",
                                     required: false,
-                                    attributes: ["id", "count", "title", "access_type", "hidden","sold_out"],
+                                    attributes: ["id", "count", "title", "access_type", "hidden", "sold_out"],
                                 },
                                 {
                                     model: EventSlots,
@@ -702,7 +727,7 @@ module.exports = {
             });
 
         } catch (error) {
-            console.log(error);
+            console.log(error.message);
             return apiResponse.error(res, "Error fetching cart", 500);
         }
     },
