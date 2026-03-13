@@ -633,17 +633,39 @@ exports.isCouponAppointmentEligible = async (req, res) => {
         /* -------- Date Validation -------- */
         if (coupon.validity_period == "specified_date") {
             const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-            if (
-                (coupon.specific_date_from && new Date(coupon.specific_date_from) > today) ||
-                (coupon.specific_date_to && new Date(coupon.specific_date_to) < today)
-            ) {
+            const fromDate = coupon.specific_date_from
+                ? new Date(coupon.specific_date_from)
+                : null;
+
+            const toDate = coupon.specific_date_to
+                ? new Date(coupon.specific_date_to)
+                : null;
+
+            if (fromDate) fromDate.setHours(0, 0, 0, 0);
+            if (toDate) toDate.setHours(0, 0, 0, 0);
+
+            if ((fromDate && today < fromDate) || (toDate && today > toDate)) {
                 return res.status(403).json({
                     success: false,
                     message: "Coupon not valid for current date",
                 });
             }
         }
+        // if (coupon.validity_period == "specified_date") {
+        //     const today = new Date();
+
+        //     if (
+        //         (coupon.specific_date_from && new Date(coupon.specific_date_from) >= today) ||
+        //         (coupon.specific_date_to && new Date(coupon.specific_date_to) <= today)
+        //     ) {
+        //         return res.status(403).json({
+        //             success: false,
+        //             message: "Coupon not valid for current date",
+        //         });
+        //     }
+        // }
 
         /* -------- Redeem Count -------- */
         const redemptionCount = await Orders.count({
