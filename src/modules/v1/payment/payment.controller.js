@@ -64,14 +64,21 @@ exports.createPaymentIntent = async (req, res) => {
 
       // DATE VALIDATION
       if (coupon.validity_period == "specified_date") {
-        const today = new Date();
+        const today = new Date().setHours(0, 0, 0, 0);
+        const from = new Date(coupon.specific_date_from).setHours(0, 0, 0, 0);
+        const to = new Date(coupon.specific_date_to).setHours(0, 0, 0, 0);
 
-        if (
-          today < new Date(coupon.specific_date_from) ||
-          today > new Date(coupon.specific_date_to)
-        ) {
+        if (today < from || today > to) {
           return apiResponse.error(res, "Coupon is expired", 400);
         }
+        // const today = new Date();
+
+        // if (
+        //   today < new Date(coupon.specific_date_from) ||
+        //   today > new Date(coupon.specific_date_to)
+        // ) {
+        //   return apiResponse.error(res, "Coupon is expired", 400);
+        // }
       }
 
       // DISCOUNT CALCULATION
@@ -472,7 +479,7 @@ exports.stripeWebhook = async (req, res) => {
           { model: TicketType, as: "ticketType", required: false },
           { model: AddonTypes, as: "addonType", required: false },
           // { model: Package, as: "packageType", required: false },
-          { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType" ,include:[{model:TicketPricing , as:"pricings"}] }, { model: AddonTypes, as: "addonType" }] } },
+          { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType", include: [{ model: TicketPricing, as: "pricings" }] }, { model: AddonTypes, as: "addonType" }] } },
 
           {
             model: TicketPricing, as: "ticketPricing",
@@ -609,7 +616,7 @@ exports.manualWebhook = async (req, res) => {
       include: [
         { model: TicketType, as: "ticketType", required: false },
         { model: AddonTypes, as: "addonType", required: false },
-        { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType" ,include:[{model:TicketPricing , as:"pricings"}] }, { model: AddonTypes, as: "addonType" }] } },
+        { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType", include: [{ model: TicketPricing, as: "pricings" }] }, { model: AddonTypes, as: "addonType" }] } },
         {
           model: TicketPricing, as: "ticketPricing",
           required: false,
