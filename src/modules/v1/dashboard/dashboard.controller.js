@@ -11,7 +11,7 @@ exports.getEventDetails = async (req, res) => {
         // 1️⃣ Event basic info
         const eventInfo = await Event.findOne({
             where: { id: event_id },
-            attributes: ['id', 'event_org_id', 'name'],
+            attributes: ['id', 'event_org_id', 'name', 'entry_type', 'is_free'],
             include: { model: Currency, as: "currencyName", attributes: ['Currency_symbol', 'Currency'] }
         });
 
@@ -35,6 +35,66 @@ exports.getEventDetails = async (req, res) => {
             }
         });
 
+
+        /* ================= ADDONS ================= */
+
+        const totalAddonsCreated = await AddonTypes.sum("count", {
+            // where: { userid: org_id }
+            where: { event_id: event_id }
+        });
+
+        const totalAddonsSoldOut = await OrderItems.sum("count", {
+            where: {
+                event_id: event_id,
+                type: { [Op.in]: ["addon"] }
+            }
+        });
+
+        /* ================= PACKAGE ================= */
+
+        const totalPackagesCreated = await Package.sum("package_limit", {
+            // where: { userid: org_id }
+            where: { event_id: event_id }
+        });
+
+        const totalPackagesSold = await OrderItems.sum("count", {
+            where: {
+                event_id: event_id,
+                type: { [Op.in]: ["package"] }
+            }
+        });
+
+        /* ================= APPOINTMENTS ================= */
+        const wellnessList = await Wellness.findAll({
+            where: {
+                event_id: event_id
+            },
+            attributes: ["id"],
+            raw: true
+        });
+
+        const wellnessIds = wellnessList.map(w => w.id);
+
+        let totalAppointmentsCreated = 0;
+        if (wellnessIds.length > 0) {
+            totalAppointmentsCreated = await WellnessSlots.sum("count", {
+                where: {
+                    wellness_id: { [Op.in]: wellnessIds }
+                }
+            });
+        }
+
+        // fallback
+        totalAppointmentsCreated = Number(totalAppointmentsCreated || 0);
+
+        const totalAppointmentsSold = await OrderItems.sum("count", {
+            where: {
+                event_id: event_id,
+                type: { [Op.in]: ["appointment"] }
+            }
+        });
+
+
         //  Revenue & earnings
         const revenueData = await Orders.findOne({
             where: { event_id },
@@ -42,12 +102,19 @@ exports.getEventDetails = async (req, res) => {
                 [fn("SUM", col("grand_total")), "total_revenue"],
                 [fn("SUM", col("sub_total")), "gross_amount"],
                 [fn("SUM", col("platform_fee_tax")), "platform_fee_tax"],
-                [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"]
+                [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"],
+                [fn("SUM", col("discount_amount")), "total_discount"],
             ],
             raw: true
         });
         const totalRevenue = Number(revenueData.total_revenue || 0);
-        const netEarning = Number(revenueData.gross_amount || 0);
+
+        const totalDiscount = Number(revenueData.total_discount || 0);
+        const netTotalEarning = Number(revenueData.gross_amount || 0);
+
+        const netEarning = netTotalEarning - totalDiscount;
+
+        // const netEarning = Number(revenueData.gross_amount || 0);
 
         const platformFee = Number(revenueData.platform_fee_tax || 0);
         const gatewayFee = Number(revenueData.payment_gateway_tax || 0);
@@ -281,7 +348,15 @@ exports.getEventDetails = async (req, res) => {
                     totalTicketsCreated,
                     totalTicketsSold,
                     totalRevenue,
-                    netEarning
+                    netEarning,
+                    totalAddonsCreated: totalAddonsCreated || 0,
+                    totalAddonsSold: totalAddonsSoldOut || 0,
+                    totalPackagesCreated: totalPackagesCreated || 0,
+                    totalPackagesSold: totalPackagesSold || 0,
+                    totalAppointmentsCreated: totalAppointmentsCreated || 0,
+                    totalAppointmentsSold: totalAppointmentsSold || 0,
+
+
                 },
                 revenueDistribution: {
                     organizer: netEarning,
@@ -331,14 +406,12 @@ exports.getEventDetails = async (req, res) => {
 exports.getOrganizersEvent = async (req, res) => {
     try {
         const org_id = req?.user?.id;
-
         if (!org_id) {
             return res.status(400).json({
                 success: false,
                 message: "Organizer ID not found"
             });
         }
-
         const today = new Date();
 
         /* ================= EVENTS ================= */
@@ -363,7 +436,7 @@ exports.getOrganizersEvent = async (req, res) => {
             const endDate = new Date(event.date_to);
 
             return (
-                event.status === "Y" &&
+                // event.status === "Y" &&
                 startDate <= today &&
                 endDate >= today
             );
@@ -373,7 +446,7 @@ exports.getOrganizersEvent = async (req, res) => {
             const endDate = new Date(event.date_to);
 
             return (
-                event.status === "Y" &&
+                // event.status === "Y" &&
                 endDate < today
             );
         }).length;
@@ -389,9 +462,71 @@ exports.getOrganizersEvent = async (req, res) => {
         const totalTicketsSold = await OrderItems.sum("count", {
             where: {
                 event_id: { [Op.in]: eventIds },
-                type: { [Op.in]: ["ticket", "ticket_price"] }
+                type: { [Op.in]: ["ticket", "ticket_price", 'committesale', 'comps'] }
             }
         });
+
+
+
+        /* ================= ADDONS ================= */
+
+        const totalAddonsCreated = await AddonTypes.sum("count", {
+            // where: { userid: org_id }
+            where: { event_id: { [Op.in]: eventIds }, }
+        });
+
+        const totalAddonsSold = await OrderItems.sum("count", {
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: { [Op.in]: ["addon"] }
+            }
+        });
+
+        /* ================= PACKAGE ================= */
+
+        const totalPackagesCreated = await Package.sum("package_limit", {
+            // where: { userid: org_id }
+            where: { event_id: { [Op.in]: eventIds }, }
+        });
+
+        const totalPackagesSold = await OrderItems.sum("count", {
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: { [Op.in]: ["package"] }
+            }
+        });
+
+        /* ================= APPOINTMENTS ================= */
+        const wellnessList = await Wellness.findAll({
+            where: {
+                event_id: { [Op.in]: eventIds }
+            },
+            attributes: ["id"],
+            raw: true
+        });
+
+        const wellnessIds = wellnessList.map(w => w.id);
+
+        let totalAppointmentsCreated = 0;
+        if (wellnessIds.length > 0) {
+            totalAppointmentsCreated = await WellnessSlots.sum("count", {
+                where: {
+                    wellness_id: { [Op.in]: wellnessIds }
+                }
+            });
+        }
+
+        // fallback
+        totalAppointmentsCreated = Number(totalAppointmentsCreated || 0);
+
+        const totalAppointmentsSold = await OrderItems.sum("count", {
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: { [Op.in]: ["appointment"] }
+            }
+        });
+
+
 
         /* ================= REVENUE ================= */
 
@@ -401,13 +536,18 @@ exports.getOrganizersEvent = async (req, res) => {
                 [fn("SUM", col("grand_total")), "total_revenue"],
                 [fn("SUM", col("sub_total")), "gross_amount"],
                 [fn("SUM", col("platform_fee_tax")), "platform_fee_tax"],
-                [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"]
+                [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"],
+                [fn("SUM", col("discount_amount")), "total_discount"],
             ],
             raw: true
         });
 
         const totalRevenue = Number(revenueData?.total_revenue || 0);
-        const grossAmount = Number(revenueData?.gross_amount || 0);
+        // const grossAmount = Number(revenueData?.gross_amount || 0);
+        const totalDiscount = Number(revenueData?.total_discount || 0);
+        const netTotalEarning = Number(revenueData?.gross_amount || 0);
+
+        const grossAmount = netTotalEarning - totalDiscount;
         const platformFee = Number(revenueData?.platform_fee_tax || 0);
         const gatewayFee = Number(revenueData?.payment_gateway_tax || 0);
         const organizerEarning = grossAmount;
@@ -505,7 +645,7 @@ exports.getOrganizersEvent = async (req, res) => {
             const endDate = new Date(event.date_to);
 
             return (
-                event.status === "Y" &&
+                // event.status === "Y" &&
                 startDate <= today &&
                 endDate >= today
             );
@@ -543,7 +683,7 @@ exports.getOrganizersEvent = async (req, res) => {
                 ],
                 where: {
                     event_id: { [Op.in]: runningEventIds },
-                    type: { [Op.in]: ["ticket", "ticket_price"] }
+                    type: { [Op.in]: ["ticket", "ticket_price", 'committesale', 'comps'] }
                 },
                 group: ["event_id"],
                 raw: true
@@ -630,7 +770,7 @@ exports.getOrganizersEvent = async (req, res) => {
                 ],
                 where: {
                     event_id: { [Op.in]: runningEventIdsForProgress },
-                    type: { [Op.in]: ["ticket", "ticket_price"] }
+                    type: { [Op.in]: ["ticket", "ticket_price", 'committesale', 'comps'] }
                 },
                 raw: true
             });
@@ -676,7 +816,8 @@ exports.getOrganizersEvent = async (req, res) => {
         const completedEventIds = events
             .filter(event => {
                 const endDate = new Date(event.date_to);
-                return event.status === "Y" && endDate < today;
+                // return event.status === "Y" && endDate < today;
+                return endDate < today;
             })
             .map(e => e.id);
 
@@ -691,7 +832,7 @@ exports.getOrganizersEvent = async (req, res) => {
                 ],
                 where: {
                     event_id: { [Op.in]: completedEventIds },
-                    type: { [Op.in]: ["ticket", "ticket_price"] }
+                    type: { [Op.in]: ["ticket", "ticket_price", 'committesale', 'comps'] }
                 },
                 group: ["event_id"],
                 raw: true
@@ -904,7 +1045,13 @@ exports.getOrganizersEvent = async (req, res) => {
                     totalTicketsCreated: totalTicketsCreated || 0,
                     totalTicketsSold: totalTicketsSold || 0,
                     totalRevenue,
-                    organizerEarning
+                    organizerEarning,
+                    totalAddonsCreated: totalAddonsCreated || 0,
+                    totalAddonsSold: totalAddonsSold || 0,
+                    totalPackagesCreated: totalPackagesCreated || 0,
+                    totalPackagesSold: totalPackagesSold || 0,
+                    totalAppointmentsCreated: totalAppointmentsCreated || 0,
+                    totalAppointmentsSold: totalAppointmentsSold || 0,
                 },
 
                 salesTrend: {
@@ -1004,7 +1151,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
             const endDate = new Date(event.date_to);
 
             return (
-                event.status === "Y" &&
+                // event.status === "Y" &&
                 startDate <= today &&
                 endDate >= today
             );
@@ -1014,7 +1161,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
             const endDate = new Date(event.date_to);
 
             return (
-                event.status === "Y" &&
+                // event.status === "Y" &&
                 endDate < today
             );
         }).length;
@@ -1028,7 +1175,67 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
         const totalTicketsSold = await OrderItems.sum("count", {
             where: {
                 event_id: { [Op.in]: eventIds },
-                type: { [Op.in]: ["ticket", "ticket_price"] }
+                type: { [Op.in]: ["ticket", "ticket_price", 'committesale', 'comps'] }
+            }
+        });
+
+
+
+        /* ================= ADDONS ================= */
+
+        const totalAddonsCreated = await AddonTypes.sum("count", {
+            // where: { userid: org_id }
+            where: { event_id: { [Op.in]: eventIds }, }
+        });
+
+        const totalAddonsSold = await OrderItems.sum("count", {
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: { [Op.in]: ["addon"] }
+            }
+        });
+
+        /* ================= PACKAGE ================= */
+
+        const totalPackagesCreated = await Package.sum("package_limit", {
+            // where: { userid: org_id }
+            where: { event_id: { [Op.in]: eventIds }, }
+        });
+
+        const totalPackagesSold = await OrderItems.sum("count", {
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: { [Op.in]: ["package"] }
+            }
+        });
+
+        /* ================= APPOINTMENTS ================= */
+        const wellnessList = await Wellness.findAll({
+            where: {
+                event_id: { [Op.in]: eventIds }
+            },
+            attributes: ["id"],
+            raw: true
+        });
+
+        const wellnessIds = wellnessList.map(w => w.id);
+
+        let totalAppointmentsCreated = 0;
+        if (wellnessIds.length > 0) {
+            totalAppointmentsCreated = await WellnessSlots.sum("count", {
+                where: {
+                    wellness_id: { [Op.in]: wellnessIds }
+                }
+            });
+        }
+
+        // fallback
+        totalAppointmentsCreated = Number(totalAppointmentsCreated || 0);
+
+        const totalAppointmentsSold = await OrderItems.sum("count", {
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: { [Op.in]: ["appointment"] }
             }
         });
 
@@ -1040,13 +1247,18 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                 [fn("SUM", col("grand_total")), "total_revenue"],
                 [fn("SUM", col("sub_total")), "gross_amount"],
                 [fn("SUM", col("platform_fee_tax")), "platform_fee_tax"],
-                [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"]
+                [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"],
+                [fn("SUM", col("discount_amount")), "total_discount"],
             ],
             raw: true
         });
 
         const totalRevenue = Number(revenueData?.total_revenue || 0);
-        const grossAmount = Number(revenueData?.gross_amount || 0);
+        // const grossAmount = Number(revenueData?.gross_amount || 0);
+        const totalDiscount = Number(revenueData?.total_discount || 0);
+        const netTotalEarning = Number(revenueData?.gross_amount || 0);
+
+        const grossAmount = netTotalEarning - totalDiscount;
         const platformFee = Number(revenueData?.platform_fee_tax || 0);
         const gatewayFee = Number(revenueData?.payment_gateway_tax || 0);
         const organizerEarning = grossAmount;
@@ -1134,7 +1346,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
             const endDate = new Date(event.date_to);
 
             return (
-                event.status === "Y" &&
+                // event.status === "Y" &&
                 startDate <= today &&
                 endDate >= today
             );
@@ -1168,7 +1380,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                 ],
                 where: {
                     event_id: { [Op.in]: runningEventIds },
-                    type: { [Op.in]: ["ticket", "ticket_price"] }
+                    type: { [Op.in]: ["ticket", "ticket_price", 'committesale', 'comps'] }
                 },
                 group: ["event_id"],
                 raw: true
@@ -1250,7 +1462,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                 ],
                 where: {
                     event_id: { [Op.in]: runningEventIdsForProgress },
-                    type: { [Op.in]: ["ticket", "ticket_price"] }
+                    type: { [Op.in]: ["ticket", "ticket_price", 'committesale', 'comps'] }
                 },
                 raw: true
             });
@@ -1299,7 +1511,8 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
         const completedEventIds = events
             .filter(event => {
                 const endDate = new Date(event.date_to);
-                return event.status === "Y" && endDate < today;
+                // return event.status === "Y" && endDate < today;
+                return endDate < today;
             })
             .map(e => e.id);
 
@@ -1314,7 +1527,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                 ],
                 where: {
                     event_id: { [Op.in]: completedEventIds },
-                    type: { [Op.in]: ["ticket", "ticket_price"] }
+                    type: { [Op.in]: ["ticket", "ticket_price", 'committesale', 'comps'] }
                 },
                 group: ["event_id"],
                 raw: true
@@ -1522,15 +1735,6 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
             };
         }
 
-
-
-
-
-
-
-
-
-
         /* ================= RESPONSE ================= */
 
         return res.json({
@@ -1547,7 +1751,13 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                     totalTicketsCreated: totalTicketsCreated || 0,
                     totalTicketsSold: totalTicketsSold || 0,
                     totalRevenue,
-                    organizerEarning
+                    organizerEarning,
+                    totalAddonsCreated: totalAddonsCreated || 0,
+                    totalAddonsSold: totalAddonsSold || 0,
+                    totalPackagesCreated: totalPackagesCreated || 0,
+                    totalPackagesSold: totalPackagesSold || 0,
+                    totalAppointmentsCreated: totalAppointmentsCreated || 0,
+                    totalAppointmentsSold: totalAppointmentsSold || 0,
                 },
 
                 salesTrend: {

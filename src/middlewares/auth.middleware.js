@@ -1,11 +1,12 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/app'); // contains jwtSecret
 const apiResponse = require('../common/utils/apiResponse');
+const {User} = require("../models")
 
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   try {
     let token = null;
-    
+
     // 1️⃣ Check Authorization header
     const authHeader = req.headers.authorization || req.headers.Authorization;
     if (authHeader) {
@@ -16,7 +17,7 @@ const authenticate = (req, res, next) => {
         token = authHeader; // Token directly sent without "Bearer"
       }
     }
-    
+
     // console.log('>>>>>>>>>>>>>>>>',token);
     // 2️⃣ Check x-access-token header
     if (!token && (req.headers['x-access-token'] || req.headers['X-Access-Token'])) {
@@ -35,7 +36,25 @@ const authenticate = (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, config.jwtSecret);
-    req.user = decoded; // Attach decoded data to req
+    // req.user = decoded; // Attach decoded data to req
+    // 🔥 IMPORTANT: DB se fresh user lao
+    const user = await User.findByPk(decoded.id);
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    // 
+    if (user.status !== "Y") {
+      return res.status(403).json({
+        success: false,
+        message: "User is inactive"
+      });
+    }
+
+    req.user = user; // ✅ DB wala fresh user
+
+
     req.token = token; // Optional: keep raw token if needed
 
     next();

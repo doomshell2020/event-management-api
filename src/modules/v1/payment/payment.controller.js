@@ -160,10 +160,92 @@ exports.createPaymentIntent = async (req, res) => {
         continue;
       }
 
+      // const masterItem = await Model.findOne({
+      //   where: { id: itemId },
+      //   attributes: ["id", limitField, nameField]
+      // });
+
+
+      // ..........16-03-2026-kamal
+      let attributes = ["id", limitField, nameField];
+
+      // hidden sab me hota hai
+      attributes.push("hidden");
+
+      // 
+      if (item.ticketType === "ticket" || item.ticketType === "committesale") {
+        attributes.push("sold_out");
+      }
+
       const masterItem = await Model.findOne({
         where: { id: itemId },
-        attributes: ["id", limitField, nameField]
+        attributes
       });
+
+      // ---------------- TICKET HIDDEN / SOLD OUT CHECK ----------------
+      if (
+        (item.ticketType === "ticket" || item.ticketType === "committesale") &&
+        (masterItem.hidden === "Y" || masterItem.sold_out === "Y")
+      ) {
+        return apiResponse.error(
+          res,
+          `Ticket "${masterItem?.[nameField] || "Item"}" is not available.`,
+          400
+        );
+      }
+
+      // ---------------- ADDON HIDDEN CHECK ----------------
+      if (item.ticketType === "addon" && masterItem.hidden === "Y") {
+        return apiResponse.error(
+          res,
+          `Addon "${masterItem?.[nameField] || "Item"}" is not available.`,
+          400
+        );
+      }
+
+      // ---------------- PACKAGE HIDDEN CHECK ----------------
+      if (item.ticketType === "package" && masterItem.hidden === "Y") {
+        return apiResponse.error(
+          res,
+          `Package "${masterItem?.[nameField] || "Item"}" is not available.`,
+          400
+        );
+      }
+
+      // ---------------- PACKAGE SOLD OUT CHECK (CUSTOM) ----------------
+      if (item.ticketType === "package") {
+
+        const totalLimit = Number(masterItem?.package_limit || 0);
+
+        if (totalLimit > 0) {
+          const booked = await OrderItems.findOne({
+            where: {
+              package_id: item.ticketId,
+              event_id
+            },
+            attributes: [
+              [fn("SUM", col("count")), "totalBooked"]
+            ],
+            raw: true
+          });
+
+          const alreadyBooked = Number(booked?.totalBooked || 0);
+          const requested = Number(item.quantity || 1);
+
+          if (alreadyBooked + requested > totalLimit) {
+            return apiResponse.error(
+              res,
+              `Package "${masterItem?.[nameField] || "Item"}" is sold out.`,
+              400
+            );
+          }
+        }
+      }
+
+
+
+      // ................ 16-03-2026 end kamal
+
 
       const totalLimit = Number(masterItem?.[limitField] || 0);
 

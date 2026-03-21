@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { Op, Sequelize } = require('sequelize');
-const { User, Event, Orders, Currency,Templates } = require('../../../../models');
+const { User, Event, Orders, Currency, Templates } = require('../../../../models');
 const config = require('../../../../config/app');
 const { replaceTemplateVariables } = require('../../../../common/utils/helpers');
 const sendEmail = require('../../../../common/utils/sendEmail');
@@ -42,7 +42,8 @@ module.exports.getEventOrganizerList = async (req, res) => {
                         // 🔥 Per Event Totals
                         [Sequelize.fn("SUM", Sequelize.col("events->orders.sub_total")), "total_sales"],
                         [Sequelize.fn("SUM", Sequelize.col("events->orders.tax_total")), "total_tax"],
-                        [Sequelize.fn("SUM", Sequelize.col("events->orders.grand_total")), "grand_total"]
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.grand_total")), "grand_total"],
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.discount_amount")), "total_discount"],
                     ],
                     include: [
                         {
@@ -130,8 +131,8 @@ module.exports.createEventOrganizer = async (req) => {
             confirm_pass: plainPassword,
             gender: 'Male',
             role_id: 2,
-            status:"Y",
-            is_email_verified:"Y"
+            status: "Y",
+            is_email_verified: "Y"
         };
         // ✅ Save to DB
         const newOrganizer = await User.create(organizerData);
@@ -143,7 +144,7 @@ module.exports.createEventOrganizer = async (req) => {
             };
         }
 
- /* ================= EMAIL TEMPLATE ================= */
+        /* ================= EMAIL TEMPLATE ================= */
         const verifyEmailTemplateId = config.emailTemplates.verifyEmail;
         const templateRecord = await Templates.findOne({
             where: { id: verifyEmailTemplateId }
@@ -334,7 +335,7 @@ module.exports.getEventOrganizerById = async (userId) => {
 // searching api
 module.exports.searchEventOrganizer = async (req) => {
     try {
-        const { first_name, email, mobile,status } = req.query;
+        const { first_name, email, mobile, status } = req.query;
         const whereCondition = {
             role_id: 2
         };
@@ -359,7 +360,7 @@ module.exports.searchEventOrganizer = async (req) => {
                 [Op.like]: `%${mobile.trim()}%`
             };
         }
-         // 🔹 Status filter
+        // 🔹 Status filter
         if (status) {
             whereCondition.status = status; // "Y" or "N"
         }
@@ -367,26 +368,63 @@ module.exports.searchEventOrganizer = async (req) => {
         const users = await User.findAll({
             where: whereCondition,
             attributes: [
-                "id",
-                "first_name",
-                "last_name",
-                "email",
-                "mobile",
-                "profile_image",
-                "status",
-                "is_email_verified",
-                "is_suspend",
+                'id',
+                'first_name',
+                'last_name',
+                'email',
+                'mobile',
+                'profile_image',
+                'status',
+                'is_email_verified',
+                'is_suspend',
+                'admin_approval_required',
+                'default_platform_charges',
                 'createdAt'
             ],
             include: [
                 {
                     model: Event,
                     as: "events",
-                    attributes: ["id", "name"],
+                    attributes: [
+                        "id",
+                        "name",
+
+                        // 🔥 Per Event Totals
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.sub_total")), "total_sales"],
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.tax_total")), "total_tax"],
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.grand_total")), "grand_total"],
+                        [Sequelize.fn("SUM", Sequelize.col("events->orders.discount_amount")), "total_discount"],
+                    ],
+                    include: [
+                        {
+                            model: Orders,
+                            as: "orders",
+                            attributes: [],
+                            required: false
+                        },
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ['Currency_symbol']
+                        }
+                    ],
                     required: false
                 }
             ],
-            order: [["id", "DESC"]]
+            // include: [
+            //     {
+            //         model: Event,
+            //         as: "events",
+            //         attributes: ["id", "name"],
+            //         required: false
+            //     }
+            // ],
+            group: [
+                "User.id",
+                "events.id"
+            ],
+            order: [['id', 'DESC']],
+            subQuery: false
         });
 
         return {

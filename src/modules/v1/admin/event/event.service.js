@@ -110,7 +110,9 @@ module.exports.getEventList = async (req, res) => {
                 [
                     Sequelize.fn("SUM", Sequelize.col("orders.payment_gateway_tax")),
                     "payment_gateway_tax"
-                ]
+                ],
+                  // 🔥 TOTAL DISCOUNT
+                [Sequelize.fn("SUM", Sequelize.col("orders.discount_amount")), "total_discount"],
             ],
 
             group: [
@@ -442,6 +444,12 @@ module.exports.getEventStaff = async (req) => {
 module.exports.searchEventList = async (req) => {
     try {
         let { eventName, organizer, fromDate, toDate, status } = req.query;
+
+        const adminInfo = await User.findOne({
+            where: { id: 1 },
+            attributes: ["id", "payment_gateway_charges", "default_platform_charges"]
+        });
+
         const whereCondition = {};
         // ✅ Event name filter
         if (eventName) {
@@ -488,7 +496,7 @@ module.exports.searchEventList = async (req) => {
                 {
                     model: User,
                     as: "Organizer",
-                    attributes: ["id", "email", "first_name", "last_name"],
+                    attributes: ["id", "email", "first_name", "last_name", "default_platform_charges"],
                     where: organizer
                         ? {
                             [Op.or]: [
@@ -526,6 +534,7 @@ module.exports.searchEventList = async (req) => {
                 "featured",
                 "video_url",
                 'slug',
+                "is_free",
 
                 // 🔥 TOTAL SALES
                 [Sequelize.fn('SUM', Sequelize.col('orders.sub_total')), 'total_sales'],
@@ -534,17 +543,36 @@ module.exports.searchEventList = async (req) => {
                 [Sequelize.fn('SUM', Sequelize.col('orders.tax_total')), 'total_tax'],
 
                 // 🔥 GRAND TOTAL (optional)
-                [Sequelize.fn('SUM', Sequelize.col('orders.grand_total')), 'grand_total']
+                [Sequelize.fn('SUM', Sequelize.col('orders.grand_total')), 'grand_total'],
 
+                // 🔥 PLATFORM FEE TAX
+                [
+                Sequelize.fn("SUM", Sequelize.col("orders.platform_fee_tax")),
+                "platform_fee_tax"
+                ],
+
+                // 🔥 PAYMENT GATEWAY TAX
+                [
+                    Sequelize.fn("SUM", Sequelize.col("orders.payment_gateway_tax")),
+                    "payment_gateway_tax"
+                ],
+                  // 🔥 TOTAL DISCOUNT
+                [Sequelize.fn("SUM", Sequelize.col("orders.discount_amount")), "total_discount"],
             ],
             group: ['Event.id', 'Organizer.id', 'tickets.id'],
-            order: [["id", "DESC"]]
+            order: [["id", "DESC"]],
+            subQuery: false
         });
+        const formattedEvents = events.map(event => ({
+            ...event.toJSON(),
+            admin_payment_gateway_charges: adminInfo?.payment_gateway_charges || 0
+        }));
 
         return {
             success: true,
             message: "Events fetched successfully.",
-            data: events
+            // data: events
+            data: formattedEvents
         };
 
     } catch (error) {

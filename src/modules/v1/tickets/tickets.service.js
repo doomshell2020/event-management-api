@@ -1,5 +1,5 @@
 
-const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing,PackageDetails } = require('../../../models/index');
+const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
 const { Op } = require('sequelize');
 const path = require('path');
@@ -1085,7 +1085,8 @@ module.exports.listTicketsByEvent = async (event_id) => {
                     model: TicketPricing,
                     as: "pricings",
                     required: false, // ✅ important (LEFT JOIN)
-                    attributes: ['price']
+                    attributes: ['price'],
+                    include: { model: EventSlots, as: "slot", attributes: ['start_time', 'end_time','slot_date','slot_name'] }
                 }
             ],
 

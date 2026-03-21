@@ -245,7 +245,7 @@ module.exports.loginUser = async ({ email, password }) => {
 
     // Generate JWT token
     const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name },
+        { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name ,status: user.status},
         config.jwtSecret,
         { expiresIn: config.jwtExpiresIn }
     );
@@ -259,7 +259,8 @@ module.exports.loginUser = async ({ email, password }) => {
             firstName: user.first_name,
             lastName: user.last_name,
             gender: user.gender,
-            dob: user.dob
+            dob: user.dob,
+            status:user.status
         },
     };
 

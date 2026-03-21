@@ -171,7 +171,7 @@ module.exports.createSlot = async (event_id, slotArray) => {
             const existingSlot = await EventSlots.findOne({
                 where: {
                     event_id,
-                    slot_name,
+                    // slot_name,
                     slot_date: formatted_slot_date,
                     start_time,
                     end_time,
@@ -182,7 +182,8 @@ module.exports.createSlot = async (event_id, slotArray) => {
                 return {
                     success: false,
                     code: 'DUPLICATE_ERROR',
-                    message: `Slot "${slot_name}" already exists for ${slot_date} (${start_time} → ${end_time}).`,
+                    // message: `Slot "${slot_name}" already exists for ${slot_date} (${start_time} → ${end_time}).`,
+                    message: `A slot already exists for ${slot_date} (${start_time} → ${end_time}).`,
                 };
             }
 
