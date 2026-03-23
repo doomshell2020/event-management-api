@@ -52,7 +52,7 @@ exports.getEventDetails = async (req, res) => {
 
         /* ================= PACKAGE ================= */
 
-        const totalPackagesCreated = await Package.sum("package_limit", {
+        const totalPackagesCreated = await Package.sum("total_package", {
             // where: { userid: org_id }
             where: { event_id: event_id }
         });
@@ -484,7 +484,7 @@ exports.getOrganizersEvent = async (req, res) => {
 
         /* ================= PACKAGE ================= */
 
-        const totalPackagesCreated = await Package.sum("package_limit", {
+        const totalPackagesCreated = await Package.sum("total_package", {
             // where: { userid: org_id }
             where: { event_id: { [Op.in]: eventIds }, }
         });
@@ -1197,7 +1197,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
 
         /* ================= PACKAGE ================= */
 
-        const totalPackagesCreated = await Package.sum("package_limit", {
+        const totalPackagesCreated = await Package.sum("total_package", {
             // where: { userid: org_id }
             where: { event_id: { [Op.in]: eventIds }, }
         });

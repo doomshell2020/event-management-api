@@ -1045,8 +1045,18 @@ module.exports.companyList = async (req, res) => {
 // event list show in calendar...
 module.exports.calendarEvents = async (req, res) => {
     try {
+        const today = new Date(); // current date
         const events = await Event.findAll({
-           attributes:["id","slug",'name','date_from','date_to',"status"]
+            where: {
+                status: "Y",
+                admineventstatus: "Y",
+                [Op.or]: [
+                    { date_from: { [Op.gte]: today } }, // upcoming
+                    { date_to: { [Op.gte]: today } }    // ongoing
+                ]
+            },
+            attributes: ["id", "slug", 'name', 'date_from', 'date_to', "status"],
+            order: [["date_from", "ASC"]]
         });
         return {
             success: true,
