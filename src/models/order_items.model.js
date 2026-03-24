@@ -119,6 +119,26 @@ const OrderItems = sequelize.define(
             allowNull: false,
             defaultValue: 'Y',
         },
+
+        // new keys added..
+        used_by: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+        scanner_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
+         scanned_date: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+        is_scanned: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: false,
+            defaultValue: 'N',
+        },
+
     },
     {
         tableName: 'tbl_order_items',

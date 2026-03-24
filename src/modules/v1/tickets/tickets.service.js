@@ -1,5 +1,5 @@
 
-const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots } = require('../../../models/index');
+const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots, Package, AddonTypes, WellnessSlots,Wellness } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
 const { Op } = require('sequelize');
 const path = require('path');
@@ -1086,7 +1086,7 @@ module.exports.listTicketsByEvent = async (event_id) => {
                     as: "pricings",
                     required: false, // ✅ important (LEFT JOIN)
                     attributes: ['price'],
-                    include: { model: EventSlots, as: "slot", attributes: ['start_time', 'end_time','slot_date','slot_name'] }
+                    include: { model: EventSlots, as: "slot", attributes: ['start_time', 'end_time', 'slot_date', 'slot_name'] }
                 }
             ],
 
@@ -1138,3 +1138,98 @@ module.exports.getTicketDetail = async (ticket_id) => {
         };
     }
 };
+
+
+
+// // Attendees - reports for a given event..service
+module.exports.AttendeesListByEvent = async (event_id, page = 1, limit = 10) => {
+    try {
+        // ✅ Check if event exists
+        const eventExists = await Event.findByPk(event_id);
+        if (!eventExists) {
+            return {
+                success: false,
+                message: 'Event not found',
+                code: 'EVENT_NOT_FOUND'
+            };
+        }
+
+        const pageNumber = parseInt(page);
+        const pageLimit = parseInt(limit);
+
+        const where = {
+            event_id: event_id,
+            is_scanned: "Y"
+        };
+
+        // ✅ Total count (IMPORTANT for pagination)
+        const totalRecords = await OrderItems.count({ where });
+
+        // ✅ Fetch paginated data
+        const attendees = await OrderItems.findAll({
+            where,
+            include: [
+                { model: User, as: "user", attributes: ['first_name', 'last_name', 'email', 'mobile'] },
+                { model: TicketType, as: "ticketType", attributes: ['title','price'] },
+                { model: AddonTypes, as: "addonType", attributes: ['name','price'] },
+                { model: Package, as: "package", attributes: ['name','grandtotal'] },
+                {
+                    model: WellnessSlots,
+                    as: "appointment",
+                    attributes: ['wellness_id','price'],
+                    include: {
+                        model:Wellness,
+                        as:"wellnessList",
+                        attributes:['name']
+                    }
+
+                },
+                {
+                    model: TicketPricing,
+                    as: "ticketPricing",
+                    attributes: ['event_id', 'ticket_type_id','price'],
+                    include: {
+                        model: TicketType,
+                        as: "ticket",
+                        attributes: ['title']
+                    }
+                }
+            ],
+            attributes: [
+                'user_id',
+                'event_id',
+                'used_by',
+                'scanner_id',
+                'is_scanned',
+                'createdAt',
+                'scanned_date'
+            ],
+            order: [["createdAt", "ASC"]],
+            limit: pageLimit,
+            offset: (pageNumber - 1) * pageLimit
+        });
+
+        const totalPages = Math.ceil(totalRecords / pageLimit);
+
+        return {
+            success: true,
+            message: 'Attendees fetched successfully',
+            data: {
+                totalRecords,
+                totalPages,
+                currentPage: pageNumber,
+                limit: pageLimit,
+                records: attendees
+            }
+        };
+
+    } catch (error) {
+        console.error('Error fetching attendees by event:', error);
+        return {
+            success: false,
+            message: 'Internal server error: ' + error.message,
+            code: 'DB_ERROR'
+        };
+    }
+};
+

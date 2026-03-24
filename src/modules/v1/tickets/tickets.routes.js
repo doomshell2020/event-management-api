@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ticketController = require('./tickets.controller');
-const { body, param, check } = require('express-validator');
+const { body, param, check,query } = require('express-validator');
 const validate = require('../../../middlewares/validation.middleware');
 const authenticate = require('../../../middlewares/auth.middleware');
 const uploadFiles = require('../../../middlewares/upload.middleware');
@@ -168,6 +168,18 @@ router.delete("/delete-generated-comps/:order_item_id",
 
 //Get single ticket detail by ID
 router.get("/detail/:ticket_id", authenticate, ticketController.getTicketDetail);
+
+// Attendees - reports for a given event..
+router.get(
+    "/attendees-list/:event_id",
+    authenticate,
+    [
+        query('page').optional().isInt().withMessage('page must be number'),
+        query('limit').optional().isInt().withMessage('limit must be number'),
+    ],
+    validate,
+    ticketController.AttendeesListByEvent
+);
 
 module.exports = router;
 

@@ -603,3 +603,43 @@ module.exports.getTicketDetail = async (req, res) => {
         return apiResponse.error(res, 'Internal Server Error', 500);
     }
 };
+
+
+// // Attendees - reports for a given event..controller
+module.exports.AttendeesListByEvent = async (req, res) => {
+    try {
+        const { event_id } = req.params;
+        const { page = 1, limit = 10 } = req.query;
+
+        if (!event_id) {
+            return apiResponse.validation(res, [], 'Event ID is required');
+        }
+
+        const result = await ticketService.AttendeesListByEvent(
+            event_id,
+            page,
+            limit
+        );
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'EVENT_NOT_FOUND':
+                    return apiResponse.notFound(res, 'Event not found');
+                case 'DB_ERROR':
+                    return apiResponse.error(res, 'Database error occurred while fetching tickets');
+                default:
+                    return apiResponse.error(res, result.message || 'An unknown error occurred');
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            'Attendees fetched successfully',
+            result.data
+        );
+
+    } catch (error) {
+        console.error('Error in AttendeesListByEvent:', error);
+        return apiResponse.error(res, 'Internal Server Error', 500);
+    }
+};
