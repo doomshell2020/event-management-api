@@ -95,6 +95,25 @@ exports.getEventDetails = async (req, res) => {
         });
 
 
+
+        //  Total Attendees
+        const totalAttendees = await OrderItems.count({
+            where: {
+                event_id,
+                is_scanned: "Y",
+                type: {
+                    [Op.in]: ["ticket_price", "ticket", "committesale"]
+                }
+            }
+        });
+
+        // console.log("totalAttendees---------",totalAttendees);
+
+
+
+
+
+
         //  Revenue & earnings
         const revenueData = await Orders.findOne({
             where: { event_id },
@@ -355,6 +374,7 @@ exports.getEventDetails = async (req, res) => {
                     totalPackagesSold: totalPackagesSold || 0,
                     totalAppointmentsCreated: totalAppointmentsCreated || 0,
                     totalAppointmentsSold: totalAppointmentsSold || 0,
+                    totalAttendees: totalAttendees || 0,
 
 
                 },
