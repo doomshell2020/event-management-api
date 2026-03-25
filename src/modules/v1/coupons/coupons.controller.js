@@ -647,33 +647,20 @@ exports.isCouponAppointmentEligible = async (req, res) => {
             if (toDate) toDate.setHours(0, 0, 0, 0);
 
             if ((fromDate && today < fromDate) || (toDate && today > toDate)) {
-                return res.status(403).json({
+                return res.status(404).json({
                     success: false,
                     message: "Coupon not valid for current date",
                 });
             }
         }
-        // if (coupon.validity_period == "specified_date") {
-        //     const today = new Date();
-
-        //     if (
-        //         (coupon.specific_date_from && new Date(coupon.specific_date_from) >= today) ||
-        //         (coupon.specific_date_to && new Date(coupon.specific_date_to) <= today)
-        //     ) {
-        //         return res.status(403).json({
-        //             success: false,
-        //             message: "Coupon not valid for current date",
-        //         });
-        //     }
-        // }
-
         /* -------- Redeem Count -------- */
         const redemptionCount = await Orders.count({
             where: { discount_code: couponCode },
         });
 
         if (redemptionCount >= Number(coupon.max_redeems)) {
-            return res.status(403).json({
+            // return res.status(403).json({
+            return res.status(404).json({
                 success: false,
                 message: "Coupon redemption limit reached",
             });
@@ -692,20 +679,41 @@ exports.isCouponAppointmentEligible = async (req, res) => {
         };
 
         /* -------- Applicable Logic -------- */
+        // if (coupon.applicable_for == "appointment") {
+        //     const cart = await Cart.findOne({
+        //         where: { ticket_type: "appointment", user_id: userId },
+        //         include: [{ model: WellnessSlots, as: 'appointments' }],
+        //     });
+
+        //     if (!cart) {
+        //         return res.status(404).json({
+        //             success: false,
+        //             message: "Coupon valid only for appointments",
+        //         });
+        //     }
+
+        //     discountPrice = calculateDiscount(cart?.appointments?.price);
+        // }
         if (coupon.applicable_for == "appointment") {
-            const cart = await Cart.findOne({
+            const cartItems = await Cart.findAll({
                 where: { ticket_type: "appointment", user_id: userId },
                 include: [{ model: WellnessSlots, as: 'appointments' }],
             });
 
-            if (!cart) {
-                return res.status(403).json({
+            if (!cartItems || cartItems.length === 0) {
+                return res.status(404).json({
                     success: false,
                     message: "Coupon valid only for appointments",
                 });
             }
 
-            discountPrice = calculateDiscount(cart?.appointments?.price);
+            let totalAmount = 0;
+
+            cartItems.forEach(item => {
+                totalAmount += Number(item?.appointments?.price || 0);
+            });
+
+            discountPrice = calculateDiscount(totalAmount);
         }
         /* -------- Success Response -------- */
         return res.status(200).json({
