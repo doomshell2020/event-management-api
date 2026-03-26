@@ -112,11 +112,9 @@ exports.createPaymentIntent = async (req, res) => {
     // VALIDATE LIMITS (Ticket / Committee / Addon / Package)
 
     for (const item of cartData) {
-
       if (item.ticketType == "appointment") {
         continue;
       }
-
       let Model = null;
       let whereClause = {};
       let itemId = null;
@@ -148,13 +146,71 @@ exports.createPaymentIntent = async (req, res) => {
         limitField = "total_package";
         nameField = "name";
       }
+      // else if (item.ticketType == "ticket_price") {
+      //   Model = TicketPricing;
+      //   whereClause.package_id = item.ticketId;
+      //   itemId = item.ticketId;
+      //   typeLabel = "TicketPrice";
+      //   limitField = "total_count";
+      //   nameField = "price";
+      // }
       else if (item.ticketType == "ticket_price") {
-        Model = TicketPricing;
-        whereClause.package_id = item.ticketId;
-        itemId = item.ticketId;
-        typeLabel = "TicketPrice";
-        limitField = "total_count";
-        nameField = "price";
+
+        // 1. Get pricing
+        const pricing = await TicketPricing.findOne({
+          where: { id: item.ticketId },
+          attributes: ["id", "ticket_type_id", "price"]
+        });
+
+        if (!pricing) {
+          return apiResponse.error(res, "Ticket pricing not found", 400);
+        }
+
+        // 2. Get actual ticket
+        const masterItem = await TicketType.findOne({
+          where: { id: pricing.ticket_type_id },
+          attributes: ["id", "count", "title", "hidden", "sold_out"]
+        });
+
+        if (!masterItem) {
+          return apiResponse.error(res, "Ticket not found", 400);
+        }
+
+        // 3. Hidden / sold out check
+        if (masterItem.hidden === "Y" || masterItem.sold_out === "Y") {
+          return apiResponse.error(
+            res,
+            `Ticket "${masterItem.title}" is not available.`,
+            400
+          );
+        }
+
+        // 4. Limit check
+        const totalLimit = Number(masterItem.count || 0);
+
+        if (totalLimit > 0) {
+          const booked = await OrderItems.findOne({
+            where: {
+              ticket_id: masterItem.id,
+              event_id
+            },
+            attributes: [[fn("SUM", col("count")), "totalBooked"]],
+            raw: true
+          });
+
+          const alreadyBooked = Number(booked?.totalBooked || 0);
+          const requested = Number(item.quantity || 1);
+
+          if (alreadyBooked + requested > totalLimit) {
+            return apiResponse.error(
+              res,
+              `Ticket "${masterItem.title}" is sold out.`,
+              400
+            );
+          }
+        }
+
+        continue; // 🔥 VERY IMPORTANT
       }
       else {
         continue;
@@ -181,7 +237,7 @@ exports.createPaymentIntent = async (req, res) => {
         where: { id: itemId },
         attributes
       });
-
+      console.log("item------", item)
       // ---------------- TICKET HIDDEN / SOLD OUT CHECK ----------------
       if (
         (item.ticketType === "ticket" || item.ticketType === "committesale") &&
