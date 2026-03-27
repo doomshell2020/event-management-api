@@ -1,5 +1,5 @@
-const { AddonTypes, Event, OrderItems, PackageDetails } = require('../../../models');
-const { Op } = require('sequelize');
+const { AddonTypes, Event, OrderItems, PackageDetails,Package } = require('../../../models');
+const { Op,Sequelize } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
 const { fn, col, literal } = require("sequelize");
@@ -183,6 +183,61 @@ module.exports.updateAddons = async (req) => {
     }
 };
 
+// module.exports.listAddonsByEvent = async (event_id) => {
+//     try {
+//         // ✅ Check if event exists
+//         const eventExists = await Event.findByPk(event_id);
+//         if (!eventExists) {
+//             return {
+//                 success: false,
+//                 message: 'Event not found',
+//                 code: 'EVENT_NOT_FOUND'
+//             };
+//         }
+
+//         // ✅ Fetch all tickets for this event
+//         // const tickets = await AddonTypes.findAll({
+//         //     where: { event_id },
+//         //     order: [['createdAt', 'DESC']]
+//         // });
+
+//         // ✅ Fetch addons with sold count
+//         const addons = await AddonTypes.findAll({
+//             where: { event_id },
+//             attributes: {
+//                 include: [
+//                     [
+//                         literal(`(
+//                         SELECT COALESCE(SUM(oi.count), 0)
+//                         FROM tbl_order_items AS oi
+//                         WHERE oi.addon_id = AddonTypes.id
+//                         AND oi.event_id = ${event_id}
+//                         AND oi.type = 'addon'
+//                         )`),
+//                         "sold_count",
+//                     ],
+//                 ],
+//             },
+//             order: [["createdAt", "DESC"]],
+//         });
+
+//         return {
+//             success: true,
+//             message: 'Addons fetched successfully',
+//             data: addons
+//         };
+
+//     } catch (error) {
+//         console.error('Error fetching Addons by event:', error);
+//         return {
+//             success: false,
+//             message: 'Internal server error: ' + error.message,
+//             code: 'DB_ERROR'
+//         };
+//     }
+// };
+
+
 module.exports.listAddonsByEvent = async (event_id) => {
     try {
         // ✅ Check if event exists
@@ -195,24 +250,20 @@ module.exports.listAddonsByEvent = async (event_id) => {
             };
         }
 
-        // ✅ Fetch all tickets for this event
-        // const tickets = await AddonTypes.findAll({
-        //     where: { event_id },
-        //     order: [['createdAt', 'DESC']]
-        // });
-
-        // ✅ Fetch addons with sold count
+        // =========================================================
+        // ✅ Step 1: Direct addon sold count
+        // =========================================================
         const addons = await AddonTypes.findAll({
             where: { event_id },
             attributes: {
                 include: [
                     [
                         literal(`(
-                        SELECT COALESCE(SUM(oi.count), 0)
-                        FROM tbl_order_items AS oi
-                        WHERE oi.addon_id = AddonTypes.id
-                        AND oi.event_id = ${event_id}
-                        AND oi.type = 'addon'
+                            SELECT COALESCE(SUM(oi.count), 0)
+                            FROM tbl_order_items AS oi
+                            WHERE oi.addon_id = AddonTypes.id
+                            AND oi.event_id = ${event_id}
+                            AND oi.type = 'addon'
                         )`),
                         "sold_count",
                     ],
@@ -221,10 +272,85 @@ module.exports.listAddonsByEvent = async (event_id) => {
             order: [["createdAt", "DESC"]],
         });
 
+        // =========================================================
+        // ✅ Step 2: Packages fetch (addon mapping)
+        // =========================================================
+        const packages = await Package.findAll({
+            where: { event_id },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                attributes: ["addon_id", "qty"]
+            },
+            attributes: ["id"]
+        });
+
+        // 👉 addon_id -> { package_id: qty }
+        const packageAddonMap = {};
+
+        packages.forEach(pkg => {
+            pkg.details.forEach(d => {
+                if (d.addon_id) {
+                    if (!packageAddonMap[d.addon_id]) {
+                        packageAddonMap[d.addon_id] = {};
+                    }
+
+                    packageAddonMap[d.addon_id][pkg.id] = Number(d.qty || 0);
+                }
+            });
+        });
+
+        // =========================================================
+        // ✅ Step 3: Package sales
+        // =========================================================
+        const packageSales = await OrderItems.findAll({
+            where: { event_id, type: "package" },
+            attributes: [
+                "package_id",
+                [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+            ],
+            group: ["package_id"],
+            raw: true
+        });
+
+        // 👉 addon_id -> total sold via package
+        const packageAddonSold = {};
+
+        packageSales.forEach(({ package_id, sold }) => {
+            for (let addonId in packageAddonMap) {
+                const qty = packageAddonMap[addonId][package_id];
+
+                if (qty) {
+                    if (!packageAddonSold[addonId]) {
+                        packageAddonSold[addonId] = 0;
+                    }
+
+                    packageAddonSold[addonId] += sold * qty;
+                }
+            }
+        });
+
+        // =========================================================
+        // ✅ Step 4: Merge counts
+        // =========================================================
+        const finalAddons = addons.map(addon => {
+            const plain = addon.toJSON();
+
+            const packageCount = packageAddonSold[plain.id] || 0;
+
+            return {
+                ...plain,
+                sold_count: Number(plain.sold_count) + packageCount
+            };
+        });
+
+        // =========================================================
+        // ✅ Final Response
+        // =========================================================
         return {
             success: true,
             message: 'Addons fetched successfully',
-            data: addons
+            data: finalAddons
         };
 
     } catch (error) {
@@ -236,6 +362,16 @@ module.exports.listAddonsByEvent = async (event_id) => {
         };
     }
 };
+
+
+
+
+
+
+
+
+
+
 
 module.exports.deleteAddon = async (req) => {
     try {

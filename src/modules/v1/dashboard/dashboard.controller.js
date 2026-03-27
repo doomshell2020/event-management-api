@@ -1,6 +1,6 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Orders, TicketType, CommitteeMembers, AddonTypes, CommitteeAssignTickets, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Currency, } = require('../../../models');
-const { Op, fn, col, literal } = require("sequelize");
+const { Orders, TicketType, CommitteeMembers, AddonTypes, CommitteeAssignTickets, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Currency, PackageDetails, } = require('../../../models');
+const { Op, fn, col, literal, Sequelize } = require("sequelize");
 
 // 📌 Get Single Order Details
 
@@ -63,6 +63,63 @@ exports.getEventDetails = async (req, res) => {
                 type: { [Op.in]: ["package"] }
             }
         });
+
+        // Package map (ticket & addon count)
+        const packages = await Package.findAll({
+            where: { event_id },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                attributes: ["ticket_type_id", "addon_id", 'qty']
+            },
+            attributes: ["id"]
+        });
+
+        const packageMap = Object.fromEntries(
+            packages.map(pkg => {
+
+                let ticket = 0;
+                let addon = 0;
+
+                pkg.details.forEach(d => {
+                    if (d.ticket_type_id) {
+                        ticket += Number(d.qty || 0);
+                    }
+                    if (d.addon_id) {
+                        addon += Number(d.qty || 0);
+                    }
+                });
+
+                return [pkg.id, { ticket, addon }];
+            })
+        );
+
+        //  Package sales
+        const packageSales = await OrderItems.findAll({
+            where: { event_id, type: "package" },
+            attributes: [
+                "package_id",
+                [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+            ],
+            group: ["package_id"],
+            raw: true
+        });
+        // Final calculation
+        const result = packageSales.reduce(
+            (acc, { package_id, sold }) => {
+                const pkg = packageMap[package_id];
+                if (!pkg) return acc;
+
+                acc.tickets += sold * pkg.ticket;
+                acc.addons += sold * pkg.addon;
+
+                return acc;
+            },
+            { tickets: 0, addons: 0 }
+        );
+        const totalSoldPackageTickets = result.tickets;
+        const totalSoldPackageAddons = result.addons;
+
 
         /* ================= APPOINTMENTS ================= */
         const wellnessList = await Wellness.findAll({
@@ -375,6 +432,8 @@ exports.getEventDetails = async (req, res) => {
                     totalAppointmentsCreated: totalAppointmentsCreated || 0,
                     totalAppointmentsSold: totalAppointmentsSold || 0,
                     totalAttendees: totalAttendees || 0,
+                    totalSoldPackageTickets: totalSoldPackageTickets || 0,
+                    totalSoldPackageAddons: totalSoldPackageAddons || 0
 
 
                 },
@@ -515,6 +574,64 @@ exports.getOrganizersEvent = async (req, res) => {
                 type: { [Op.in]: ["package"] }
             }
         });
+
+
+        // Package map (ticket & addon count)
+        const packages = await Package.findAll({
+            where: { event_id: { [Op.in]: eventIds } },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                attributes: ["ticket_type_id", "addon_id", 'qty']
+            },
+            attributes: ["id"]
+        });
+
+        const packageMap = Object.fromEntries(
+            packages.map(pkg => {
+
+                let ticket = 0;
+                let addon = 0;
+
+                pkg.details.forEach(d => {
+                    if (d.ticket_type_id) {
+                        ticket += Number(d.qty || 0);
+                    }
+                    if (d.addon_id) {
+                        addon += Number(d.qty || 0);
+                    }
+                });
+
+                return [pkg.id, { ticket, addon }];
+            })
+        );
+
+        //  Package sales
+        const packageSales = await OrderItems.findAll({
+            where: { event_id: { [Op.in]: eventIds }, type: "package" },
+            attributes: [
+                "package_id",
+                [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+            ],
+            group: ["package_id"],
+            raw: true
+        });
+        // Final calculation
+        const result = packageSales.reduce(
+            (acc, { package_id, sold }) => {
+                const pkg = packageMap[package_id];
+                if (!pkg) return acc;
+
+                acc.tickets += sold * pkg.ticket;
+                acc.addons += sold * pkg.addon;
+
+                return acc;
+            },
+            { tickets: 0, addons: 0 }
+        );
+        const totalSoldPackageTickets = result.tickets;
+        const totalSoldPackageAddons = result.addons;
+
 
         /* ================= APPOINTMENTS ================= */
         const wellnessList = await Wellness.findAll({
@@ -1072,6 +1189,8 @@ exports.getOrganizersEvent = async (req, res) => {
                     totalPackagesSold: totalPackagesSold || 0,
                     totalAppointmentsCreated: totalAppointmentsCreated || 0,
                     totalAppointmentsSold: totalAppointmentsSold || 0,
+                    totalSoldPackageTickets: totalSoldPackageTickets || 0,
+                    totalSoldPackageAddons: totalSoldPackageAddons || 0,
                 },
 
                 salesTrend: {
@@ -1228,6 +1347,63 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                 type: { [Op.in]: ["package"] }
             }
         });
+
+
+        // Package map (ticket & addon count)
+        const packages = await Package.findAll({
+            where: { event_id },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                attributes: ["ticket_type_id", "addon_id", 'qty']
+            },
+            attributes: ["id"]
+        });
+
+        const packageMap = Object.fromEntries(
+            packages.map(pkg => {
+
+                let ticket = 0;
+                let addon = 0;
+
+                pkg.details.forEach(d => {
+                    if (d.ticket_type_id) {
+                        ticket += Number(d.qty || 0);
+                    }
+                    if (d.addon_id) {
+                        addon += Number(d.qty || 0);
+                    }
+                });
+
+                return [pkg.id, { ticket, addon }];
+            })
+        );
+
+        //  Package sales
+        const packageSales = await OrderItems.findAll({
+            where: { event_id, type: "package" },
+            attributes: [
+                "package_id",
+                [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+            ],
+            group: ["package_id"],
+            raw: true
+        });
+        // Final calculation
+        const result = packageSales.reduce(
+            (acc, { package_id, sold }) => {
+                const pkg = packageMap[package_id];
+                if (!pkg) return acc;
+
+                acc.tickets += sold * pkg.ticket;
+                acc.addons += sold * pkg.addon;
+
+                return acc;
+            },
+            { tickets: 0, addons: 0 }
+        );
+        const totalSoldPackageTickets = result.tickets;
+        const totalSoldPackageAddons = result.addons;
 
         /* ================= APPOINTMENTS ================= */
         const wellnessList = await Wellness.findAll({
@@ -1778,6 +1954,8 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                     totalPackagesSold: totalPackagesSold || 0,
                     totalAppointmentsCreated: totalAppointmentsCreated || 0,
                     totalAppointmentsSold: totalAppointmentsSold || 0,
+                    totalSoldPackageAddons: totalSoldPackageAddons || 0,
+                    totalSoldPackageTickets: totalSoldPackageTickets || 0,
                 },
 
                 salesTrend: {

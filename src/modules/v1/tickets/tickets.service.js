@@ -1,7 +1,7 @@
 
-const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots, Package, AddonTypes, WellnessSlots,Wellness } = require('../../../models/index');
+const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots, Package, AddonTypes, WellnessSlots, Wellness } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
-const { Op } = require('sequelize');
+const { Op,Sequelize } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
 const { generateQRCode } = require('../../../common/utils/qrGenerator');
@@ -1022,6 +1022,7 @@ module.exports.deleteTicket = async (req) => {
     }
 };
 
+// new include ticket sold in package...27-03-2026
 module.exports.listTicketsByEvent = async (event_id) => {
     try {
         // ✅ Check if event exists
@@ -1034,34 +1035,7 @@ module.exports.listTicketsByEvent = async (event_id) => {
             };
         }
 
-        // const await OrderItems
-
-        // ✅ Fetch all tickets for this event
-        // const tickets = await TicketType.findAll({
-        //     where: { eventid: event_id },
-        //     order: [['createdAt', 'DESC']]
-        // });
-
-        // ✅ Fetch tickets with sold count
-        // const tickets = await TicketType.findAll({
-        //     where: { eventid: event_id },
-        //     attributes: {
-        //         include: [
-        //             [
-        //                 // 🔥 Subquery to calculate sold count
-        //                 literal(`(
-        //                 SELECT COALESCE(SUM(oi.count), 0)
-        //                 FROM tbl_order_items AS oi
-        //                 WHERE oi.ticket_id = TicketType.id
-        //                 AND oi.event_id = ${event_id}
-        //                 AND oi.type IN ('ticket', 'committesale','comps')
-        //                 )`),
-        //                 "sold_count",
-        //             ]
-        //         ],
-        //     },
-        //     order: [["createdAt", "DESC"]],
-        // });
+        // ✅ Step 1: Fetch tickets with direct + pricing sold count
         const tickets = await TicketType.findAll({
             where: { eventid: event_id },
 
@@ -1069,12 +1043,17 @@ module.exports.listTicketsByEvent = async (event_id) => {
                 include: [
                     [
                         literal(`(
-                    SELECT COALESCE(SUM(oi.count), 0)
-                    FROM tbl_order_items AS oi
-                    WHERE oi.ticket_id = TicketType.id
-                    AND oi.event_id = ${event_id}
-                    AND oi.type IN ('ticket', 'committesale','comps')
-                )`),
+                            SELECT COALESCE(SUM(oi.count), 0)
+                            FROM tbl_order_items AS oi
+                            LEFT JOIN tbl_ticket_pricing tp 
+                                ON tp.id = oi.ticket_pricing_id
+                            WHERE (
+                                oi.ticket_id = TicketType.id
+                                OR tp.ticket_type_id = TicketType.id
+                            )
+                            AND oi.event_id = ${event_id}
+                            AND oi.type IN ('ticket', 'committesale','comps','ticket_price')
+                        )`),
                         "sold_count",
                     ]
                 ]
@@ -1084,20 +1063,98 @@ module.exports.listTicketsByEvent = async (event_id) => {
                 {
                     model: TicketPricing,
                     as: "pricings",
-                    required: false, // ✅ important (LEFT JOIN)
+                    required: false,
                     attributes: ['price'],
-                    include: { model: EventSlots, as: "slot", attributes: ['start_time', 'end_time', 'slot_date', 'slot_name'] }
+                    include: {
+                        model: EventSlots,
+                        as: "slot",
+                        attributes: ['start_time', 'end_time', 'slot_date', 'slot_name']
+                    }
                 }
             ],
 
             order: [["createdAt", "DESC"]],
         });
 
+        // =========================================================
+        // ✅ Step 2: Fetch Packages with ticket qty mapping
+        // =========================================================
+        const packages = await Package.findAll({
+            where: { event_id },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                attributes: ["ticket_type_id", "qty"]
+            },
+            attributes: ["id"]
+        });
 
+        // 👉 ticket_type_id -> { package_id: qty }
+        const packageTicketMap = {};
+
+        packages.forEach(pkg => {
+            pkg.details.forEach(d => {
+                if (d.ticket_type_id) {
+                    if (!packageTicketMap[d.ticket_type_id]) {
+                        packageTicketMap[d.ticket_type_id] = {};
+                    }
+
+                    packageTicketMap[d.ticket_type_id][pkg.id] = Number(d.qty || 0);
+                }
+            });
+        });
+
+        // =========================================================
+        // ✅ Step 3: Package Sales
+        // =========================================================
+        const packageSales = await OrderItems.findAll({
+            where: { event_id, type: "package" },
+            attributes: [
+                "package_id",
+                [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+            ],
+            group: ["package_id"],
+            raw: true
+        });
+
+        // 👉 ticket_type_id -> total sold via package
+        const packageTicketSold = {};
+
+        packageSales.forEach(({ package_id, sold }) => {
+            for (let ticketTypeId in packageTicketMap) {
+                const qty = packageTicketMap[ticketTypeId][package_id];
+
+                if (qty) {
+                    if (!packageTicketSold[ticketTypeId]) {
+                        packageTicketSold[ticketTypeId] = 0;
+                    }
+
+                    packageTicketSold[ticketTypeId] += sold * qty;
+                }
+            }
+        });
+
+        // =========================================================
+        // ✅ Step 4: Merge package count into tickets
+        // =========================================================
+        const finalTickets = tickets.map(ticket => {
+            const plain = ticket.toJSON();
+
+            const packageCount = packageTicketSold[plain.id] || 0;
+
+            return {
+                ...plain,
+                sold_count: Number(plain.sold_count) + packageCount
+            };
+        });
+
+        // =========================================================
+        // ✅ Final Response
+        // =========================================================
         return {
             success: true,
             message: 'Tickets fetched successfully',
-            data: tickets
+            data: finalTickets
         };
 
     } catch (error) {
@@ -1109,6 +1166,103 @@ module.exports.listTicketsByEvent = async (event_id) => {
         };
     }
 };
+
+
+
+
+// module.exports.listTicketsByEvent = async (event_id) => {
+//     try {
+//         // ✅ Check if event exists
+//         const eventExists = await Event.findByPk(event_id);
+//         if (!eventExists) {
+//             return {
+//                 success: false,
+//                 message: 'Event not found',
+//                 code: 'EVENT_NOT_FOUND'
+//             };
+//         }
+
+//         // const await OrderItems
+
+//         // ✅ Fetch all tickets for this event
+//         // const tickets = await TicketType.findAll({
+//         //     where: { eventid: event_id },
+//         //     order: [['createdAt', 'DESC']]
+//         // });
+
+//         // ✅ Fetch tickets with sold count
+//         // const tickets = await TicketType.findAll({
+//         //     where: { eventid: event_id },
+//         //     attributes: {
+//         //         include: [
+//         //             [
+//         //                 // 🔥 Subquery to calculate sold count
+//         //                 literal(`(
+//         //                 SELECT COALESCE(SUM(oi.count), 0)
+//         //                 FROM tbl_order_items AS oi
+//         //                 WHERE oi.ticket_id = TicketType.id
+//         //                 AND oi.event_id = ${event_id}
+//         //                 AND oi.type IN ('ticket', 'committesale','comps')
+//         //                 )`),
+//         //                 "sold_count",
+//         //             ]
+//         //         ],
+//         //     },
+//         //     order: [["createdAt", "DESC"]],
+//         // });
+
+//         const tickets = await TicketType.findAll({
+//             where: { eventid: event_id },
+
+//             attributes: {
+//                 include: [
+//                     [
+//                     literal(`(
+//                     SELECT COALESCE(SUM(oi.count), 0)
+//                     FROM tbl_order_items AS oi
+//                     LEFT JOIN tbl_ticket_pricing tp 
+//                     ON tp.id = oi.ticket_pricing_id
+//                     WHERE (
+//                       oi.ticket_id = TicketType.id
+//                     OR tp.ticket_type_id = TicketType.id
+//                     )
+//                    AND oi.event_id = ${event_id}
+//                   AND oi.type IN ('ticket', 'committesale','comps','ticket_price')
+//                   )`),
+//                         "sold_count",
+//                     ]
+//                 ]
+//             },
+
+//             include: [
+//                 {
+//                     model: TicketPricing,
+//                     as: "pricings",
+//                     required: false, // ✅ important (LEFT JOIN)
+//                     attributes: ['price'],
+//                     include: { model: EventSlots, as: "slot", attributes: ['start_time', 'end_time', 'slot_date', 'slot_name'] }
+//                 }
+//             ],
+
+//             order: [["createdAt", "DESC"]],
+//         });
+
+
+//         return {
+//             success: true,
+//             message: 'Tickets fetched successfully',
+//             data: tickets
+//         };
+
+//     } catch (error) {
+//         console.error('Error fetching tickets by event:', error);
+//         return {
+//             success: false,
+//             message: 'Internal server error: ' + error.message,
+//             code: 'DB_ERROR'
+//         };
+//     }
+// };
 
 module.exports.getTicketDetail = async (ticket_id) => {
     try {
@@ -1170,24 +1324,24 @@ module.exports.AttendeesListByEvent = async (event_id, page = 1, limit = 10) => 
             where,
             include: [
                 { model: User, as: "user", attributes: ['first_name', 'last_name', 'email', 'mobile'] },
-                { model: TicketType, as: "ticketType", attributes: ['title','price'] },
-                { model: AddonTypes, as: "addonType", attributes: ['name','price'] },
-                { model: Package, as: "package", attributes: ['name','grandtotal'] },
+                { model: TicketType, as: "ticketType", attributes: ['title', 'price'] },
+                { model: AddonTypes, as: "addonType", attributes: ['name', 'price'] },
+                { model: Package, as: "package", attributes: ['name', 'grandtotal'] },
                 {
                     model: WellnessSlots,
                     as: "appointment",
-                    attributes: ['wellness_id','price'],
+                    attributes: ['wellness_id', 'price'],
                     include: {
-                        model:Wellness,
-                        as:"wellnessList",
-                        attributes:['name']
+                        model: Wellness,
+                        as: "wellnessList",
+                        attributes: ['name']
                     }
 
                 },
                 {
                     model: TicketPricing,
                     as: "ticketPricing",
-                    attributes: ['event_id', 'ticket_type_id','price'],
+                    attributes: ['event_id', 'ticket_type_id', 'price'],
                     include: {
                         model: TicketType,
                         as: "ticket",

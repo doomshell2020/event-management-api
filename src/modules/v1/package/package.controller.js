@@ -84,8 +84,10 @@ module.exports.createPackage = async (req, res) => {
             total_package
         } = req.body;
 
-        // ✅ Basic validation
-        if (!event_id || !name || !package_limit || !hidden) {
+        // ===============================
+        // ✅ BASIC VALIDATION
+        // ===============================
+        if (!event_id || !name || !package_limit || hidden === undefined) {
             return apiResponse.validation(res, [], 'Required fields are missing');
         }
 
@@ -93,10 +95,11 @@ module.exports.createPackage = async (req, res) => {
             return apiResponse.validation(res, [], 'Package items are required');
         }
 
-        // ===============================
-        // ✅ CHECK AVAILABILITY FIRST
-        // ===============================
+        const totalPackageQty = total_package || 1;
 
+        // ===============================
+        // ✅ STOCK VALIDATION
+        // ===============================
         for (const item of ticketType) {
 
             if (!item.id || !item.type || !item.count) {
@@ -104,12 +107,17 @@ module.exports.createPackage = async (req, res) => {
                 return apiResponse.validation(res, [], 'Invalid package item data');
             }
 
+            const requiredQty = item.count * totalPackageQty;
+
+            // =====================================================
+            // 🎟️ TICKET VALIDATION (NORMAL + PRICING + PACKAGE)
+            // =====================================================
             if (item.type === "ticket") {
 
                 const ticket = await TicketType.findOne({
-                    where: { id: item.id, eventid:event_id },
+                    where: { id: item.id, eventid: event_id },
                     transaction: t,
-                    lock: t.LOCK.UPDATE // 🔒 prevent race condition
+                    lock: t.LOCK.UPDATE
                 });
 
                 if (!ticket) {
@@ -117,16 +125,70 @@ module.exports.createPackage = async (req, res) => {
                     return apiResponse.validation(res, [], 'Ticket not found');
                 }
 
-                if (item.count > ticket.count) {
+                // ✅ PACKAGE USED
+                const packageUsedQty = await PackageDetails.sum('qty', {
+                    where: { ticket_type_id: item.id },
+                    transaction: t
+                });
+
+                // ===============================
+                // ✅ NORMAL TICKET SOLD
+                // ===============================
+                const normalSoldQty = await OrderItems.sum('count', {
+                    where: {
+                        ticket_id: item.id,
+                        status: 'Y'
+                    },
+                    transaction: t
+                });
+
+                // ===============================
+                // ✅ PRICING BASED SOLD
+                // ===============================
+                const pricingIds = await TicketPricing.findAll({
+                    where: { ticket_type_id: item.id },
+                    attributes: ['id'],
+                    raw: true,
+                    transaction: t
+                });
+
+                const pricingIdList = pricingIds.map(p => p.id);
+
+                let pricingSoldQty = 0;
+
+                if (pricingIdList.length > 0) {
+                    pricingSoldQty = await OrderItems.sum('count', {
+                        where: {
+                            ticket_pricing_id: pricingIdList,
+                            status: 'Y'
+                        },
+                        transaction: t
+                    });
+                }
+
+                // ===============================
+                // ✅ FINAL SOLD + AVAILABLE
+                // ===============================
+                const totalSoldQty =
+                    (normalSoldQty || 0) + (pricingSoldQty || 0);
+
+                const availableQty =
+                    ticket.count - ((packageUsedQty || 0) + totalSoldQty);
+
+                if (requiredQty > availableQty) {
                     await t.rollback();
                     return apiResponse.validation(
                         res,
                         [],
-                        `Only ${ticket.count} tickets available for ${ticket.title}`
+                        `Only ${availableQty} tickets remaining, but required ${requiredQty}`
                     );
                 }
+            }
 
-            } else if (item.type === "addon") {
+            // =====================================================
+            // ➕ ADDON VALIDATION
+            // =====================================================
+            else if (item.type === "addon") {
 
                 const addon = await AddonTypes.findOne({
                     where: { id: item.id, event_id },
@@ -139,12 +201,28 @@ module.exports.createPackage = async (req, res) => {
                     return apiResponse.validation(res, [], 'Addon not found');
                 }
 
-                if (item.count > addon.count) {
+                const packageUsedQty = await PackageDetails.sum('qty', {
+                    where: { addon_id: item.id },
+                    transaction: t
+                });
+
+                const orderSoldQty = await OrderItems.sum('count', {
+                    where: {
+                        addon_id: item.id,
+                        status: 'Y'
+                    },
+                    transaction: t
+                });
+
+                const availableQty =
+                    addon.count - ((packageUsedQty || 0) + (orderSoldQty || 0));
+
+                if (requiredQty > availableQty) {
                     await t.rollback();
                     return apiResponse.validation(
                         res,
                         [],
-                        `Only ${addon.count} addons available for ${addon.name}`
+                        `Only ${availableQty} addons remaining, but required ${requiredQty}`
                     );
                 }
             }
@@ -153,7 +231,6 @@ module.exports.createPackage = async (req, res) => {
         // ===============================
         // ✅ CREATE PACKAGE
         // ===============================
-
         const newPackage = await Package.create(
             {
                 event_id,
@@ -161,7 +238,7 @@ module.exports.createPackage = async (req, res) => {
                 package_limit,
                 discount_percentage: discount_percentage || 0,
                 total,
-                total_package,
+                total_package: totalPackageQty,
                 discount_amt: discount_amt || 0,
                 grandtotal,
                 hidden,
@@ -173,12 +250,14 @@ module.exports.createPackage = async (req, res) => {
         // ===============================
         // ✅ INSERT PACKAGE DETAILS
         // ===============================
-
         const detailsData = ticketType.map((item) => ({
             package_id: newPackage.id,
             ticket_type_id: item.type === 'ticket' ? item.id : null,
             addon_id: item.type === 'addon' ? item.id : null,
-            qty: item.count,
+
+            // 🔥 FINAL QTY (MULTIPLIED)
+            qty: item.count * totalPackageQty,
+
             price: item.price || 0,
             status: 'Y'
         }));
@@ -203,29 +282,97 @@ module.exports.createPackage = async (req, res) => {
 
 // ✅ Update Package (name, hidden, limit — any or all)
 module.exports.updatePackage = async (req, res) => {
+    const t = await Package.sequelize.transaction();
+
     try {
         const { id } = req.params;
         const { name, hidden, package_limit, total_package } = req.body;
 
-        const packageData = await Package.findByPk(id);
+        const packageData = await Package.findByPk(id, {
+            transaction: t,
+            lock: t.LOCK.UPDATE
+        });
+
         if (!packageData) {
+            await t.rollback();
             return apiResponse.notFound(res, 'Package not found');
         }
 
-        // ✅ Only update fields that are sent in body
+        // ===============================
+        // ✅ SOLD PACKAGE COUNT
+        // ===============================
+        const soldPackageQty = await OrderItems.sum('count', {
+            where: {
+                package_id: id,
+                status: 'Y' // ya CONFIRMED
+            },
+            transaction: t
+        });
+
+        const soldQty = soldPackageQty || 0;
+
+        // ===============================
+        // ✅ VALIDATE total_package
+        // ===============================
+        if (total_package !== undefined) {
+
+            if (total_package < soldQty) {
+                await t.rollback();
+                return apiResponse.validation(
+                    res,
+                    [],
+                    `Cannot reduce package below sold quantity (${soldQty})`
+                );
+            }
+        }
+
+        // ===============================
+        // ✅ UPDATE FIELDS
+        // ===============================
         if (name !== undefined) packageData.name = name;
         if (hidden !== undefined) packageData.hidden = hidden;
         if (package_limit !== undefined) packageData.package_limit = package_limit;
         if (total_package !== undefined) packageData.total_package = total_package;
 
-        await packageData.save();
+        await packageData.save({ transaction: t });
+
+        await t.commit();
 
         return apiResponse.success(res, 'Package updated successfully', packageData);
+
     } catch (error) {
         console.error('Error in updatePackage:', error);
+        await t.rollback();
         return apiResponse.error(res, 'Internal Server Error', 500);
     }
 };
+
+
+
+// module.exports.updatePackage = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const { name, hidden, package_limit, total_package } = req.body;
+
+//         const packageData = await Package.findByPk(id);
+//         if (!packageData) {
+//             return apiResponse.notFound(res, 'Package not found');
+//         }
+
+//         // ✅ Only update fields that are sent in body
+//         if (name !== undefined) packageData.name = name;
+//         if (hidden !== undefined) packageData.hidden = hidden;
+//         if (package_limit !== undefined) packageData.package_limit = package_limit;
+//         if (total_package !== undefined) packageData.total_package = total_package;
+
+//         await packageData.save();
+
+//         return apiResponse.success(res, 'Package updated successfully', packageData);
+//     } catch (error) {
+//         console.error('Error in updatePackage:', error);
+//         return apiResponse.error(res, 'Internal Server Error', 500);
+//     }
+// };
 
 module.exports.getAllPackages = async (req, res) => {
     try {
