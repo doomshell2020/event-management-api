@@ -110,6 +110,7 @@ OrderItems.belongsTo(WellnessSlots, { foreignKey: "appointment_id", as: "appoint
 OrderItems.belongsTo(User, { foreignKey: "user_id", as: "user" });
 OrderItems.hasMany(QuestionsBook, { foreignKey: "ticketdetail_id", sourceKey: "id", as: "questionsBook" });
 OrderItems.belongsTo(CommitteeMembers, { foreignKey: "committee_user_id", targetKey: "user_id",  as: "committeeMembers" });
+OrderItems.belongsTo(User, { foreignKey: "scanner_id", as: "scanner" });
 
 Questions.hasMany(QuestionItems, { foreignKey: 'question_id', as: 'questionItems', onDelete: 'CASCADE' });
 QuestionItems.belongsTo(Questions, { foreignKey: 'question_id', as: 'question' });

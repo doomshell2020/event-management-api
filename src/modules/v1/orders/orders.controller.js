@@ -164,6 +164,11 @@ exports.organizerTicketExports = async (req, res) => {
                             ]
                         }
                     ]
+                },
+                {
+                    model: User,
+                    as: "scanner",
+                    attributes: ["id", "first_name", "last_name", "email"]
                 }
 
             ],
@@ -196,6 +201,10 @@ exports.organizerTicketExports = async (req, res) => {
         });
     }
 };
+
+
+
+
 
 exports.salesAddons = async (req, res) => {
     try {

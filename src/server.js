@@ -38,12 +38,13 @@ const payoutsRoutesV1 = require('./modules/v1/payouts/payouts.routes');
 const couponsRoutesV1 = require('./modules/v1/coupons/coupons.route');
 const companyRoutesV1 = require('./modules/v1/company/company.routes');
 const dashboardRoutesV1 = require('./modules/v1/dashboard/dashboard.route');
-
+const scanTicketsRoutesV1 = require('./modules/v1/scantickets/scan-tickets.route');
 
 const eventsRoutesV2 = require('./modules/v2/events/events.routes');
 const ticketsRoutesV2 = require('./modules/v2/tickets/tickets.routes');
 // const subscriptionsRoutesV1 = require('./modules/v1/subscriptions/subscriptions.routes');
 // const apiKeysRoutesV1 = require('./modules/v1/apiKeys/apiKeys.routes');
+
 
 // Admin Routes...
 const authAdminRoutesV1 = require('./modules/v1/admin/auth/auth.routes');
@@ -108,6 +109,7 @@ app.use('/api/v1/payouts',payoutsRoutesV1);
 app.use('/api/v1/coupons',couponsRoutesV1);
 app.use('/api/v1/company',companyRoutesV1);
 app.use('/api/v1/dashboard',dashboardRoutesV1);
+app.use('/api/v1/scan-tickets',scanTicketsRoutesV1);
 
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);
 // app.use('/api/v1/api-keys', apiKeysRoutesV1);
