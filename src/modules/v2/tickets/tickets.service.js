@@ -1,8 +1,7 @@
-const { TicketType, Event, EventSlots, TicketPricing } = require('../../../models/index');
-const { Op } = require('sequelize');
+const { TicketType, Event, EventSlots, TicketPricing, OrderItems, Package, PackageDetails } = require('../../../models/index');
+const { Op, literal, Sequelize } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
-
 // getTicketPricing
 module.exports.getTicketPricing = async (req) => {
     try {
@@ -188,7 +187,74 @@ module.exports.updateTicket = async (req) => {
             }
         }
 
+        const event_id = existingTicket.eventid;
 
+        // =========================================================
+        // ✅ Step 1: Direct + Pricing sold count (single ticket)
+        // =========================================================
+        const soldData = await TicketType.findOne({
+            where: { id: ticketId },
+            attributes: [
+                "id",
+                [
+                    literal(`(
+                SELECT COALESCE(SUM(oi.count), 0)
+                FROM tbl_order_items AS oi
+                LEFT JOIN tbl_ticket_pricing tp 
+                    ON tp.id = oi.ticket_pricing_id
+                WHERE (
+                    oi.ticket_id = TicketType.id 
+                    OR tp.ticket_type_id = TicketType.id
+                )
+                AND oi.event_id = ${event_id}
+                AND oi.type IN ('ticket', 'committesale','comps','ticket_price')
+            )`),
+                    "sold_count"
+                ]
+            ],
+            raw: true
+        });
+
+        let totalSold = Number(soldData?.sold_count || 0);
+
+        // =========================================================
+        // ✅ Step 2: Package mapping for THIS ticket only
+        // =========================================================
+        const packages = await Package.findAll({
+            where: { event_id },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                attributes: ["ticket_type_id", "qty"]
+            },
+            attributes: ["id", "total_package"]
+        });
+
+        // 👉 total package required qty for this ticket
+        let packageRequiredQty = 0;
+
+        packages.forEach(pkg => {
+            const totalPkg = Number(pkg.total_package || 0);
+
+            pkg.details.forEach(d => {
+                if (d.ticket_type_id == ticketId) {
+                    const qty = Number(d.qty || 0);
+
+                    // 🔥 MAIN FIX
+                    packageRequiredQty += qty * totalPkg;
+                }
+            });
+        });
+
+        const minimumRequired = totalSold + packageRequiredQty;
+
+        if (count && parseInt(count) < minimumRequired) {
+            return {
+                success: false,
+                message: `Cannot reduce below ${minimumRequired} (Sold: ${totalSold} + Package Reserved: ${packageRequiredQty})`,
+                code: "INVALID_COUNT"
+            };
+        }
         // ✅ Validate image extension only if a new image is uploaded
         if (ticketImage) {
             const allowedExt = ['png', 'jpg', 'jpeg'];

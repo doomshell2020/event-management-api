@@ -1,5 +1,5 @@
-const { AddonTypes, Event, OrderItems, PackageDetails,Package } = require('../../../models');
-const { Op,Sequelize } = require('sequelize');
+const { AddonTypes, Event, OrderItems, PackageDetails, Package } = require('../../../models');
+const { Op, Sequelize } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
 const { fn, col, literal } = require("sequelize");
@@ -134,6 +134,74 @@ module.exports.updateAddons = async (req) => {
             }
         }
 
+
+        const event_id = existingAddon.event_id;
+
+        // =========================================================
+        // ✅ Step 1: Direct sold count
+        // =========================================================
+        const soldData = await OrderItems.findOne({
+            where: {
+                addon_id: addonId,
+                event_id: event_id,
+                type: 'addon'
+            },
+            attributes: [
+                [
+                    Sequelize.fn(
+                        "COALESCE",
+                        Sequelize.fn("SUM", Sequelize.col("count")),
+                        0
+                    ),
+                    "sold_count"
+                ]
+            ],
+            raw: true
+        });
+
+        let totalSold = Number(soldData?.sold_count || 0);
+
+        // =========================================================
+        // ✅ Step 2: Only relevant packages fetch karo (OPTIMIZED)
+        // =========================================================
+        const packages = await Package.findAll({
+            where: { event_id },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                required: true, // 🔥 only matching records
+                where: { addon_id: addonId },
+                attributes: ["addon_id", "qty"]
+            },
+            attributes: ["id", "total_package"]
+        });
+
+        // =========================================================
+        // ✅ Step 3: Calculate package reserved qty
+        // =========================================================
+        let packageRequiredQty = 0;
+
+        packages.forEach(pkg => {
+            const totalPkg = Number(pkg.total_package || 0);
+            if (!totalPkg) return;
+
+            pkg.details.forEach(d => {
+                const qty = Number(d.qty || 0);
+                packageRequiredQty += qty * totalPkg;
+            });
+        });
+
+        // =========================================================
+        // ✅ Final minimum required
+        // =========================================================
+        const minimumRequired = totalSold + packageRequiredQty;
+        if (count && parseInt(count) < minimumRequired) {
+            return {
+                success: false,
+                message: `Cannot reduce below ${minimumRequired} (Sold: ${totalSold} + Package Reserved: ${packageRequiredQty})`,
+                code: "INVALID_COUNT"
+            };
+        }
 
         // ✅ Validate image type
         if (addonImage) {
