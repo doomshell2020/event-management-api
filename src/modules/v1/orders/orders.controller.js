@@ -2130,7 +2130,10 @@ exports.getOrderDetails = async (req, res) => {
                         "qr_image",
                         "secure_hash",
                         "cancel_status",
-                        "cancel_date"
+                        "cancel_date",
+                        "scanner_id",
+                        "is_scanned",
+                        "scanned_date"
                     ],
                     include: [
                         { model: TicketType, as: "ticketType", attributes: ["id", "title"] },
@@ -2171,9 +2174,11 @@ exports.getOrderDetails = async (req, res) => {
                                     attributes: ["Currency_symbol", "Currency"]
                                 }
                             }
-                        }
+                        },
+                         {model:User , as:"scanner", attributes:["email","first_name","last_name"]}
                     ]
                 },
+               
                 {
                     model: Event,
                     as: "event",
