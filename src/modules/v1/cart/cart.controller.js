@@ -334,7 +334,10 @@ module.exports = {
                 order: [["id", "DESC"]],
                 where: where,
                 include: [
-                    { model: TicketType, attributes: ["id", "title", "price"] },
+                    { model: TicketType, attributes: ["id", "title", "price"],
+                        include:{model:TicketPricing, as:"pricings",attributes:["price"]} 
+
+                      },
                     { model: AddonTypes, attributes: ["id", "name", "price"] },
                     { model: Package, attributes: ["id", "name", "grandtotal"] },
                     {
@@ -405,7 +408,43 @@ module.exports = {
                                     model: TicketType,
                                     as: "ticket",
                                     required: false,
-                                    attributes: ["id", "count", "title", "access_type", "hidden", "sold_out"],
+                                    attributes: ["id", "count", "title", "access_type", "hidden", "sold_out", "type"],
+                                    include: [
+                                        {
+                                            model: CommitteeAssignTickets,
+                                            as: "committeeAssignedTickets",
+                                            required: false,
+                                            attributes: {
+                                                exclude: ["createdAt", "updatedAt"]
+                                            },
+                                            where: {
+                                                event_id: ev
+                                            },
+                                            include: [
+                                                {
+                                                    model: CommitteeMembers,
+                                                    as: "committeeMember",
+                                                    required: false,
+                                                    attributes: ['status'],
+                                                    where: {
+                                                        event_id: ev
+                                                    },
+                                                    include: [
+                                                        {
+                                                            model: User,
+                                                            as: "user",
+                                                            attributes: [
+                                                                "id",
+                                                                "first_name",
+                                                                "last_name",
+                                                                "email"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
                                 },
                                 {
                                     model: EventSlots,
@@ -656,7 +695,7 @@ module.exports = {
                 let ticketPrice = 0;
                 let uniqueId = null;
                 let committee_member_id = null;
-
+                // console.log("item-----=-=-=-=-=-==",item.TicketType?.pricings[0]?.price);
                 switch (item.ticket_type) {
                     case "ticket":
                         displayName = item.TicketType?.title || "";
@@ -666,7 +705,7 @@ module.exports = {
 
                     case "committesale":
                         displayName = item.TicketType?.title || "";
-                        ticketPrice = item.TicketType?.price || 0;
+                        ticketPrice = item.TicketType?.price || item.TicketType?.pricings[0]?.price || 0;
                         uniqueId = item.TicketType?.id || null;
                         committee_member_id = item.commitee_user_id || null;
                         break;

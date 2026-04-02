@@ -8,7 +8,7 @@ const { sequelize } = require("../../../models");
 const Sequelize = require('sequelize');
 const { Op } = Sequelize;
 const config = require('../../../config/app');
-const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType, Templates, Payouts } = require('../../../models');
+const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType, Templates, Payouts,TicketPricing } = require('../../../models');
 const { pushFromCommitteeCompsTicket } = require('../tickets/tickets.service');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 
@@ -515,7 +515,8 @@ exports.handleCommitteeTicketDetails = async (req, res) => {
                 {
                     model: TicketType,
                     as: 'ticket',
-                    attributes: ['id', 'title', 'price', 'type']
+                    attributes: ['id', 'title', 'price', 'type'],
+                    include:{model:TicketPricing,as:"pricings" , attributes:['ticket_type_id','price']}
                 }
             ],
             attributes: [
@@ -760,7 +761,8 @@ exports.requestList = async (req, res) => {
                 },
                 {
                     model: TicketType,
-                    attributes: ['id', 'title', 'price']
+                    attributes: ['id', 'title', 'price'],
+                    include:{model:TicketPricing,as:"pricings" , attributes:['ticket_type_id','price']}
                 },
                 {
                     model: User,
@@ -853,7 +855,8 @@ exports.requestList = async (req, res) => {
                 {
                     model: TicketType,
                     as: "ticketType",
-                    attributes: ["id", "title", "price"]
+                    attributes: ["id", "title", "price"],
+                    include:{model:TicketPricing,as:"pricings" , attributes:['ticket_type_id','price']}
                 }
             ],
             raw: true
