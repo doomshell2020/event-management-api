@@ -8,7 +8,7 @@ const { sequelize } = require("../../../models");
 const Sequelize = require('sequelize');
 const { Op } = Sequelize;
 const config = require('../../../config/app');
-const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType, Templates, Payouts,TicketPricing } = require('../../../models');
+const { CommitteeMembers, CartQuestionsDetails, OrderItems, QuestionItems, Questions, CommitteeAssignTickets, CommitteeGroup, CommitteeGroupMember, AddonTypes, Company, Currency, User, Event, Cart, TicketType, Templates, Payouts, TicketPricing } = require('../../../models');
 const { pushFromCommitteeCompsTicket } = require('../tickets/tickets.service');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 
@@ -516,7 +516,7 @@ exports.handleCommitteeTicketDetails = async (req, res) => {
                     model: TicketType,
                     as: 'ticket',
                     attributes: ['id', 'title', 'price', 'type'],
-                    include:{model:TicketPricing,as:"pricings" , attributes:['ticket_type_id','price']}
+                    include: { model: TicketPricing, as: "pricings", attributes: ['ticket_type_id', 'price'] }
                 }
             ],
             attributes: [
@@ -645,19 +645,51 @@ exports.handleAction = async (req, res) => {
             );
         }
 
-        const used = assign.usedticket || 0;
-        const available = assign.count - used;
+        // const used = assign.usedticket || 0;
+        // const available = assign.count - used;
 
-        if (available < 1) {
+
+        // 🔢 Get total purchased tickets from orders
+        const purchasedData = await OrderItems.findOne({
+            attributes: [
+                [Sequelize.fn('SUM', Sequelize.col('count')), 'totalPurchased']
+            ],
+            where: {
+                event_id: cartItem.event_id,
+                ticket_id: cartItem.ticket_id,
+                type: 'committesale',
+                committee_user_id: committee_user_id,
+                status: 'Y' // or completed/paid status
+            },
+            raw: true
+        });
+        const purchased = parseInt(purchasedData?.totalPurchased || 0);
+        // 🔢 Total assigned
+        const assigned = assign.count || 0;
+        const requestedCount = cartItem.no_tickets || 0;
+        // ✅ FINAL AVAILABLE
+        const available = assigned - purchased;
+
+        if (available <= 0) {
             return apiResponse.error(
                 res,
                 "All committee tickets for this category have already been allocated.",
                 400
             );
         }
-
+        // ❗ MAIN VALIDATION
+        if (requestedCount > available) {
+            return apiResponse.error(
+                res,
+                `Only ${available} ticket(s) can be approved`,
+                400
+            );
+        }
         // 🔒 Update allocation and cart status
-        await assign.update({ usedticket: used + 1 });
+        // await assign.update({ usedticket: used + 1 });
+        await assign.update({
+            usedticket: (assign.usedticket || 0) + requestedCount
+        });
         await cartItem.update({ status: 'Y' });
 
         /* ================= APPROVAL EMAIL ================= */
@@ -762,7 +794,7 @@ exports.requestList = async (req, res) => {
                 {
                     model: TicketType,
                     attributes: ['id', 'title', 'price'],
-                    include:{model:TicketPricing,as:"pricings" , attributes:['ticket_type_id','price']}
+                    include: { model: TicketPricing, as: "pricings", attributes: ['ticket_type_id', 'price'] }
                 },
                 {
                     model: User,
@@ -856,7 +888,7 @@ exports.requestList = async (req, res) => {
                     model: TicketType,
                     as: "ticketType",
                     attributes: ["id", "title", "price"],
-                    include:{model:TicketPricing,as:"pricings" , attributes:['ticket_type_id','price']}
+                    include: { model: TicketPricing, as: "pricings", attributes: ['ticket_type_id', 'price'] }
                 }
             ],
             raw: true

@@ -237,7 +237,6 @@ exports.createPaymentIntent = async (req, res) => {
         where: { id: itemId },
         attributes
       });
-      console.log("item------", item)
       // ---------------- TICKET HIDDEN / SOLD OUT CHECK ----------------
       if (
         (item.ticketType === "ticket" || item.ticketType === "committesale") &&

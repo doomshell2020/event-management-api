@@ -2,7 +2,7 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const requestTicket = require('../../../common/utils/emailTemplates/requestTicket');
 const sendEmail = require('../../../common/utils/sendEmail');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers, Questions, QuestionItems, CartQuestionsDetails, PackageDetails, Templates } = require('../../../models');
+const { Cart, TicketType, TicketPricing, AddonTypes, Package, Event, EventSlots, Wellness, WellnessSlots, Company, Currency, User, CommitteeAssignTickets, CommitteeMembers, Questions, QuestionItems, CartQuestionsDetails, PackageDetails, Templates, OrderItems } = require('../../../models');
 const { Op, Sequelize } = require("sequelize");
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
@@ -79,12 +79,12 @@ module.exports = {
             /* ================= COMMITTEE LOGIC ================= */
             if (item_type == 'committesale') {
 
-                if (count > 1)
-                    return apiResponse.error(
-                        res,
-                        "Only 1 committee ticket can be requested",
-                        400
-                    );
+                // if (count > 1)
+                //     return apiResponse.error(
+                //         res,
+                //         "Only 1 committee ticket can be requested",
+                //         400
+                //     );
 
                 const pendingSameTicket = await Cart.findOne({
                     where: {
@@ -119,17 +119,49 @@ module.exports = {
                         400
                     );
 
-                const available =
-                    committeeAssign.count - (committeeAssign.usedticket || 0);
+                // Get total purchased tickets from orders
+                const purchasedData = await OrderItems.findOne({
+                    attributes: [
+                        [Sequelize.fn('SUM', Sequelize.col('count')), 'totalPurchased']
+                    ],
+                    where: {
+                        event_id,
+                        ticket_id,
+                        type: 'committesale',
+                        committee_user_id: committee_member_id,
+                        status: 'Y' // or completed/paid status
+                    },
+                    raw: true
+                });
 
-                if (available < 1)
+                const purchased = parseInt(purchasedData?.totalPurchased || 0);
+
+                // 🔢 Pending tickets (not yet approved)
+                const pending = parseInt(pendingSameTicket?.count || 0);
+
+                // 🔢 Total assigned
+                const assigned = committeeAssign.count || 0;
+
+                // ✅ FINAL AVAILABLE
+                const available = assigned - purchased - pending;
+
+                // const available = committeeAssign.count - (committeeAssign.usedticket || 0);
+                // if (available < 1)
+                if (available <= 0)
                     return apiResponse.error(
                         res,
-                        "No committee ticket available for selected member",
+                        "No committee ticket available for selected committee member.",
                         400
                     );
-            }
 
+                if (count > available)
+                    return apiResponse.error(
+                        res,
+                        `You can request maximum ${available} ticket(s) for this committee member.`,
+                        400
+                    );
+
+            }
             /* ================= EXISTING CART CHECK ================= */
             const existing = await Cart.findOne({
                 where: {
@@ -159,7 +191,8 @@ module.exports = {
             const createData = {
                 user_id,
                 event_id,
-                no_tickets: item_type == 'committesale' ? 1 : count,
+                // no_tickets: item_type == 'committesale' ? 1 : count,
+                no_tickets: count,
                 ticket_type: item_type,
                 ticket_id: ticket_id || null,
                 addons_id: addons_id || null,
@@ -334,10 +367,11 @@ module.exports = {
                 order: [["id", "DESC"]],
                 where: where,
                 include: [
-                    { model: TicketType, attributes: ["id", "title", "price"],
-                        include:{model:TicketPricing, as:"pricings",attributes:["price"]} 
+                    {
+                        model: TicketType, attributes: ["id", "title", "price"],
+                        include: { model: TicketPricing, as: "pricings", attributes: ["price"] }
 
-                      },
+                    },
                     { model: AddonTypes, attributes: ["id", "name", "price"] },
                     { model: Package, attributes: ["id", "name", "grandtotal"] },
                     {
