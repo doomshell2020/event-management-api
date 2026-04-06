@@ -39,6 +39,7 @@ const couponsRoutesV1 = require('./modules/v1/coupons/coupons.route');
 const companyRoutesV1 = require('./modules/v1/company/company.routes');
 const dashboardRoutesV1 = require('./modules/v1/dashboard/dashboard.route');
 const scanTicketsRoutesV1 = require('./modules/v1/scantickets/scan-tickets.route');
+const cmsRoutesV1 = require('./modules/v1/cms/cms.routes');
 
 const eventsRoutesV2 = require('./modules/v2/events/events.routes');
 const ticketsRoutesV2 = require('./modules/v2/tickets/tickets.routes');
@@ -110,6 +111,7 @@ app.use('/api/v1/coupons',couponsRoutesV1);
 app.use('/api/v1/company',companyRoutesV1);
 app.use('/api/v1/dashboard',dashboardRoutesV1);
 app.use('/api/v1/scan-tickets',scanTicketsRoutesV1);
+app.use('/api/v1/cms',cmsRoutesV1);
 
 // app.use('/api/v1/subscriptions', subscriptionsRoutesV1);
 // app.use('/api/v1/api-keys', apiKeysRoutesV1);
