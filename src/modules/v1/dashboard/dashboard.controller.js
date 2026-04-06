@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Orders, TicketType, CommitteeMembers, AddonTypes, CommitteeAssignTickets, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Currency, PackageDetails, } = require('../../../models');
+const { Orders, TicketType, CommitteeMembers, AddonTypes, CommitteeAssignTickets, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Currency, PackageDetails,Payouts } = require('../../../models');
 const { Op, fn, col, literal, Sequelize } = require("sequelize");
 
 // 📌 Get Single Order Details
@@ -1169,12 +1169,292 @@ exports.getOrganizersEvent = async (req, res) => {
                 avgConversion
             };
         }
+
+        // ================= PER EVENT DATA =================
+
+        // Total Tickets per event
+        const ticketsPerEvent = await TicketType.findAll({
+            attributes: [
+                "eventid",
+                [fn("SUM", col("count")), "totalTickets"]
+            ],
+            where: { eventid: { [Op.in]: eventIds } },
+            group: ["eventid"],
+            raw: true
+        });
+
+        // Sold Tickets per event
+        const soldTicketsPerEvent = await OrderItems.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("count")), "soldTickets"]
+            ],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: { [Op.in]: ["ticket", "ticket_price", "committesale", "comps"] }
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        // Total Addons per event
+        const addonsPerEvent = await AddonTypes.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("count")), "totalAddons"]
+            ],
+            where: { event_id: { [Op.in]: eventIds } },
+            group: ["event_id"],
+            raw: true
+        });
+
+        // Sold Addons per event
+        const soldAddonsPerEvent = await OrderItems.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("count")), "soldAddons"]
+            ],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: "addon"
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        const packagePerEvent = await Package.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("total_package")), "totalPackages"]
+            ],
+            where: { event_id: { [Op.in]: eventIds } },
+            group: ["event_id"],
+            raw: true
+        });
+
+
+        const soldPackagesPerEvent = await OrderItems.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("count")), "soldPackages"]
+            ],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: "package"
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        const wellnessListPerEvent = await Wellness.findAll({
+            where: { event_id: { [Op.in]: eventIds } },
+            attributes: ["id", "event_id"], // ✅ event_id add karo
+            raw: true
+        });
+
+
+        const wellnessId = wellnessListPerEvent.map(w => w.id);
+        let appointmentsCreatedPerEvent = [];
+
+        if (wellnessId.length > 0) {
+            appointmentsCreatedPerEvent = await WellnessSlots.findAll({
+                attributes: [
+                    "wellness_id",
+                    [fn("SUM", col("count")), "totalAppointments"]
+                ],
+                where: {
+                    wellness_id: { [Op.in]: wellnessId }
+                },
+                group: ["wellness_id"],
+                raw: true
+            });
+        }
+
+        const wellnessEventMap = {};
+        wellnessListPerEvent.forEach(w => {
+            wellnessEventMap[w.id] = w.event_id;
+        });
+
+        const appointmentEventWise = {};
+
+        appointmentsCreatedPerEvent.forEach(a => {
+            const eventId = wellnessEventMap[a.wellness_id];
+            if (!eventId) return;
+
+            if (!appointmentEventWise[eventId]) {
+                appointmentEventWise[eventId] = 0;
+            }
+
+            appointmentEventWise[eventId] += Number(a.totalAppointments || 0);
+        });
+
+
+        const appointmentsSoldPerEvent = await OrderItems.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("count")), "soldAppointments"]
+            ],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: "appointment"
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+
+        // Revenue per event
+        const revenuePerEvent = await Orders.findAll({
+            attributes: [
+                "event_id",
+
+                [fn("SUM", col("grand_total")), "revenue"],
+                // Organizer earning (sub_total)
+                [fn("SUM", col("sub_total")), "organizerEarning"],
+
+                // Discount
+                [fn("SUM", col("discount_amount")), "totalDiscount"],
+
+                // total platform tax..
+                [fn("SUM", col("platform_fee_tax")), "totalPlatformFee"],
+                // total gateway tax..
+                [fn("SUM", col("payment_gateway_tax")), "totalPaymentGatewayFee"],
+
+
+            ],
+            where: { event_id: { [Op.in]: eventIds } },
+            group: ["event_id"],
+            raw: true
+        });
+
+
+        const packagesPerEvent = await Package.findAll({
+            where: { event_id: { [Op.in]: eventIds } },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                attributes: ["ticket_type_id", "addon_id", 'qty']
+            },
+            attributes: ["id", "event_id"]
+        });
+
+        const packagePerEventMap = {};
+
+        packagesPerEvent.forEach(pkg => {
+
+            let ticket = 0;
+            let addon = 0;
+
+            pkg.details.forEach(d => {
+                if (d.ticket_type_id) ticket += Number(d.qty || 0);
+                if (d.addon_id) addon += Number(d.qty || 0);
+            });
+
+            packagePerEventMap[pkg.id] = {
+                event_id: pkg.event_id, // ✅ IMPORTANT
+                ticket,
+                addon
+            };
+        });
+
+        //  Package sales
+        const packagePerEventSales = await OrderItems.findAll({
+            where: { event_id: { [Op.in]: eventIds }, type: "package" },
+            attributes: [
+                "package_id",
+                [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+            ],
+            group: ["package_id"],
+            raw: true
+        });
+
+        const packageEventWise = {};
+
+        packagePerEventSales.forEach(({ package_id, sold }) => {
+
+            const pkg = packagePerEventMap[package_id];
+            if (!pkg) return;
+
+            const eventId = pkg.event_id;
+
+            if (!packageEventWise[eventId]) {
+                packageEventWise[eventId] = { tickets: 0, addons: 0 };
+            }
+
+            packageEventWise[eventId].tickets += sold * pkg.ticket;
+            packageEventWise[eventId].addons += sold * pkg.addon;
+        });
+
+        const payoutPerEvent = await Payouts.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("paid_amount")), "totalPayout"]
+            ],
+            where: {
+                event_id: { [Op.in]: eventIds },
+
+                // ✅ IMPORTANT FILTER
+                committee_id: { [Op.ne]: null }
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        const payoutMap = Object.fromEntries(
+            payoutPerEvent.map(p => [
+                p.event_id,
+                Number(p.totalPayout || 0)
+            ])
+        );
+
+
+        // merge inside events....
+        const updatedEvents = events.map(event => {
+
+            const totalTickets = ticketsPerEvent.find(t => t.eventid === event.id);
+            const soldTickets = soldTicketsPerEvent.find(t => t.event_id === event.id);
+            const totalAddons = addonsPerEvent.find(a => a.event_id === event.id);
+            const soldAddons = soldAddonsPerEvent.find(a => a.event_id === event.id);
+            const revenue = revenuePerEvent.find(r => r.event_id === event.id);
+            const pkgData = packageEventWise[event.id] || { tickets: 0, addons: 0 };
+
+            const pkg = packagePerEvent.find(p => p.event_id === event.id);
+            const soldPkg = soldPackagesPerEvent.find(p => p.event_id === event.id);
+            const soldAppointments = appointmentsSoldPerEvent.find(a => a.event_id === event.id);
+
+            return {
+                ...event.toJSON(),
+
+                totalTickets: Number(totalTickets?.totalTickets || 0),
+                // soldTickets: Number(soldTickets?.soldTickets || 0),
+                soldTickets: Number(soldTickets?.soldTickets || 0) + pkgData.tickets,
+
+                totalAddons: Number(totalAddons?.totalAddons || 0),
+                // soldAddons: Number(soldAddons?.soldAddons || 0),
+                soldAddons: Number(soldAddons?.soldAddons || 0) + pkgData.addons,
+
+                totalPackages: Number(pkg?.totalPackages || 0),
+                soldPackages: Number(soldPkg?.soldPackages || 0),
+
+                totalAppointments: Number(appointmentEventWise[event.id] || 0),
+                soldAppointments: Number(soldAppointments?.soldAppointments || 0),
+
+                revenue: Number(revenue?.revenue || 0),
+                organizerEarning: Number(revenue?.organizerEarning || 0) - Number(revenue?.totalDiscount || 0),
+
+                PlatformFee: Number(revenue?.totalPlatformFee || 0),
+                PaymentGatewayFee: Number(revenue?.totalPaymentGatewayFee || 0),
+
+                totalPayout: payoutMap[event.id] || 0
+
+            };
+        });
         /* ================= RESPONSE ================= */
         return res.json({
             success: true,
             message: "Events dashboard data fetched successfully",
             data: {
-                events,
+                events: updatedEvents,
                 summary: {
                     total_events: totalEvents,
                     running_events: runningEvents,
@@ -1933,13 +2213,269 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
 
         /* ================= RESPONSE ================= */
 
+ /* ================= PER EVENT DATA ================= */
+
+        const ticketsPerEvent = await TicketType.findAll({
+            attributes: ["eventid", [fn("SUM", col("count")), "totalTickets"]],
+            where: { eventid: { [Op.in]: eventIds } },
+            group: ["eventid"],
+            raw: true
+        });
+
+        const soldTicketsPerEvent = await OrderItems.findAll({
+            attributes: ["event_id", [fn("SUM", col("count")), "soldTickets"]],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: { [Op.in]: ["ticket", "ticket_price", "committesale", "comps"] }
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        const addonsPerEvent = await AddonTypes.findAll({
+            attributes: ["event_id", [fn("SUM", col("count")), "totalAddons"]],
+            where: { event_id: { [Op.in]: eventIds } },
+            group: ["event_id"],
+            raw: true
+        });
+
+        const soldAddonsPerEvent = await OrderItems.findAll({
+            attributes: ["event_id", [fn("SUM", col("count")), "soldAddons"]],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: "addon"
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        const packagePerEvent = await Package.findAll({
+            attributes: ["event_id", [fn("SUM", col("total_package")), "totalPackages"]],
+            where: { event_id: { [Op.in]: eventIds } },
+            group: ["event_id"],
+            raw: true
+        });
+
+        const soldPackagesPerEvent = await OrderItems.findAll({
+            attributes: ["event_id", [fn("SUM", col("count")), "soldPackages"]],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: "package"
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        /* ================= PACKAGE DETAILS ================= */
+
+        const packagesPerEvent = await Package.findAll({
+            where: { event_id: { [Op.in]: eventIds } },
+            include: {
+                model: PackageDetails,
+                as: "details",
+                attributes: ["ticket_type_id", "addon_id", "qty"]
+            },
+            attributes: ["id", "event_id"]
+        });
+
+        const packagePerEventMap = {};
+
+        packagesPerEvent.forEach(pkg => {
+            let ticket = 0;
+            let addon = 0;
+
+            pkg.details.forEach(d => {
+                if (d.ticket_type_id) ticket += Number(d.qty || 0);
+                if (d.addon_id) addon += Number(d.qty || 0);
+            });
+
+            packagePerEventMap[pkg.id] = {
+                event_id: pkg.event_id,
+                ticket,
+                addon
+            };
+        });
+
+        const packagePerEventSales = await OrderItems.findAll({
+            where: { event_id: { [Op.in]: eventIds }, type: "package" },
+            attributes: [
+                "package_id",
+                [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+            ],
+            group: ["package_id"],
+            raw: true
+        });
+
+        const packageEventWise = {};
+
+        packagePerEventSales.forEach(({ package_id, sold }) => {
+            const pkg = packagePerEventMap[package_id];
+            if (!pkg) return;
+
+            const eventId = pkg.event_id;
+
+            if (!packageEventWise[eventId]) {
+                packageEventWise[eventId] = { tickets: 0, addons: 0 };
+            }
+
+            packageEventWise[eventId].tickets += sold * pkg.ticket;
+            packageEventWise[eventId].addons += sold * pkg.addon;
+        });
+
+        /* ================= APPOINTMENTS ================= */
+
+        const wellnessListPerEvent = await Wellness.findAll({
+            where: { event_id: { [Op.in]: eventIds } },
+            attributes: ["id", "event_id"],
+            raw: true
+        });
+
+        const wellnessMap = Object.fromEntries(
+            wellnessListPerEvent.map(w => [w.id, w.event_id])
+        );
+
+        let appointmentsCreatedPerEvent = [];
+
+        if (Object.keys(wellnessMap).length > 0) {
+            appointmentsCreatedPerEvent = await WellnessSlots.findAll({
+                attributes: [
+                    "wellness_id",
+                    [fn("SUM", col("count")), "totalAppointments"]
+                ],
+                where: {
+                    wellness_id: { [Op.in]: Object.keys(wellnessMap) }
+                },
+                group: ["wellness_id"],
+                raw: true
+            });
+        }
+
+        const appointmentEventWise = {};
+
+        appointmentsCreatedPerEvent.forEach(a => {
+            const eventId = wellnessMap[a.wellness_id];
+            if (!eventId) return;
+
+            appointmentEventWise[eventId] =
+                (appointmentEventWise[eventId] || 0) +
+                Number(a.totalAppointments || 0);
+        });
+
+        const appointmentsSoldPerEvent = await OrderItems.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("count")), "soldAppointments"]
+            ],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                type: "appointment"
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        /* ================= REVENUE ================= */
+
+        const revenuePerEvent = await Orders.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("grand_total")), "revenue"],
+                [fn("SUM", col("sub_total")), "organizerEarning"],
+                [fn("SUM", col("discount_amount")), "totalDiscount"],
+                [fn("SUM", col("platform_fee_tax")), "totalPlatformFee"],
+                [fn("SUM", col("payment_gateway_tax")), "totalPaymentGatewayFee"]
+            ],
+            where: { event_id: { [Op.in]: eventIds } },
+            group: ["event_id"],
+            raw: true
+        });
+
+        /* ================= PAYOUT ================= */
+
+        const payoutPerEvent = await Payouts.findAll({
+            attributes: [
+                "event_id",
+                [fn("SUM", col("paid_amount")), "totalPayout"]
+            ],
+            where: {
+                event_id: { [Op.in]: eventIds },
+                committee_id: { [Op.ne]: null }
+            },
+            group: ["event_id"],
+            raw: true
+        });
+
+        const payoutMap = Object.fromEntries(
+            payoutPerEvent.map(p => [
+                p.event_id,
+                Number(p.totalPayout || 0)
+            ])
+        );
+
+        /* ================= MAPS ================= */
+
+        const makeMap = (arr, key) =>
+            Object.fromEntries(arr.map(i => [i[key], i]));
+
+        const ticketsMap = makeMap(ticketsPerEvent, "eventid");
+        const soldTicketsMap = makeMap(soldTicketsPerEvent, "event_id");
+        const addonsMap = makeMap(addonsPerEvent, "event_id");
+        const soldAddonsMap = makeMap(soldAddonsPerEvent, "event_id");
+        const pkgMap = makeMap(packagePerEvent, "event_id");
+        const soldPkgMap = makeMap(soldPackagesPerEvent, "event_id");
+        const revenueMap = makeMap(revenuePerEvent, "event_id");
+        const soldAppMap = makeMap(appointmentsSoldPerEvent, "event_id");
+
+        /* ================= FINAL MERGE ================= */
+
+        const updatedEvents = events.map(event => {
+
+            const id = event.id;
+            const pkgData = packageEventWise[id] || { tickets: 0, addons: 0 };
+            const revenue = revenueMap[id] || {};
+
+            return {
+                ...event.toJSON(),
+
+                totalTickets: Number(ticketsMap[id]?.totalTickets || 0),
+
+                soldTickets:
+                    Number(soldTicketsMap[id]?.soldTickets || 0) +
+                    pkgData.tickets,
+
+                totalAddons: Number(addonsMap[id]?.totalAddons || 0),
+
+                soldAddons:
+                    Number(soldAddonsMap[id]?.soldAddons || 0) +
+                    pkgData.addons,
+
+                totalPackages: Number(pkgMap[id]?.totalPackages || 0),
+                soldPackages: Number(soldPkgMap[id]?.soldPackages || 0),
+
+                totalAppointments: Number(appointmentEventWise[id] || 0),
+                soldAppointments: Number(soldAppMap[id]?.soldAppointments || 0),
+
+                revenue: Number(revenue?.revenue || 0),
+
+                organizerEarning:
+                    Number(revenue?.organizerEarning || 0) -
+                    Number(revenue?.totalDiscount || 0),
+
+                PlatformFee: Number(revenue?.totalPlatformFee || 0),
+                PaymentGatewayFee: Number(revenue?.totalPaymentGatewayFee || 0),
+
+                totalPayout: payoutMap[id] || 0
+            };
+        });
+
+        
+
         return res.json({
             success: true,
             message: "Event dashboard data fetched successfully",
             data: {
-
-                events,
-
+                // events,
+                events: updatedEvents,
                 summary: {
                     total_events: totalEvents,
                     running_events: runningEvents,

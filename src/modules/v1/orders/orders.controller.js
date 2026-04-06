@@ -38,7 +38,7 @@ exports.organizerTicketExports = async (req, res) => {
 
         const organizerId = req.user.id;
         // console.log('organizerId :', organizerId);
-        const { page = 1, limit = config.perPageDataLimit, eventId } = req.query;
+        const { page = 1, limit = config.perPageDataLimit, eventId, status } = req.query;
 
         const pageNumber = parseInt(page);
         const pageLimit = parseInt(limit);
@@ -74,6 +74,13 @@ exports.organizerTicketExports = async (req, res) => {
         }
 
         const where = { event_id: parseInt(eventId) };
+
+        if (status === "scanned") {
+            where.is_scanned = "Y";
+        } else if (status === "not_scanned") {
+            where.is_scanned = "N";
+        }
+
         const totalRecords = await OrderItems.count({ where });
 
         const items = await OrderItems.findAll({
@@ -201,7 +208,6 @@ exports.organizerTicketExports = async (req, res) => {
         });
     }
 };
-
 
 
 
@@ -2175,10 +2181,10 @@ exports.getOrderDetails = async (req, res) => {
                                 }
                             }
                         },
-                         {model:User , as:"scanner", attributes:["email","first_name","last_name"]}
+                        { model: User, as: "scanner", attributes: ["email", "first_name", "last_name"] }
                     ]
                 },
-               
+
                 {
                     model: Event,
                     as: "event",
