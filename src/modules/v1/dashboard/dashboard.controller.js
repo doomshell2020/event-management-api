@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Orders, TicketType, CommitteeMembers, AddonTypes, CommitteeAssignTickets, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Currency, PackageDetails,Payouts } = require('../../../models');
+const { Orders, TicketType, CommitteeMembers, AddonTypes, CommitteeAssignTickets, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Currency, PackageDetails, Payouts } = require('../../../models');
 const { Op, fn, col, literal, Sequelize } = require("sequelize");
 
 // 📌 Get Single Order Details
@@ -232,12 +232,14 @@ exports.getEventDetails = async (req, res) => {
         const platformData = await Orders.findOne({
             where: { event_id },
             attributes: [
-                [fn("SUM", col("platform_fee_tax")), "platform_earning"]
+                [fn("SUM", col("platform_fee_tax")), "platform_earning"],
+                [fn("SUM", col("payment_gateway_tax")), "gateway_earning"]
             ],
             raw: true
         });
 
         const platformEarning = Number(platformData.platform_earning || 0);
+        const paymentGatewayEarning = Number(platformData.gateway_earning || 0);
 
         const totalDistributed = totalRevenue
         const commissionSplit = {
@@ -246,6 +248,9 @@ exports.getEventDetails = async (req, res) => {
                 : 0,
             platform: totalDistributed
                 ? ((platformEarning / totalDistributed) * 100).toFixed(2)
+                : 0,
+            gateway: totalDistributed
+                ? ((paymentGatewayEarning / totalDistributed) * 100).toFixed(2)
                 : 0,
             committee: totalDistributed
                 ? ((committeeEarning / totalDistributed) * 100).toFixed(2)
@@ -440,6 +445,7 @@ exports.getEventDetails = async (req, res) => {
                 revenueDistribution: {
                     organizer: netEarning,
                     platform: platformEarning,
+                    gateway: paymentGatewayEarning,
                     committee: committeeEarning
                 },
                 commissionSplit: {
@@ -1038,6 +1044,169 @@ exports.getOrganizersEvent = async (req, res) => {
             avgConversion: 0
         };
 
+        //     if (eventIds.length) {
+
+        //         const committeeRaw = await CommitteeMembers.findAll({
+        //             where: {
+        //                 event_id: { [Op.in]: eventIds },
+        //                 status: "Y"
+        //             },
+        //             attributes: [
+        //                 "user_id",
+
+        //                 [fn("MAX", col("CommitteeMembers.commission")), "commission"],
+
+        //                 [fn("MAX", col("user.first_name")), "first_name"],
+        //                 [fn("MAX", col("user.last_name")), "last_name"],
+
+        //                 // [
+        //                 //     fn(
+        //                 //         "SUM",
+        //                 //         literal(`CAST(order_items.price AS DECIMAL(10,2))`)
+        //                 //     ),
+        //                 //     "total_sales"
+        //                 // ],
+
+        //                 [
+        //                     literal(`(
+        //                 SELECT COALESCE(SUM(oi.price),0)
+        //                 FROM tbl_order_items oi
+        //                 WHERE oi.committee_user_id = CommitteeMembers.user_id
+        //                 AND oi.event_id IN (${eventIds.join(",")})
+        //             )`),
+        //                     "total_sales"
+        //                 ],
+
+        //                 [
+        //                     fn(
+        //                         "SUM",
+        //                         literal(`
+        //                     CAST(order_items.price AS DECIMAL(10,2))
+        //                     * CAST(CommitteeMembers.commission AS DECIMAL(10,2))
+        //                     / 100
+        //                 `)
+        //                     ),
+        //                     "member_earning"
+        //                 ],
+
+        //                 // [
+        //                 //     fn("SUM", col("order_items.count")),
+        //                 //     "tickets_sold"
+        //                 // ],
+
+        //                 // [
+        //                 //     fn("SUM", col("assignedTickets.count")),
+        //                 //     "assigned_tickets"
+        //                 // ]
+
+        //                 [
+        //                     literal(`(
+        //     SELECT COALESCE(SUM(oi.count),0)
+        //     FROM tbl_order_items oi
+        //     WHERE oi.committee_user_id = CommitteeMembers.user_id
+        //     AND oi.event_id IN (${eventIds.join(",")})
+        //     AND oi.status = 'Y'
+        // )`),
+        //                     "tickets_sold"
+        //                 ],
+
+        //                 [
+        //                     literal(`(
+        //     SELECT COALESCE(SUM(cat.count),0)
+        //     FROM tblcommittee_assigntickets cat
+        //     WHERE cat.user_id = CommitteeMembers.user_id
+        // )`),
+        //                     "assigned_tickets"
+        //                 ]
+        //             ],
+
+        //             include: [
+        //                 {
+        //                     model: OrderItems,
+        //                     attributes: [],
+        //                     required: false,
+        //                     as: "order_items",
+        //                     where: {
+        //                         event_id: { [Op.in]: eventIds },
+        //                         status: "Y"
+        //                     }
+        //                 },
+
+        //                 {
+        //                     model: CommitteeAssignTickets,
+        //                     attributes: [],
+        //                     required: false,
+        //                     as: "assignedTickets"
+        //                 },
+
+        //                 {
+        //                     model: User,
+        //                     attributes: [],
+        //                     required: false,
+        //                     as: "user"
+        //                 }
+        //             ],
+
+        //             group: ["CommitteeMembers.user_id"],
+        //             raw: true
+        //         });
+
+        //         committeePerformance = committeeRaw.map(item => {
+        //             //  console.log("item.total_sales",item.total_sales)
+        //             const totalSales = Number(item.total_sales || 0);
+        //             const earning = Number(item.member_earning || 0);
+        //             const soldTickets = Number(item.tickets_sold || 0);
+        //             const assignedTickets = Number(item.assigned_tickets || 0);
+        //             console.log("totalSales", totalSales)
+        //             const conversion = assignedTickets
+        //                 ? Math.round((soldTickets / assignedTickets) * 100)
+        //                 : 0;
+
+        //             return {
+        //                 committee_user_id: item.user_id,
+        //                 name: `${item.first_name || ""} ${item.last_name || ""}`,
+        //                 commission_percentage: Number(item.commission || 0),
+        //                 total_sales: totalSales,
+        //                 soldTickets,
+        //                 assignedTickets,
+        //                 earning,
+        //                 conversion
+        //             };
+        //         });
+
+        //         const totalAssigned = committeePerformance.reduce(
+        //             (a, b) => a + (b.assignedTickets || 0),
+        //             0
+        //         );
+
+        //         const totalSold = committeePerformance.reduce(
+        //             (a, b) => a + (b.soldTickets || 0),
+        //             0
+        //         );
+
+        //         const totalPaid = committeePerformance.reduce(
+        //             // (a, b) => a + (b.earning || 0),
+        //             (a, b) => a + (b.total_sales || 0),
+        //             0
+        //         );
+
+        //         const avgConversion = committeePerformance.length
+        //             ? Math.round(
+        //                 committeePerformance.reduce((a, b) => a + b.conversion, 0) /
+        //                 committeePerformance.length
+        //             )
+        //             : 0;
+
+        //         committeeSummary = {
+        //             totalAssigned,
+        //             totalSold,
+        //             totalPaid,
+        //             conversionRate: avgConversion,
+        //             totalCommitteeEarning: totalPaid,
+        //             avgConversion
+        //         };
+        //     }
+
         if (eventIds.length) {
 
             const committeeRaw = await CommitteeMembers.findAll({
@@ -1053,56 +1222,53 @@ exports.getOrganizersEvent = async (req, res) => {
                     [fn("MAX", col("user.first_name")), "first_name"],
                     [fn("MAX", col("user.last_name")), "last_name"],
 
+                    // Total Sales
+                    //     [
+                    //         literal(`(
+                    //     SELECT COALESCE(SUM(oi.price),0)
+                    //     FROM tbl_order_items oi
+                    //     WHERE oi.committee_user_id = CommitteeMembers.user_id
+                    //     AND oi.event_id IN (${eventIds.join(",")})
+                    //     AND oi.status='Y'
+                    // )`),
+                    //         "total_sales"
+                    //     ],
                     [
-                        fn(
-                            "SUM",
-                            literal(`CAST(order_items.price AS DECIMAL(10,2))`)
-                        ),
+                        literal(`(
+                    SELECT COALESCE(SUM(oi.price),0)
+                    FROM tbl_order_items oi
+                    WHERE oi.committee_user_id = CommitteeMembers.user_id
+                    AND oi.event_id IN (${eventIds.join(",")})
+                    AND oi.status='Y'
+                )`),
                         "total_sales"
                     ],
 
+                    // Tickets Sold
                     [
-                        fn(
-                            "SUM",
-                            literal(`
-                        CAST(order_items.price AS DECIMAL(10,2))
-                        * CAST(CommitteeMembers.commission AS DECIMAL(10,2))
-                        / 100
-                    `)
-                        ),
-                        "member_earning"
-                    ],
-
-                    [
-                        fn("SUM", col("order_items.count")),
+                        literal(`(
+    SELECT COALESCE(SUM(oi.count),0)
+    FROM tbl_order_items oi
+    WHERE oi.committee_user_id = CommitteeMembers.user_id
+    AND oi.event_id IN (${eventIds.join(",")})
+    AND oi.status = 'Y'
+ )`),
                         "tickets_sold"
                     ],
 
+                    // Assigned Tickets
                     [
-                        fn("SUM", col("assignedTickets.count")),
+                        literal(`(
+    SELECT COALESCE(SUM(cat.count),0)
+    FROM tblcommittee_assigntickets cat
+    WHERE cat.user_id = CommitteeMembers.user_id
+    AND cat.event_id IN (${eventIds.join(",")})
+ )`),
                         "assigned_tickets"
                     ]
                 ],
 
                 include: [
-                    {
-                        model: OrderItems,
-                        attributes: [],
-                        required: false,
-                        as: "order_items",
-                        where: {
-                            event_id: { [Op.in]: eventIds },
-                            status: "Y"
-                        }
-                    },
-
-                    {
-                        model: CommitteeAssignTickets,
-                        attributes: [],
-                        required: false,
-                        as: "assignedTickets"
-                    },
-
                     {
                         model: User,
                         attributes: [],
@@ -1118,18 +1284,20 @@ exports.getOrganizersEvent = async (req, res) => {
             committeePerformance = committeeRaw.map(item => {
 
                 const totalSales = Number(item.total_sales || 0);
-                const earning = Number(item.member_earning || 0);
+                const commission = Number(item.commission || 0);
+
                 const soldTickets = Number(item.tickets_sold || 0);
                 const assignedTickets = Number(item.assigned_tickets || 0);
+
+                const earning = (totalSales * commission) / 100;
 
                 const conversion = assignedTickets
                     ? Math.round((soldTickets / assignedTickets) * 100)
                     : 0;
-
                 return {
                     committee_user_id: item.user_id,
                     name: `${item.first_name || ""} ${item.last_name || ""}`,
-                    commission_percentage: Number(item.commission || 0),
+                    commission_percentage: commission,
                     total_sales: totalSales,
                     soldTickets,
                     assignedTickets,
@@ -1139,17 +1307,18 @@ exports.getOrganizersEvent = async (req, res) => {
             });
 
             const totalAssigned = committeePerformance.reduce(
-                (a, b) => a + (b.assignedTickets || 0),
+                (a, b) => a + b.assignedTickets,
                 0
             );
 
             const totalSold = committeePerformance.reduce(
-                (a, b) => a + (b.soldTickets || 0),
+                (a, b) => a + b.soldTickets,
                 0
             );
 
             const totalPaid = committeePerformance.reduce(
-                (a, b) => a + (b.earning || 0),
+                // (a, b) => a + b.earning,
+                (a, b) => a + b.total_sales,
                 0
             );
 
@@ -1169,6 +1338,12 @@ exports.getOrganizersEvent = async (req, res) => {
                 avgConversion
             };
         }
+
+
+
+
+
+
 
         // ================= PER EVENT DATA =================
 
@@ -2213,7 +2388,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
 
         /* ================= RESPONSE ================= */
 
- /* ================= PER EVENT DATA ================= */
+        /* ================= PER EVENT DATA ================= */
 
         const ticketsPerEvent = await TicketType.findAll({
             attributes: ["eventid", [fn("SUM", col("count")), "totalTickets"]],
@@ -2468,7 +2643,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
             };
         });
 
-        
+
 
         return res.json({
             success: true,
