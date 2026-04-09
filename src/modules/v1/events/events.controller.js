@@ -160,7 +160,12 @@ module.exports.createEvent = async (req, res) => {
             allow_register,
             request_rsvp,
             video_url,
-            event_timezone
+            event_timezone,
+             // ================= REFUND FIELDS =================
+            refund_enabled,
+            refund_allowed,
+            refund_deadline,
+            cancellation_policy
         } = req.body;
 
         // ✅ Required field validation

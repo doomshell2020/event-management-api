@@ -585,7 +585,12 @@ module.exports.createEvent = async (req, res) => {
             allow_register,
             request_rsvp,
             event_timezone,
-            entry_type
+            entry_type,
+             // ================= REFUND FIELDS =================
+            refund_enabled,
+            refund_allowed,
+            refund_deadline,
+            cancellation_policy
         } = req.body;
 
         const user_id = req.user?.id;
@@ -707,6 +712,10 @@ module.exports.createEvent = async (req, res) => {
             // admineventstatus: admin_status,
             request_rsvp: formatted_request_rsvp,
             event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
+            refund_enabled:refund_enabled,
+            refund_allowed:refund_allowed,
+            refund_deadline:refund_deadline,
+            cancellation_policy:cancellation_policy
         };
 
         // ✅ Save to DB

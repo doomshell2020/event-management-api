@@ -120,7 +120,7 @@ const Event = sequelize.define('Event',
             defaultValue: 'N'
         },
         entry_type: {
-            type: DataTypes.ENUM('single', 'multi', 'slot','event'),
+            type: DataTypes.ENUM('single', 'multi', 'slot', 'event'),
             allowNull: true,
             defaultValue: 'event'
         },
@@ -232,6 +232,27 @@ const Event = sequelize.define('Event',
             type: DataTypes.DECIMAL(10, 2),
             allowNull: true
         },
+
+        // ================= REFUND FIELDS =================
+        refund_enabled: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: true,
+        },
+        refund_allowed: {
+            type: DataTypes.ENUM('Y', 'N'),
+            allowNull: true,
+        },
+
+        refund_deadline: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+
+        cancellation_policy: {
+            type: DataTypes.TEXT,
+            allowNull: true
+        }
+
     },
     {
         tableName: 'tblevent',
