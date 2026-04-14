@@ -393,9 +393,12 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             approve_timer,
             allow_register,
             event_timezone,
-            entry_type
+            entry_type,
+            refund_enabled,
+            refund_allowed,
+            refund_deadline,
+            cancellation_policy
         } = updateData;
-
         if (
             Object.keys(updateData).length == 1 &&      // only one key in object
             updateData.hasOwnProperty("status")          // that key is "status"
@@ -484,6 +487,11 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         if (allow_register !== undefined) existingEvent.allow_register = allow_register == 'Y' ? 'Y' : 'N';
         if (is_free !== undefined) existingEvent.is_free = is_free == 'Y' ? 'Y' : 'N';
         if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
+
+        if (refund_enabled) existingEvent.refund_enabled = refund_enabled;
+        if (refund_allowed) existingEvent.refund_allowed = refund_allowed;
+        if (refund_deadline) existingEvent.refund_deadline = refund_deadline;
+        if (cancellation_policy) existingEvent.cancellation_policy = cancellation_policy.trim();
 
         // console.log('entry_type :', entry_type);
         // Handle optional image update
@@ -1239,7 +1247,7 @@ module.exports.getSelectedWellnessSlots = async (req, res) => {
             where: { id: 1 },
             attributes: ["id", "payment_gateway_charges", "default_platform_charges"]
         });
-        
+
         const authProfile = await User.findOne({
             where: { id: event?.event_org_id },
             attributes: ['default_platform_charges']
@@ -1257,7 +1265,7 @@ module.exports.getSelectedWellnessSlots = async (req, res) => {
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";
         const formattedEvent = {
             ...data,
-             charges: {
+            charges: {
                 platform_fee_percent: platformCharges,
                 payment_gateway_percent: gatewayCharges
             },
@@ -1282,7 +1290,7 @@ module.exports.getSelectedWellnessSlots = async (req, res) => {
             success: true,
             message: "Event & appointment slot details fetched successfully",
             data: formattedEvent,
-           
+
         };
 
     } catch (error) {

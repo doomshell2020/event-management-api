@@ -85,13 +85,6 @@ router.post('/create-appointment',
 
 // ... appointment cancel
 router.put('/cancel-appointment/:id',
-    // authenticate,
-    // [
-    //     body('order_id')
-    //         .notEmpty().withMessage('Wellness ID is required')
-    //         .isInt().withMessage('Wellness ID must be a valid number'),
-    // ],
-    // validate,
     ordersController.cancelAppointment
 );
 
@@ -132,5 +125,42 @@ router.get("/sales-addons",
     validate,
     ordersController.salesAddons
 );
+
+
+// ... cancel ticket/addon/package/appointment request send
+router.put('/cancel-request/:id',
+    ordersController.sendCancelRequest
+);
+
+router.get('/organizer/cancel-tickets-request',
+    authenticate,
+    [
+        query('eventId').notEmpty().withMessage('eventId is required'),
+        query('page').optional().isInt().withMessage('page must be number'),
+        query('limit').optional().isInt().withMessage('limit must be number'),
+    ],
+    validate,
+    ordersController.organizerCancelTicketsRequest
+);
+
+router.get('/organizer/cancel-orders-request',
+    authenticate,
+    [
+        query('eventId').notEmpty().withMessage('eventId is required'),
+        query('page').optional().isInt().withMessage('page must be number'),
+        query('limit').optional().isInt().withMessage('limit must be number'),
+    ],
+    validate,
+    ordersController.organizerCancelOrdersRequest
+);
+
+router.put('/:id/approve-cancel-request', ordersController.approveCancelRequest);
+router.put('/:id/reject-cancel-request', ordersController.rejectCancelRequest);
+
+// send order cancel request
+router.put('/:id/cancel-request',ordersController.sendCancelOrderRequest);
+router.put('/:id/reject-cancel-order',ordersController.rejectCancelOrderRequest);
+router.put('/:id/approve-cancel-order',ordersController.approveCancelOrderRequest);
+
 
 module.exports = router;

@@ -108,6 +108,60 @@ const Orders = sequelize.define(
             type: DataTypes.FLOAT,
             defaultValue: 0
         },
+
+        // cancel ticket and send cancel ticket request...
+        cancel_request_status: {
+            type: DataTypes.ENUM(
+                "pending",
+                "approved",
+                "rejected"),
+            allowNull: true
+        },
+
+        cancel_request_date: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+        cancel_request_reject_reason: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+        cancel_status: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+
+        cancel_date: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+
+        total_refunded_amount: {
+            type: DataTypes.FLOAT,
+            defaultValue: 0
+        },
+        refund_status: {
+            type: DataTypes.ENUM(
+                "none",
+                "partial",
+                "full"),
+            allowNull: true
+        },
+        refund_id: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+
+
+        refund_date: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+
+        is_refunded: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
+        },
         created: {
             type: DataTypes.DATE,
             allowNull: true

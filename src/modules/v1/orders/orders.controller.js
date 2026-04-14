@@ -7,10 +7,11 @@ const sendEmail = require('../../../common/utils/sendEmail');
 const path = require("path");
 const { generateUniqueOrderId, getItemTitle, replaceTemplateVariables, formatPrice } = require('../../../common/utils/helpers');
 const { convertUTCToLocal } = require('../../../common/utils/timezone');
-const { Op, fn, col, literal } = require("sequelize");
+const { Op, fn, col, literal, Sequelize } = require("sequelize");
 const { sequelize } = require("../../../models");
 const config = require('../../../config/app');
-
+const Stripe = require("stripe");
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // Convert to user-friendly readable format
 const formatDateReadable = (dateStr, timezone) => {
     if (!dateStr) return "";
@@ -208,9 +209,6 @@ exports.organizerTicketExports = async (req, res) => {
         });
     }
 };
-
-
-
 
 exports.salesAddons = async (req, res) => {
     try {
@@ -1876,7 +1874,12 @@ exports.listOrders = async (req, res) => {
                 "package_id",
                 "grand_total",
                 "status",
-                "createdAt"
+                "createdAt",
+                "cancel_request_status",
+                "cancel_request_date",
+                "cancel_request_reject_reason",
+                "cancel_status",
+                "cancel_date"
             ],
             include: [
                 {
@@ -1933,7 +1936,7 @@ exports.listOrders = async (req, res) => {
                 {
                     model: Event,
                     as: "event",
-                    attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_timezone'],
+                    attributes: ['name', 'date_from', 'date_to', 'feat_image', 'location', 'event_timezone', "refund_allowed", "refund_deadline", "cancellation_policy"],
                     include: [{ model: Currency, as: 'currencyName', attributes: ['Currency_symbol', 'Currency'] }]
                 },
                 { model: User, as: "user", attributes: ['email', 'first_name', 'last_name', 'full_name', 'mobile', "gender"] },
@@ -2137,6 +2140,9 @@ exports.getOrderDetails = async (req, res) => {
                         "secure_hash",
                         "cancel_status",
                         "cancel_date",
+                        "cancel_request_status",
+                        "cancel_request_date",
+                        "cancel_request_reject_reason",
                         "scanner_id",
                         "is_scanned",
                         "scanned_date"
@@ -2195,7 +2201,12 @@ exports.getOrderDetails = async (req, res) => {
                         "feat_image",
                         "location",
                         "event_org_id",
-                        'event_timezone'
+                        'event_timezone',
+                        'refund_enabled',
+                        'refund_allowed',
+                        'refund_deadline',
+                        'cancellation_policy'
+
                     ],
                     include: [
                         { model: Company, as: "companyInfo", attributes: ["name"] },
@@ -2234,7 +2245,6 @@ exports.getOrderDetails = async (req, res) => {
 };
 
 //..cancel appointment..kamal
-
 exports.cancelAppointment = async (req, res) => {
     try {
         const { id } = req.params;
@@ -2356,94 +2366,1012 @@ exports.cancelAppointment = async (req, res) => {
 
 
 
+//..cancel ticket/addon/appointment/package... request sent..
+exports.sendCancelRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Order item ID is required",
+                code: "ID_MISSING"
+            });
+        }
+
+        const order = await OrderItems.findByPk(id, {
+            include: [
+                { model: User, as: "user", attributes: ["first_name", "last_name", "email"] },
+                { model: Event, as: "event", attributes: ["name"] },
+                { model: WellnessSlots, as: "appointment", attributes: ["date", "slot_start_time", "slot_end_time"] }
+            ]
+        });
+        console.log("order", order.cancel_status)
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order item not found",
+                code: "NOT_FOUND"
+            });
+        }
+
+        // ❌ already cancelled
+        if (order.cancel_status === "cancel") {
+            return res.status(400).json({
+                success: false,
+                message: "Item already cancelled",
+                code: "ALREADY_CANCELLED"
+            });
+        }
+
+        // ❌ already requested
+        if (order.cancel_request_status === "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "Cancellation request already sent",
+                code: "ALREADY_REQUESTED"
+            });
+        }
+
+        // 🔐 authorization
+        if (req.user && req.user.id !== order.user_id) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not authorized",
+                code: "UNAUTHORIZED"
+            });
+        }
+
+        // ✅ SAVE REQUEST (COMMON FOR ALL TYPES)
+        await order.update({
+            cancel_request_status: "pending",
+            cancel_request_date: new Date(),
+            cancel_request_reject_reason: null
+        });
+
+        // ===== FORMAT DATE (only if appointment exists) =====
+        let formattedDate = "";
+        let formattedTime = "";
+
+        if (order.appointment?.date) {
+            const dateObj = new Date(order.appointment.date);
+            formattedDate = dateObj.toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+            });
+        }
+
+        if (order.appointment?.slot_start_time && order.appointment?.slot_end_time) {
+            const start = new Date(`1970-01-01T${order.appointment.slot_start_time}`);
+            const end = new Date(`1970-01-01T${order.appointment.slot_end_time}`);
+
+            const startTime = start.toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+            });
+
+            const endTime = end.toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+            });
+
+            formattedTime = `${startTime} - ${endTime}`;
+        }
+
+        // ===== IDENTIFY TYPE (optional but useful) =====
+        const typeMap = {
+            ticket: "Ticket",
+            ticket_price: "Ticket",
+            comps: "Ticket",
+            committesale: "Ticket",
+            addon: "Addon",
+            package: "Package",
+            appointment: "Appointment"
+        };
+
+        let itemTypeName = typeMap[order.type] || "Item";
+
+        // ===== SEND EMAIL =====
+        // const templateId = config.emailTemplates.cancelRequest;
+        const templateId = config.emailTemplates.cancelAppointment;
+
+        const template = await Templates.findOne({
+            where: { id: templateId }
+        });
+
+        if (template) {
+            const html = replaceTemplateVariables(template.description, {
+                UserName: `${order.user.first_name} ${order.user.last_name}`,
+                EventName: order.event?.name || "",
+                ItemType: itemTypeName,
+                SITE_URL: config.clientUrl,
+                AppointmentDate: formattedDate,
+                AppointmentTime: formattedTime
+            });
+
+            const finalSubject = `${template.subject} ${itemTypeName}`;
+
+            await sendEmail(order.user.email, finalSubject, html);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `${itemTypeName} cancellation request sent successfully`
+        });
+
+    } catch (error) {
+        console.error("Cancel Request Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong",
+            error: error.message
+        });
+    }
+};
+
+// ..view cancel request....
+exports.organizerCancelTicketsRequest = async (req, res) => {
+    try {
+        const organizerId = req.user.id;
+        const { page = 1, limit = config.perPageDataLimit, eventId, status } = req.query;
+
+        const pageNumber = parseInt(page);
+        const pageLimit = parseInt(limit);
+
+        if (!eventId) {
+            return apiResponse.success(res, "Event ID is required", {
+                totalRecords: 0,
+                totalPages: 0,
+                currentPage: 1,
+                limit: pageLimit,
+                records: []
+            });
+        }
+
+        // 🔹 Check event belongs to organizer
+        const event = await Event.findOne({
+            where: { event_org_id: organizerId, id: eventId },
+            attributes: ["id"]
+        });
+
+        if (!event) {
+            return apiResponse.success(res, "No event found for this organizer.", {
+                totalRecords: 0,
+                totalPages: 0,
+                currentPage: 1,
+                limit: pageLimit,
+                records: []
+            });
+        }
+
+        // 🔥 WHERE CONDITION
+        const where = {
+            event_id: parseInt(eventId),
+            cancel_request_status: {
+                [Op.ne]: null
+            }
+        };
+
+        const validStatus = ["pending", "approved", "rejected"];
+        if (status && validStatus.includes(status)) {
+            where.cancel_request_status = status;
+        }
+
+        const totalRecords = await OrderItems.count({ where });
+
+        // 🔥 FETCH ITEMS
+        const items = await OrderItems.findAll({
+            where,
+            attributes: { exclude: ["qr_data"] },
+            include: [
+                {
+                    model: Orders,
+                    as: "order",
+                    attributes: [
+                        "order_uid",
+                        "grand_total",
+                        "platform_fee_percent",
+                        "payment_gateway_percent"
+                    ],
+                    include: [
+                        {
+                            model: User,
+                            as: "user",
+                            attributes: ["id", "first_name", "last_name", "email"]
+                        }
+                    ]
+                },
+                {
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["title", "price"]
+                },
+                {
+                    model: TicketPricing,
+                    as: "ticketPricing",
+                    attributes: ["ticket_type_id", "event_id"],
+                    include: {
+                        model: TicketType,
+                        as: "ticket",
+                        attributes: ["title", "price"]
+                    },
+                },
+                {
+                    model: Package,
+                    as: "package",
+                    attributes: ["name", "grandtotal"]
+                },
+                {
+                    model: AddonTypes,
+                    as: "addonType",
+                    attributes: ["name", "price"]
+                },
+                {
+                    model: EventSlots,
+                    as: "slot",
+                    attributes: ["slot_name", "start_time", "end_time"]
+                },
+                {
+                    model: WellnessSlots,
+                    as: "appointment",
+                    attributes: ["slot_location"],
+                    include: [
+                        {
+                            model: Wellness,
+                            as: "wellnessList",
+                            attributes: ["name"]
+                        }
+                    ]
+                },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ["name", "feat_image", "date_from", "date_to", "event_timezone"],
+                    include: [
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
+                    ]
+                },
+                {
+                    model: User,
+                    as: "scanner",
+                    attributes: ["id", "first_name", "last_name", "email"]
+                }
+            ],
+            order: [["cancel_request_date", "DESC"]],
+            limit: pageLimit,
+            offset: (pageNumber - 1) * pageLimit
+        });
+
+        // 🔥 ADD PRICE BREAKDOWN
+        const updatedItems = items.map(item => {
+            const data = item.toJSON();
+
+            const ticketAmount = Number(data.price) || 0;
+            const platformPercent = Number(data.order?.platform_fee_percent) || 0;
+            const gatewayPercent = Number(data.order?.payment_gateway_percent) || 0;
+
+            const platformFee = (ticketAmount * platformPercent) / 100;
+            const gatewayFee = ((ticketAmount + platformFee) * gatewayPercent) / 100;
+
+            const totalAmount = ticketAmount + platformFee + gatewayFee;
+
+            return {
+                ...data,
+                price_breakdown: {
+                    base_price: ticketAmount,
+                    platform_fee: Number(platformFee.toFixed(2)),
+                    gateway_fee: Number(gatewayFee.toFixed(2)),
+                    total_amount: Number(totalAmount.toFixed(2))
+                }
+            };
+        });
+
+        const totalPages = Math.ceil(totalRecords / pageLimit);
+
+        return apiResponse.success(
+            res,
+            "Organizer cancel request items fetched successfully",
+            {
+                totalRecords,
+                totalPages,
+                currentPage: pageNumber,
+                limit: pageLimit,
+                records: updatedItems
+            }
+        );
+
+    } catch (error) {
+        console.log("Order Items Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong"
+        });
+    }
+};
+
+exports.organizerCancelOrdersRequest = async (req, res) => {
+    try {
+        const organizerId = req.user.id;
+        const { page = 1, limit = config.perPageDataLimit, eventId, status } = req.query;
+
+        const pageNumber = parseInt(page);
+        const pageLimit = parseInt(limit);
+
+        if (!eventId) {
+            return apiResponse.success(res, "Event ID is required", {
+                totalRecords: 0,
+                totalPages: 0,
+                currentPage: 1,
+                limit: pageLimit,
+                records: []
+            });
+        }
+
+        // 🔹 Check event belongs to organizer
+        const event = await Event.findOne({
+            where: { event_org_id: organizerId, id: eventId },
+            attributes: ["id"]
+        });
+
+        if (!event) {
+            return apiResponse.success(res, "No event found for this organizer.", {
+                totalRecords: 0,
+                totalPages: 0,
+                currentPage: 1,
+                limit: pageLimit,
+                records: []
+            });
+        }
+
+        // 🔥 WHERE CONDITION (Orders table)
+        const where = {
+            event_id: parseInt(eventId),
+            cancel_request_status: {
+                [Op.ne]: null
+            }
+        };
+
+        const validStatus = ["pending", "approved", "rejected"];
+        if (status && validStatus.includes(status)) {
+            where.cancel_request_status = status;
+        }
+
+        // 🔹 COUNT
+        const totalRecords = await Orders.count({ where });
+
+        // 🔥 FETCH ORDERS
+        const orders = await Orders.findAll({
+            where,
+            attributes: [
+                "id",
+                "order_uid",
+                "grand_total",
+                "cancel_request_status",
+                "cancel_request_date",
+                "cancel_status"
+            ],
+            include: [
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["id", "first_name", "last_name", "email"]
+                },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ["name", "feat_image", "date_from", "date_to"],
+                    include: [
+                        {
+                            model: Currency,
+                            as: "currencyName",
+                            attributes: ["Currency_symbol", "Currency"]
+                        }
+                    ]
+                }
+            ],
+            order: [["cancel_request_date", "DESC"]],
+            limit: pageLimit,
+            offset: (pageNumber - 1) * pageLimit
+        });
+
+        const totalPages = Math.ceil(totalRecords / pageLimit);
+
+        return apiResponse.success(
+            res,
+            "Organizer cancel order requests fetched successfully",
+            {
+                totalRecords,
+                totalPages,
+                currentPage: pageNumber,
+                limit: pageLimit,
+                records: orders
+            }
+        );
+
+    } catch (error) {
+        console.log("Order Fetch Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong"
+        });
+    }
+};
 
 
 
 
 
 
-// exports.cancelAppointment = async (req, res) => {
-//     try {
-//         const { id: orderId } = req.params;
+// approved cancel request and refund automatic
+exports.approveCancelRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
 
-//         if (!orderId) {
-//             return res.json({
-//                 success: false,
-//                 message: "Order ID is required",
-//                 code: "ORDER_ID_MISSING"
-//             });
-//         }
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Order item ID is required"
+            });
+        }
 
-//         // Find order by ID
-//         const order = await OrderItems.findByPk(orderId);
+        // 👇 orderItem + parent order fetch
+        const orderItem = await OrderItems.findByPk(id, {
+            include: ["order"] // make sure association exists
+        });
 
-//         if (!order) {
-//             return res.json({
-//                 success: false,
-//                 message: "Order not found",
-//                 code: "ORDER_NOT_FOUND"
-//             });
-//         }
+        if (!orderItem) {
+            return res.status(404).json({
+                success: false,
+                message: "Order item not found"
+            });
+        }
 
-//         // Already cancelled check
-//         if (order.cancel_status == "cancel") {
-//             return res.json({
-//                 success: false,
-//                 message: "This appointment is already cancelled",
-//                 code: "ALREADY_CANCELLED"
-//             });
-//         }
+        if (orderItem.cancel_request_status !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "No pending cancellation request found"
+            });
+        }
 
-//         // Update cancel status & date
-//         await order.update({
-//             cancel_status: "cancel",
-//             cancel_date: new Date()
-//         });
-//         // ===== EMAIL TEMPLATE FETCH =====
-//         // const templateId = config.emailTemplates.addStaffForEvent;
+        if (orderItem.cancel_status === "cancel") {
+            return res.status(400).json({
+                success: false,
+                message: "Already cancelled"
+            });
+        }
 
-//         // const templateRecord = await Templates.findOne({
-//         //     where: { id: templateId }
-//         // });
+        if (orderItem.is_refunded) {
+            return res.status(400).json({
+                success: false,
+                message: "Already refunded"
+            });
+        }
 
-//         // if (!templateRecord) {
-//         //     throw new Error('Add staff email template not found');
-//         // }
+        // GET PAYMENT INTENT
+        const paymentIntentId = orderItem.order?.RRN;
+        if (!paymentIntentId) {
+            return res.status(400).json({
+                success: false,
+                message: "Payment intent not found"
+            });
+        }
+        // BASE AMOUNT
+        const ticketAmount = Number(orderItem.price) || 0;
 
-//         // const { subject, description } = templateRecord;
+        // PERCENTAGES (safe fallback)
+        const platformPercent = Number(orderItem.order?.platform_fee_percent) || 0;
+        const gatewayPercent = Number(orderItem.order?.payment_gateway_percent) || 0;
+
+        // PLATFORM FEE
+        const platformFee =
+            ticketAmount > 0 ? (ticketAmount * platformPercent) / 100 : 0;
+
+        // PAYMENT GATEWAY FEE
+        const gatewayFee =
+            ticketAmount > 0
+                ? ((ticketAmount + platformFee) * gatewayPercent) / 100
+                : 0;
+
+        // TOTAL REFUND
+        const totalRefundAmount = ticketAmount + platformFee + gatewayFee;
+
+        // FINAL (paise me)
+        const refundInPaise = Math.round(totalRefundAmount * 100);
+
+        // FETCH PAYMENT INTENT
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+        let refundResponse = null;
+
+        if (paymentIntent.status === "succeeded" && paymentIntent.latest_charge) {
+
+            const chargeId = paymentIntent.latest_charge;
+
+            // ✅ CREATE PARTIAL REFUND
+            refundResponse = await stripe.refunds.create({
+                charge: chargeId,
+                amount: refundInPaise,
+                reason: "requested_by_customer",
+                metadata: {
+                    order_item_id: orderItem.id,
+                }
+            });
+
+        } else {
+            await stripe.paymentIntents.cancel(paymentIntentId);
+        }
 
 
-//         // const html = replaceTemplateVariables(description, {
-//         //     Name: `${existingUser.first_name} ${existingUser.last_name}`,
-//         //     Email: existingUser.email,
-//         //     Password: "Your existing password remains unchanged",
-//         //     EventName: eventNames,
-//         //     AddedBy: `${req.user.firstName} ${req.user.lastName}`,
-//         //     SITE_URL: config.clientUrl
-//         // });
+        // 🔥 UPDATE ORDER ITEM
+        await orderItem.update({
+            cancel_request_status: "approved",
+            cancel_status: "cancel",
+            cancel_date: new Date(),
+            is_refunded: true,
+            refund_amount: totalRefundAmount,
+            refund_id: refundResponse?.id || null,
+            refund_date: new Date(),
+            refund_status: refundResponse ? "success" : "failed"
+        });
 
-//         // const finalSubject = `${subject} ${eventNames}`;
+        // 🔥 UPDATE ORDER TABLE (AGGREGATE)
+        const order = orderItem.order;
 
-//         // await sendEmail(existingUser.email, finalSubject, html);
+        // 1. total refunded update
+        // await order.update({
+        //     total_refunded_amount: Sequelize.literal(
+        //         `total_refunded_amount + ${totalRefundAmount}`
+        //     )
+        // });
+
+        // 2. calculate refund status
+        const totalItems = await OrderItems.count({
+            where: { order_id: order.id }
+        });
+
+        const refundedItems = await OrderItems.count({
+            where: {
+                order_id: order.id,
+                is_refunded: true
+            }
+        });
+
+        let refundStatus = "none";
+
+        if (refundedItems === 0) {
+            refundStatus = "none";
+        } else if (refundedItems < totalItems) {
+            refundStatus = "partial";
+        } else {
+            refundStatus = "full";
+        }
+
+        // 3. update status
+        await order.update({
+            total_refunded_amount: totalRefundAmount,
+            refund_status: refundStatus
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Cancellation approved & refund processed",
+            refund: refundResponse
+        });
+
+    } catch (error) {
+        console.error("Approve Cancel Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Refund failed or server error",
+            error: error.message
+        });
+    }
+};
+
+// reject cancel ticket request.....
+exports.rejectCancelRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Order item ID is required"
+            });
+        }
+
+        if (!reason) {
+            return res.status(400).json({
+                success: false,
+                message: "Rejection reason is required"
+            });
+        }
+
+        const order = await OrderItems.findByPk(id);
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order item not found"
+            });
+        }
+
+        // ❌ no pending request
+        if (order.cancel_request_status !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "No pending request to reject"
+            });
+        }
+
+        // ✅ REJECT
+        await order.update({
+            cancel_request_status: "rejected",
+            cancel_request_reject_reason: reason,
+            cancel_request_handled_by: req.user?.id || null
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Cancellation request rejected successfully."
+        });
+
+    } catch (error) {
+        console.error("Reject Cancel Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong",
+            error: error.message
+        });
+    }
+};
 
 
 
+// send order cancel request
+exports.sendCancelOrderRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Order ID is required",
+                code: "ID_MISSING"
+            });
+        }
+
+        // 🔥 GET ORDER + ITEMS
+        const order = await Orders.findByPk(id, {
+            include: [
+                {
+                    model: OrderItems,
+                    as: "orderItems",
+                },
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["first_name", "last_name", "email"]
+                },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ["name"]
+                }
+            ]
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found",
+                code: "NOT_FOUND"
+            });
+        }
+
+        // ❌ authorization
+        if (req.user && req.user.id !== order.user_id) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not authorized",
+                code: "UNAUTHORIZED"
+            });
+        }
+
+        // ❌ already requested
+        if (order.cancel_request_status === "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "Cancel request already sent",
+                code: "ALREADY_REQUESTED"
+            });
+        }
+
+        // ❌ already fully cancelled
+        if (order.cancel_status === "cancel") {
+            return res.status(400).json({
+                success: false,
+                message: "Order already cancelled",
+                code: "ALREADY_CANCELLED"
+            });
+        }
+
+        // 🔥 CHECK REMAINING ITEMS
+        const remainingItems = order.orderItems.filter(
+            item => item.cancel_status !== "cancel"
+        );
+
+        if (remainingItems.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "All items already cancelled",
+            });
+        }
+
+        // ✅ UPDATE ORDER
+        await order.update({
+            cancel_request_status: "pending",
+            cancel_request_date: new Date(),
+            cancel_request_reject_reason: null
+        });
+
+        // const [updatedCount] = await OrderItems.update(
+        //     {
+        //         cancel_request_status: "pending",
+        //         cancel_request_date: new Date(),
+        //     },
+        //     {
+        //         where: {
+        //             order_id: id,
+        //             [Op.and]: [
+        //                 {
+        //                     [Op.or]: [
+        //                         { cancel_status: { [Op.ne]: "cancel" } },
+        //                         { cancel_status: { [Op.is]: null } }
+        //                     ]
+        //                 },
+        //                 {
+        //                     [Op.or]: [
+        //                         { cancel_request_status: { [Op.is]: null } }, // ✅ ONLY NULL
+        //                         { cancel_request_status: "" }                 // ✅ EMPTY STRING (if any)
+        //                     ]
+        //                 }
+        //             ]
+        //         }
+        //     }
+        // );
 
 
+        // ===== SEND EMAIL =====
+        const templateId = config.emailTemplates.cancelAppointment;
+
+        const template = await Templates.findOne({
+            where: { id: templateId }
+        });
+
+        // if (template) {
+        //     const html = replaceTemplateVariables(template.description, {
+        //         UserName: `${order.user.first_name} ${order.user.last_name}`,
+        //         EventName: order.event?.name || "",
+        //         SITE_URL: config.clientUrl
+        //     });
+
+        //     await sendEmail(order.user.email, template.subject, html);
+        // }
+
+        return res.status(200).json({
+            success: true,
+            message: "Order cancellation request sent successfully"
+        });
+
+    } catch (error) {
+        console.error("Cancel Order Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong",
+            error: error.message
+        });
+    }
+};
+
+// cancel order request rejected...
+exports.rejectCancelOrderRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Order ID is required"
+            });
+        }
+
+        if (!reason) {
+            return res.status(400).json({
+                success: false,
+                message: "Rejection reason required"
+            });
+        }
+
+        const order = await Orders.findByPk(id, {
+            include: ["orderItems"]
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found"
+            });
+        }
+
+        if (order.cancel_request_status !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "No pending request"
+            });
+        }
 
 
-//         return res.json({
-//             success: true,
-//             message: "Your appointment has been cancelled successfully",
-//             // data: order
-//         });
+        await OrderItems.update(
+            {
+                cancel_request_status: "rejected",
+                cancel_request_reject_reason: reason,
+                cancel_request_date: order?.cancel_request_date || new Date()
+            },
+            {
+                where: {
+                    order_id: id,
+                    [Op.or]: [
+                        { cancel_request_status: { [Op.is]: null } },  // ✅ NULL
+                        { cancel_request_status: "pending" }           // ✅ pending
+                    ]
+                }
+            }
+        );
 
-//     } catch (error) {
-//         return res.json({
-//             success: false,
-//             message: "Something went wrong",
-//             error: error.message,
-//             code: "DB_ERROR"
-//         });
-//     }
-// };
+        // 🔥 UPDATE ORDER
+        await order.update({
+            cancel_request_status: "rejected",
+            cancel_request_reject_reason: reason
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Order & items rejected successfully"
+        });
+
+    } catch (error) {
+        console.error("Reject Order Cancel Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong",
+            error: error.message
+        });
+    }
+};
+
+
+exports.approveCancelOrderRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Order ID is required"
+            });
+        }
+
+        // 🔥 GET ORDER + ITEMS
+        const order = await Orders.findByPk(id, {
+            include: ["orderItems"]
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found"
+            });
+        }
+
+        // ❌ NO PENDING REQUEST
+        if (order.cancel_request_status !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "No pending cancel request"
+            });
+        }
+
+        // ❌ ALREADY CANCELLED
+        if (order.cancel_status === "cancel") {
+            return res.status(400).json({
+                success: false,
+                message: "Order already cancelled"
+            });
+        }
+
+        // 💰 FULL AMOUNT (no tax calc needed)
+        const totalAmount = Number(order.grand_total) || 0;
+        const refundInPaise = Math.round(totalAmount * 100);
+
+        // 🔥 PAYMENT INTENT
+        const paymentIntentId = order.RRN;
+
+        if (!paymentIntentId) {
+            return res.status(400).json({
+                success: false,
+                message: "Payment intent not found"
+            });
+        }
+
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+        let refundResponse = null;
+
+        // ✅ FULL REFUND
+        if (paymentIntent.status === "succeeded" && paymentIntent.latest_charge) {
+            refundResponse = await stripe.refunds.create({
+                charge: paymentIntent.latest_charge,
+                amount: refundInPaise,
+                reason: "requested_by_customer",
+                metadata: {
+                    order_id: order.id
+                }
+            });
+        } else {
+            // fallback
+            await stripe.paymentIntents.cancel(paymentIntentId);
+        }
+
+        // 🔥 UPDATE ALL ITEMS
+        await OrderItems.update(
+            {
+                cancel_request_status: "approved",
+                cancel_status: "cancel",
+                cancel_date: new Date(),
+                is_refunded: true,
+                refund_status: "success",
+                cancel_request_date: order?.cancel_request_date || new Date()
+            },
+            {
+                where: {
+                    order_id: id
+                }
+            }
+        );
+
+        // 🔥 UPDATE ORDER
+        await order.update({
+            cancel_status: "cancel",
+            cancel_request_status: "approved",
+            cancel_date: new Date(),
+            total_refunded_amount: totalAmount,
+            refund_status: "full",
+            refund_id: refundResponse?.id || null,
+            refund_date: new Date(),
+            is_refunded: true
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Order cancelled & full refund processed successfully",
+            refund: refundResponse
+        });
+
+    } catch (error) {
+        console.error("Order Cancel Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Refund failed",
+            error: error.message
+        });
+    }
+};

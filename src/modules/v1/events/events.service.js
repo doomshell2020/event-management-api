@@ -586,7 +586,7 @@ module.exports.createEvent = async (req, res) => {
             request_rsvp,
             event_timezone,
             entry_type,
-             // ================= REFUND FIELDS =================
+            // ================= REFUND FIELDS =================
             refund_enabled,
             refund_allowed,
             refund_deadline,
@@ -712,10 +712,10 @@ module.exports.createEvent = async (req, res) => {
             // admineventstatus: admin_status,
             request_rsvp: formatted_request_rsvp,
             event_timezone: finalTimezone, // ✅ Always store timezone (defaulted if missing)
-            refund_enabled:refund_enabled,
-            refund_allowed:refund_allowed,
-            refund_deadline:refund_deadline,
-            cancellation_policy:cancellation_policy
+            refund_enabled: refund_enabled,
+            refund_allowed: refund_allowed,
+            refund_deadline: refund_deadline,
+            cancellation_policy: cancellation_policy
         };
 
         // ✅ Save to DB
@@ -781,9 +781,13 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
             allow_register,
             request_rsvp,
             feat_image,
-            status, event_timezone
+            status, event_timezone,
+            // ================= REFUND FIELDS =================
+            refund_enabled,
+            refund_allowed,
+            refund_deadline,
+            cancellation_policy
         } = updateData;
-
         if (
             Object.keys(updateData).length == 1 &&      // only one key in object
             updateData.hasOwnProperty("status")          // that key is "status"
@@ -917,7 +921,10 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
         if (request_rsvp) existingEvent.request_rsvp = new Date(request_rsvp);
         if (status !== undefined && status !== null) existingEvent.status = status;
         if (event_timezone !== undefined && event_timezone !== null) existingEvent.event_timezone = event_timezone;
-
+        if (refund_enabled) existingEvent.refund_enabled = refund_enabled;
+        if (refund_allowed) existingEvent.refund_allowed = refund_allowed;
+        if (refund_deadline) existingEvent.refund_deadline = refund_deadline;
+        if (cancellation_policy) existingEvent.cancellation_policy = cancellation_policy.trim();
         // ✅ Handle optional image update
         if (feat_image) {
             const allowedExt = ['png', 'jpg', 'jpeg'];
