@@ -80,7 +80,8 @@ const User = sequelize.define(
     },
     status: {
       type: DataTypes.ENUM('Y', 'N'),
-      defaultValue: 'N',
+      // defaultValue: 'N',
+      defaultValue: 'Y',
     },
     is_email_verified: {
       type: DataTypes.ENUM('Y', 'N'),
