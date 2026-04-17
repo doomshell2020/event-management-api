@@ -442,7 +442,30 @@ module.exports = {
                                     model: TicketType,
                                     as: "ticket",
                                     required: false,
-                                    attributes: ["id", "count", "title", "access_type", "hidden", "sold_out", "type"],
+                                    attributes: ["id", "count", "title", "access_type", "hidden", "sold_out", "type",
+                                        // sales count in order item table    
+                                        [
+                                            Sequelize.literal(`(
+        SELECT COALESCE(SUM(oi.count), 0)
+        FROM tbl_order_items AS oi
+        WHERE 
+            oi.ticket_pricing_id = \`ticketPrices\`.id
+            AND oi.event_id = ${Number(ev)}
+    )`),
+                                            "sales_count"
+                                        ],
+                                        // ✅ 2. package_assigned_count
+                                        [
+                                            Sequelize.literal(`(
+        SELECT COALESCE(SUM(pd.qty), 0)
+        FROM tblpackage_details AS pd
+        WHERE pd.ticket_type_id = \`ticketPrices\`.ticket_type_id
+    )`),
+                                            "package_assigned_count"
+                                        ]
+
+                                    ],
+
                                     include: [
                                         {
                                             model: CommitteeAssignTickets,
@@ -493,7 +516,29 @@ module.exports = {
                             as: "tickets",
                             required: false,
                             attributes: {
-                                exclude: ["createdAt", "updatedAt"]
+                                exclude: ["createdAt", "updatedAt"],
+                                include: [
+                                    // ✅ 1. sales_count (direct ticket sales)
+                                    [
+                                        Sequelize.literal(`(
+                SELECT COALESCE(SUM(oi.count), 0)
+                FROM tbl_order_items AS oi
+                WHERE 
+                    oi.ticket_id = \`tickets\`.id
+                    AND oi.event_id = ${Number(ev)}
+            )`),
+                                        "sales_count"
+                                    ],
+
+                                    // ✅ 2. package_assigned_count (package me used tickets)
+                                    [
+                                        Sequelize.literal(`(
+                SELECT COALESCE(SUM(pd.qty), 0)
+                FROM tblpackage_details AS pd
+                WHERE pd.ticket_type_id = \`tickets\`.id
+            )`),
+                                        "package_assigned_count"
+                                    ]]
                             },
                             include: [
                                 {
@@ -550,9 +595,9 @@ module.exports = {
                                     ],
                                     [
                                         Sequelize.literal(`(
-                    CASE 
-                        WHEN (
-                            SELECT COALESCE(SUM(oi.count), 0)
+                                        CASE 
+                                        WHEN (
+                                      SELECT COALESCE(SUM(oi.count), 0)
                             FROM tbl_order_items AS oi
                             WHERE 
                                 oi.addon_id = addons.id
@@ -563,7 +608,18 @@ module.exports = {
                     END
                 )`),
                                         "sold_out"
+                                    ],
+
+                                    // ✅ NEW: package_assigned_count
+                                    [
+                                        Sequelize.literal(`(
+                                        SELECT COALESCE(SUM(pd.qty), 0)
+                                        FROM tblpackage_details AS pd
+                                        WHERE pd.addon_id = addons.id
+                                        )`),
+                                        "package_assigned_count"
                                     ]
+
                                 ]
                             }
                         },
