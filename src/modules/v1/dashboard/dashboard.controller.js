@@ -832,6 +832,60 @@ exports.getOrganizersEvent = async (req, res) => {
                 raw: true
             });
 
+            const packages = await Package.findAll({
+                where: { event_id: { [Op.in]: runningEventIds } },
+                include: {
+                    model: PackageDetails,
+                    as: "details",
+                    attributes: ["ticket_type_id", "addon_id", 'qty']
+                },
+                attributes: ["id"]
+            });
+
+            const packageMap = Object.fromEntries(
+                packages.map(pkg => {
+
+                    let ticket = 0;
+                    let addon = 0;
+
+                    pkg.details.forEach(d => {
+                        if (d.ticket_type_id) {
+                            ticket += Number(d.qty || 0);
+                        }
+                        if (d.addon_id) {
+                            addon += Number(d.qty || 0);
+                        }
+                    });
+
+                    return [pkg.id, { ticket, addon }];
+                })
+            );
+
+            //  Package sales
+            const packageSales = await OrderItems.findAll({
+                where: { event_id: { [Op.in]: eventIds }, type: "package" },
+                attributes: [
+                    "package_id",
+                    [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+                ],
+                group: ["package_id"],
+                raw: true
+            });
+            // Final calculation
+            const result = packageSales.reduce(
+                (acc, { package_id, sold }) => {
+                    const pkg = packageMap[package_id];
+                    if (!pkg) return acc;
+
+                    acc.tickets += sold * pkg.ticket;
+                    acc.addons += sold * pkg.addon;
+
+                    return acc;
+                },
+                { tickets: 0, addons: 0 }
+            );
+            const totalSoldPackageTickets = result.tickets;
+
 
             // Revenue per Event
             const eventRevenue = await Orders.findAll({
@@ -856,10 +910,12 @@ exports.getOrganizersEvent = async (req, res) => {
                 const soldTickets = Number(soldData?.sold_tickets || 0);
                 const revenue = Number(revenueData?.revenue || 0);
 
-                const remaining = totalTickets - soldTickets;
+                const totalSoldTicketsWithPkg = soldTickets + totalSoldPackageTickets;
+
+                const remaining = totalTickets - totalSoldTicketsWithPkg;
 
                 const progress = totalTickets
-                    ? Math.round((soldTickets / totalTickets) * 100)
+                    ? Math.round((totalSoldTicketsWithPkg / totalTickets) * 100)
                     : 0;
 
                 return {
@@ -869,7 +925,7 @@ exports.getOrganizersEvent = async (req, res) => {
                     event_date: event.date_from,
 
                     totalTickets,
-                    soldTickets,
+                    soldTickets: totalSoldTicketsWithPkg,
                     remaining,
                     revenue,
                     progress
@@ -918,6 +974,61 @@ exports.getOrganizersEvent = async (req, res) => {
                 raw: true
             });
 
+
+            const packages = await Package.findAll({
+                where: { event_id: { [Op.in]: runningEventIds } },
+                include: {
+                    model: PackageDetails,
+                    as: "details",
+                    attributes: ["ticket_type_id", "addon_id", 'qty']
+                },
+                attributes: ["id"]
+            });
+
+            const packageMap = Object.fromEntries(
+                packages.map(pkg => {
+
+                    let ticket = 0;
+                    let addon = 0;
+
+                    pkg.details.forEach(d => {
+                        if (d.ticket_type_id) {
+                            ticket += Number(d.qty || 0);
+                        }
+                        if (d.addon_id) {
+                            addon += Number(d.qty || 0);
+                        }
+                    });
+
+                    return [pkg.id, { ticket, addon }];
+                })
+            );
+
+            //  Package sales
+            const packageSales = await OrderItems.findAll({
+                where: { event_id: { [Op.in]: eventIds }, type: "package" },
+                attributes: [
+                    "package_id",
+                    [Sequelize.fn("SUM", Sequelize.col("count")), "sold"]
+                ],
+                group: ["package_id"],
+                raw: true
+            });
+            // Final calculation
+            const result = packageSales.reduce(
+                (acc, { package_id, sold }) => {
+                    const pkg = packageMap[package_id];
+                    if (!pkg) return acc;
+
+                    acc.tickets += sold * pkg.ticket;
+                    acc.addons += sold * pkg.addon;
+
+                    return acc;
+                },
+                { tickets: 0, addons: 0 }
+            );
+            const totalSoldPackageTickets = result.tickets;
+
             // Sold Revenue
             const soldRevenueData = await Orders.findOne({
                 attributes: [
@@ -932,22 +1043,22 @@ exports.getOrganizersEvent = async (req, res) => {
             const totalTickets = Number(totalTicketsData?.totalTickets || 0);
             const soldTickets = Number(soldTicketsData?.soldTickets || 0);
             const soldRevenue = Number(soldRevenueData?.soldRevenue || 0);
-
-            const remainingTickets = totalTickets - soldTickets;
+            const totalSoldTicketsWithPkg = soldTickets + totalSoldPackageTickets;
+            const remainingTickets = totalTickets - totalSoldTicketsWithPkg;
 
             const soldPercent = totalTickets
-                ? Math.round((soldTickets / totalTickets) * 100)
+                ? Math.round((totalSoldTicketsWithPkg / totalTickets) * 100)
                 : 0;
 
-            const avgTicketPrice = soldTickets
-                ? soldRevenue / soldTickets
+            const avgTicketPrice = totalSoldTicketsWithPkg
+                ? soldRevenue / totalSoldTicketsWithPkg
                 : 0;
 
             const potentialRevenue = remainingTickets * avgTicketPrice;
 
             salesProgress = {
                 soldPercent,
-                soldTickets,
+                soldTickets:totalSoldTicketsWithPkg,
                 totalTickets,
                 soldRevenue,
                 potentialRevenue
@@ -1043,169 +1154,6 @@ exports.getOrganizersEvent = async (req, res) => {
             totalCommitteeEarning: 0,
             avgConversion: 0
         };
-
-        //     if (eventIds.length) {
-
-        //         const committeeRaw = await CommitteeMembers.findAll({
-        //             where: {
-        //                 event_id: { [Op.in]: eventIds },
-        //                 status: "Y"
-        //             },
-        //             attributes: [
-        //                 "user_id",
-
-        //                 [fn("MAX", col("CommitteeMembers.commission")), "commission"],
-
-        //                 [fn("MAX", col("user.first_name")), "first_name"],
-        //                 [fn("MAX", col("user.last_name")), "last_name"],
-
-        //                 // [
-        //                 //     fn(
-        //                 //         "SUM",
-        //                 //         literal(`CAST(order_items.price AS DECIMAL(10,2))`)
-        //                 //     ),
-        //                 //     "total_sales"
-        //                 // ],
-
-        //                 [
-        //                     literal(`(
-        //                 SELECT COALESCE(SUM(oi.price),0)
-        //                 FROM tbl_order_items oi
-        //                 WHERE oi.committee_user_id = CommitteeMembers.user_id
-        //                 AND oi.event_id IN (${eventIds.join(",")})
-        //             )`),
-        //                     "total_sales"
-        //                 ],
-
-        //                 [
-        //                     fn(
-        //                         "SUM",
-        //                         literal(`
-        //                     CAST(order_items.price AS DECIMAL(10,2))
-        //                     * CAST(CommitteeMembers.commission AS DECIMAL(10,2))
-        //                     / 100
-        //                 `)
-        //                     ),
-        //                     "member_earning"
-        //                 ],
-
-        //                 // [
-        //                 //     fn("SUM", col("order_items.count")),
-        //                 //     "tickets_sold"
-        //                 // ],
-
-        //                 // [
-        //                 //     fn("SUM", col("assignedTickets.count")),
-        //                 //     "assigned_tickets"
-        //                 // ]
-
-        //                 [
-        //                     literal(`(
-        //     SELECT COALESCE(SUM(oi.count),0)
-        //     FROM tbl_order_items oi
-        //     WHERE oi.committee_user_id = CommitteeMembers.user_id
-        //     AND oi.event_id IN (${eventIds.join(",")})
-        //     AND oi.status = 'Y'
-        // )`),
-        //                     "tickets_sold"
-        //                 ],
-
-        //                 [
-        //                     literal(`(
-        //     SELECT COALESCE(SUM(cat.count),0)
-        //     FROM tblcommittee_assigntickets cat
-        //     WHERE cat.user_id = CommitteeMembers.user_id
-        // )`),
-        //                     "assigned_tickets"
-        //                 ]
-        //             ],
-
-        //             include: [
-        //                 {
-        //                     model: OrderItems,
-        //                     attributes: [],
-        //                     required: false,
-        //                     as: "order_items",
-        //                     where: {
-        //                         event_id: { [Op.in]: eventIds },
-        //                         status: "Y"
-        //                     }
-        //                 },
-
-        //                 {
-        //                     model: CommitteeAssignTickets,
-        //                     attributes: [],
-        //                     required: false,
-        //                     as: "assignedTickets"
-        //                 },
-
-        //                 {
-        //                     model: User,
-        //                     attributes: [],
-        //                     required: false,
-        //                     as: "user"
-        //                 }
-        //             ],
-
-        //             group: ["CommitteeMembers.user_id"],
-        //             raw: true
-        //         });
-
-        //         committeePerformance = committeeRaw.map(item => {
-        //             //  console.log("item.total_sales",item.total_sales)
-        //             const totalSales = Number(item.total_sales || 0);
-        //             const earning = Number(item.member_earning || 0);
-        //             const soldTickets = Number(item.tickets_sold || 0);
-        //             const assignedTickets = Number(item.assigned_tickets || 0);
-        //             console.log("totalSales", totalSales)
-        //             const conversion = assignedTickets
-        //                 ? Math.round((soldTickets / assignedTickets) * 100)
-        //                 : 0;
-
-        //             return {
-        //                 committee_user_id: item.user_id,
-        //                 name: `${item.first_name || ""} ${item.last_name || ""}`,
-        //                 commission_percentage: Number(item.commission || 0),
-        //                 total_sales: totalSales,
-        //                 soldTickets,
-        //                 assignedTickets,
-        //                 earning,
-        //                 conversion
-        //             };
-        //         });
-
-        //         const totalAssigned = committeePerformance.reduce(
-        //             (a, b) => a + (b.assignedTickets || 0),
-        //             0
-        //         );
-
-        //         const totalSold = committeePerformance.reduce(
-        //             (a, b) => a + (b.soldTickets || 0),
-        //             0
-        //         );
-
-        //         const totalPaid = committeePerformance.reduce(
-        //             // (a, b) => a + (b.earning || 0),
-        //             (a, b) => a + (b.total_sales || 0),
-        //             0
-        //         );
-
-        //         const avgConversion = committeePerformance.length
-        //             ? Math.round(
-        //                 committeePerformance.reduce((a, b) => a + b.conversion, 0) /
-        //                 committeePerformance.length
-        //             )
-        //             : 0;
-
-        //         committeeSummary = {
-        //             totalAssigned,
-        //             totalSold,
-        //             totalPaid,
-        //             conversionRate: avgConversion,
-        //             totalCommitteeEarning: totalPaid,
-        //             avgConversion
-        //         };
-        //     }
 
         if (eventIds.length) {
 
@@ -1859,7 +1807,6 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
         );
         const totalSoldPackageTickets = result.tickets;
         const totalSoldPackageAddons = result.addons;
-
         /* ================= APPOINTMENTS ================= */
         const wellnessList = await Wellness.findAll({
             where: {
@@ -2057,12 +2004,13 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
 
                 const totalTickets = Number(ticketsData?.total_tickets || 0);
                 const soldTickets = Number(soldData?.sold_tickets || 0);
+                const totalSoldTicketsPackage = soldTickets + totalSoldPackageTickets
                 const revenue = Number(revenueData?.revenue || 0);
 
-                const remaining = totalTickets - soldTickets;
+                const remaining = totalTickets - totalSoldTicketsPackage;
 
                 const progress = totalTickets
-                    ? Math.round((soldTickets / totalTickets) * 100)
+                    ? Math.round((totalSoldTicketsPackage / totalTickets) * 100)
                     : 0;
 
                 return {
@@ -2072,7 +2020,7 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                     event_date: event.date_from,
 
                     totalTickets,
-                    soldTickets,
+                    soldTickets: totalSoldTicketsPackage,
                     remaining,
                     revenue,
                     progress
@@ -2131,22 +2079,23 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
             const totalTickets = Number(totalTicketsData?.totalTickets || 0);
             const soldTickets = Number(soldTicketsData?.soldTickets || 0);
             const soldRevenue = Number(soldRevenueData?.soldRevenue || 0);
+            const totalSoldTicketsPackage = soldTickets + totalSoldPackageTickets
 
-            const remainingTickets = totalTickets - soldTickets;
+            const remainingTickets = totalTickets - totalSoldTicketsPackage;
 
             const soldPercent = totalTickets
-                ? Math.round((soldTickets / totalTickets) * 100)
+                ? Math.round((totalSoldTicketsPackage / totalTickets) * 100)
                 : 0;
 
-            const avgTicketPrice = soldTickets
-                ? soldRevenue / soldTickets
+            const avgTicketPrice = totalSoldTicketsPackage
+                ? soldRevenue / totalSoldTicketsPackage
                 : 0;
 
             const potentialRevenue = remainingTickets * avgTicketPrice;
 
             salesProgress = {
                 soldPercent,
-                soldTickets,
+                soldTickets: totalSoldTicketsPackage,
                 totalTickets,
                 soldRevenue,
                 potentialRevenue
@@ -2232,15 +2181,6 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
             totalCommissions: historicalEvents.reduce((a, b) => a + b.commission, 0),
             netEarnings: historicalEvents.reduce((a, b) => a + b.net, 0)
         };
-
-
-
-
-
-
-
-
-
         /* ================= COMMITTEE PERFORMANCE ================= */
 
         let committeePerformance = [];
