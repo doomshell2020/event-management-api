@@ -1047,7 +1047,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     if (data.ticket_type_id) {
 
                         const ticket = data.ticketType?.dataValues || data.ticketType || {};
-                        console.log("ticket-==============", ticket)
                         const name = ticket.title || "Ticket";
                         let unitPrice = Number(ticket.price);
 
@@ -1121,8 +1120,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
                     const data = item?.dataValues || item;
                     const itemType = data.item_type;
-                    console.log("===========-=================itemType", data.ticketType)
-                    console.log("===========-=================ticket", data.ticket)
                     // ✅ ADD THIS BLOCK
                     const ticket = data.ticketType?.dataValues || data.ticketType || {};
                     const gateName =
@@ -2403,7 +2400,6 @@ exports.sendCancelRequest = async (req, res) => {
                 { model: WellnessSlots, as: "appointment", attributes: ["date", "slot_start_time", "slot_end_time"] }
             ]
         });
-        console.log("order", order.cancel_status)
         if (!order) {
             return res.status(404).json({
                 success: false,
