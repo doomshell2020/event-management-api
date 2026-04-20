@@ -1049,10 +1049,6 @@ module.exports.fulfilOrderFromSnapshot = async ({
                         const ticket = data.ticketType?.dataValues || data.ticketType || {};
                         console.log("ticket-==============", ticket)
                         const name = ticket.title || "Ticket";
-                        const gateName = ticket?.gates?.dataValues?.title
-                            || ticket?.gates?.title
-                            || "";
-
                         let unitPrice = Number(ticket.price);
 
                         // 🔥 If ticket price is 0 → take from TicketPricing
@@ -1125,7 +1121,15 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
                     const data = item?.dataValues || item;
                     const itemType = data.item_type;
-                    console.log("============================itemType", itemType)
+                    console.log("===========-=================itemType", data.ticketType)
+                    console.log("===========-=================ticket", data.ticket)
+                    // ✅ ADD THIS BLOCK
+                    const ticket = data.ticketType?.dataValues || data.ticketType || {};
+                    const gateName =
+                        ticket?.gates?.dataValues?.title ||
+                        ticket?.gates?.title ||
+                        "";
+
                     const quantity = Number(data.quantity || 0);
                     const price = Number(data.price || 0);
                     //  PACKAGE
