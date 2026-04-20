@@ -61,6 +61,10 @@ const TicketType = sequelize.define(
             type: DataTypes.TEXT,
             allowNull: true
         },
+        gate_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
         createdAt: {
             type: DataTypes.DATE,
             allowNull: false

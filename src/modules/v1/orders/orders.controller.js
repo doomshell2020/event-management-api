@@ -1043,12 +1043,15 @@ module.exports.fulfilOrderFromSnapshot = async ({
 
                     const data = detail?.dataValues || detail;
                     const quantity = Number(data.qty || 0);
-
                     // 🎟 TICKET CASE
                     if (data.ticket_type_id) {
 
                         const ticket = data.ticketType?.dataValues || data.ticketType || {};
+                        console.log("ticket-==============", ticket)
                         const name = ticket.title || "Ticket";
+                        const gateName = ticket?.gates?.dataValues?.title
+                            || ticket?.gates?.title
+                            || "";
 
                         let unitPrice = Number(ticket.price);
 
@@ -1121,11 +1124,10 @@ module.exports.fulfilOrderFromSnapshot = async ({
                   ${snapshotItems.map(item => {
 
                     const data = item?.dataValues || item;
-
                     const itemType = data.item_type;
+                    console.log("============================itemType", itemType)
                     const quantity = Number(data.quantity || 0);
                     const price = Number(data.price || 0);
-
                     //  PACKAGE
                     if (itemType === "package") {
 
@@ -1171,7 +1173,15 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     }
                     return `
         <tr>
-            <td>${getItemTitle(item)}</td>
+            <td>${getItemTitle(item)}
+            ${itemType !== "addon" && gateName ? `
+    <div style="font-size:12px; color:#666; margin-top:4px;">
+        🚪 Entrance: ${gateName}
+    </div>
+` : ""}
+            
+            
+            </td>
             <td align="center">${quantity}</td>
             <td align="right">
                 ${formattedEvent.currency_symbol}${formatPrice(price * quantity)}
@@ -1332,14 +1342,18 @@ exports.createOrder = async (req, res) => {
             nest: true,
             order: [["id", "DESC"]],
             include: [
-                { model: TicketType, attributes: ["id", "title", "price"] },
+                {
+                    model: TicketType, attributes: ["id", "title", "price"]
+                },
                 { model: AddonTypes, attributes: ["id", "name"] },
                 { model: Package, attributes: ["id", "name"] },
                 {
                     model: TicketPricing,
                     attributes: ["id", "price", "ticket_type_id", "event_slot_id"],
                     include: [
-                        { model: TicketType, as: 'ticket', attributes: ['id', 'title', 'access_type', 'type', 'price'] },
+                        {
+                            model: TicketType, as: 'ticket', attributes: ['id', 'title', 'access_type', 'type', 'price']
+                        },
                         { model: EventSlots, as: 'slot', attributes: ['id', 'slot_name', 'slot_date', 'start_time', 'end_time'] }
                     ]
                 }

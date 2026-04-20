@@ -245,4 +245,7 @@ router.get('/search',
 );
 
 
+router.get('/gate-list/:event_id', eventController.gateList);
+
+
 module.exports = router;

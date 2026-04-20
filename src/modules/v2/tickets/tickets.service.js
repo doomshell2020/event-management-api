@@ -59,7 +59,8 @@ module.exports.createTicket = async (req) => {
             type,
             count,
             price,
-            hidden
+            hidden,
+            gate_id
         } = req.body;
 
         const user_id = req.user?.id || null;
@@ -124,6 +125,7 @@ module.exports.createTicket = async (req) => {
             // ✅ Price and Count logic
             price: parseFloat(price) || 0,
             count: parseInt(count) || 0,
+            gate_id: gate_id,
             hidden: hidden == 'Y' ? 'Y' : 'N',
         });
 
@@ -152,7 +154,8 @@ module.exports.updateTicket = async (req) => {
             count,
             price,
             hidden,
-            type
+            type,
+            gate_id
         } = req.body;
 
         const user_id = req.user?.id || null;
@@ -292,6 +295,7 @@ module.exports.updateTicket = async (req) => {
             price: validatedPrice,
             count: count ? parseInt(count) : existingTicket.count,
             type: type || existingTicket.type, // Ensure 'type' is updated
+            gate_id:gate_id || existingTicket.gate_id
         };
 
         // ✅ Handle ticket image replacement

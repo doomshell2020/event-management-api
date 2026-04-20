@@ -1,11 +1,12 @@
 const path = require('path');
 const fs = require('fs');
 const { Op, where } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency, Templates, User, Orders, EventActivationLog, Wellness, WellnessSlots, TicketPricing, sequelize, Package, CommitteeMembers } = require('../../../models');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User, Orders, EventActivationLog, Wellness, WellnessSlots, TicketPricing, sequelize, Package, CommitteeMembers, EventGates } = require('../../../models');
 const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
 const sendEmail = require('../../../common/utils/sendEmail');
+
 
 module.exports.deleteEvent = async (eventId) => {
     const transaction = await sequelize.transaction();
@@ -173,9 +174,6 @@ module.exports.searchEvents = async ({ keyword, loginId, currentEventId }) => {
     }
 };
 
-
-
-
 module.exports.eventList = async (req, res) => {
     try {
         const user = req.user;
@@ -245,6 +243,7 @@ module.exports.eventList = async (req, res) => {
             where: whereCondition,
             include: [
                 { model: Company, as: "companyInfo", attributes: ["name"] },
+                { model: EventGates, as: "eventGates", attributes: ["id","title"] },
                 { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] },
                 { model: User, as: "Organizer", attributes: ["id", "email", "first_name", "last_name", "payment_gateway_charges", "default_platform_charges", "admin_approval_required", "approval_type"] }
             ],
@@ -590,7 +589,8 @@ module.exports.createEvent = async (req, res) => {
             refund_enabled,
             refund_allowed,
             refund_deadline,
-            cancellation_policy
+            cancellation_policy,
+            gates
         } = req.body;
 
         const user_id = req.user?.id;
@@ -720,6 +720,23 @@ module.exports.createEvent = async (req, res) => {
 
         // ✅ Save to DB
         const newEvent = await Event.create(eventData);
+
+        let parsedGates = gates;
+
+        if (typeof parsedGates === "string") {
+            parsedGates = JSON.parse(parsedGates);
+        }
+        if (parsedGates && Array.isArray(parsedGates) && parsedGates.length > 0) {
+
+            const gateData = parsedGates.map(gate => ({
+                event_id: newEvent.id,
+                title: gate.name.trim(),
+            }));
+            const result = await EventGates.bulkCreate(gateData);
+        }
+
+
+
 
         if (!newEvent) {
             return {
@@ -1089,3 +1106,27 @@ module.exports.calendarEvents = async (req, res) => {
     }
 
 }
+
+
+// gate list priticular events...service
+module.exports.gateList = async (event_id) => {
+    try {
+        const gates = await EventGates.findAll({
+            where: { event_id: event_id },
+            attributes: ['id', 'title'],
+            raw: true
+        });
+
+        return {
+            success: true,
+            message: 'Gate list fetched successfully',
+            data: gates
+        };
+    } catch (error) {
+        console.error('Error fetching gate list:', error);
+        return {
+            success: false,
+            message: error.message
+        };
+    }
+};

@@ -1,5 +1,5 @@
 const Stripe = require("stripe");
-const { Payment, Orders, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons, WellnessSlots, Wellness, PackageDetails } = require("../../../models");
+const { Payment, Orders, PaymentSnapshotItems, EventSlots, OrderItems, TicketType, AddonTypes, Package, TicketPricing, Coupons, WellnessSlots, Wellness, PackageDetails, EventGates } = require("../../../models");
 const apiResponse = require("../../../common/utils/apiResponse");
 const config = require("../../../config/app");
 const { fulfilOrderFromSnapshot } = require("../orders/orders.controller");
@@ -613,7 +613,15 @@ exports.stripeWebhook = async (req, res) => {
       const snapshotItems = await PaymentSnapshotItems.findAll({
         where: { id: snapshotIds },
         include: [
-          { model: TicketType, as: "ticketType", required: false },
+          {
+            model: TicketType, as: "ticketType", required: false, include: [
+              {
+                model: EventGates,
+                as: "gates", // ⚠️ same as relation
+                attributes: ["id", "title"]
+              }
+            ]
+          },
           { model: AddonTypes, as: "addonType", required: false },
           // { model: Package, as: "packageType", required: false },
           { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType", include: [{ model: TicketPricing, as: "pricings" }] }, { model: AddonTypes, as: "addonType" }] } },
@@ -628,6 +636,13 @@ exports.stripeWebhook = async (req, res) => {
                 as: "ticket",
                 required: false,
                 attributes: ["id", "count", "title", "access_type"],
+                include: [
+                  {
+                    model: EventGates,
+                    as: "gates", // ⚠️ same as relation
+                    attributes: ["id", "title"]
+                  }
+                ]
               },
               {
                 model: EventSlots,
@@ -751,7 +766,15 @@ exports.manualWebhook = async (req, res) => {
     const snapshotItems = await PaymentSnapshotItems.findAll({
       where: { id: snapshotIds },
       include: [
-        { model: TicketType, as: "ticketType", required: false },
+        {
+          model: TicketType, as: "ticketType", required: false, include: [
+            {
+              model: EventGates,
+              as: "gates", // ⚠️ same as relation
+              attributes: ["id", "title"]
+            }
+          ]
+        },
         { model: AddonTypes, as: "addonType", required: false },
         { model: Package, as: "packageType", required: false, include: { model: PackageDetails, as: "details", include: [{ model: TicketType, as: "ticketType", include: [{ model: TicketPricing, as: "pricings" }] }, { model: AddonTypes, as: "addonType" }] } },
         {
@@ -764,6 +787,13 @@ exports.manualWebhook = async (req, res) => {
               as: "ticket",
               required: false,
               attributes: ["id", "count", "title", "access_type"],
+              include: [
+                {
+                  model: EventGates,
+                  as: "gates", // ⚠️ same as relation
+                  attributes: ["id", "title"]
+                }
+              ]
             },
             {
               model: EventSlots,
@@ -799,8 +829,8 @@ exports.manualWebhook = async (req, res) => {
     });
 
     const payment = await Payment.create({
-      user_id: 6450,
-      event_id: 365,
+      user_id: 6502,
+      event_id: 391,
       amount: 500 || 0,
       payment_intent: 'pi_3Sp3sWCwP2xM68Rm1wkQ3rRR',
       payment_status: "paid",
@@ -814,9 +844,9 @@ exports.manualWebhook = async (req, res) => {
     });
 
     const order = await fulfilOrderFromSnapshot({
-      meta_data: { discount_amount: 0, grand_total: 540, snapshot_ids: req.body.snapshot_ids, sub_total: 500, tax_total: 40 },
-      user_id: 6450,
-      event_id: 365,
+      meta_data: { discount_amount: 0, grand_total: 200, snapshot_ids: req.body.snapshot_ids, sub_total: 500, tax_total: 40 },
+      user_id: 6502,
+      event_id: 391,
       payment,
       snapshotItems,
       payment_method: "stripe",

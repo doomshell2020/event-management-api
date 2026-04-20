@@ -40,7 +40,7 @@ module.exports.createTicket = async (req, res) => {
         const fullFilePath = filename ? path.join(uploadFolder, filename) : null;
 
         // ✅ Validate required fields
-        const { event_id, title, access_type, price, count, hidden } = req.body;
+        const { event_id, title, access_type, price, count, hidden,gate_id } = req.body;
 
         if (!event_id || !title || !access_type) {
             return apiResponse.validation(res, [], 'Required fields are missing');

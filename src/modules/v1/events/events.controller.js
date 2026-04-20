@@ -378,3 +378,30 @@ module.exports.calendarEvents = async (req, res) => {
         return apiResponse.error(res, 'Internal server error', 500);
     }
 }
+
+// controller........
+module.exports.gateList = async (req, res) => {
+    try {
+        const event_id = req.params.event_id;
+
+        if (!event_id) {
+            return apiResponse.validation(res, [], 'Event ID is required');
+        }
+
+        const result = await eventService.gateList(event_id);
+
+        if (!result.success) {
+            return apiResponse.error(res, result.message);
+        }
+
+        return apiResponse.success(
+            res,
+            result.message,
+            { gates: result.data }
+        );
+
+    } catch (error) {
+        console.error('Error in gateList controller:', error);
+        return apiResponse.error(res, 'Internal server error', 500);
+    }
+};

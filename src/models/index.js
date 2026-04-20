@@ -38,6 +38,7 @@ const Payouts = require('./payouts.model');
 const EventActivationLog = require('./event_activation_logs.model');
 const Coupons = require('./coupons.model');
 const requestDemo = require('./demo.model');
+const EventGates = require('./event_gates.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
@@ -99,6 +100,7 @@ Event.belongsTo(Currency, { foreignKey: 'payment_currency', as: 'currencyName', 
 Event.hasMany(Wellness, { foreignKey: 'event_id', as: 'wellness', });
 Event.hasMany(TicketType, { foreignKey: 'eventid', as: 'tickets', onDelete: 'CASCADE' });
 Event.hasMany(TicketPricing, { foreignKey: 'event_id', as: 'ticketPrices', onDelete: 'CASCADE' });
+Event.hasMany(EventGates, { foreignKey: 'event_id', as: 'eventGates' });
 
 OrderItems.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 OrderItems.belongsTo(Orders, { foreignKey: "order_id", as: "order" });
@@ -119,6 +121,7 @@ QuestionsBook.belongsTo(OrderItems, { foreignKey: "ticketdetail_id", targetKey: 
 QuestionsBook.belongsTo(Questions, { foreignKey: "question_id", targetKey: "id", as: "question" });
 
 TicketType.belongsTo(Event, { foreignKey: 'eventid', as: 'event' });
+TicketType.belongsTo(EventGates, { foreignKey: 'gate_id', as: 'gates' });
 TicketType.hasMany(TicketPricing, { foreignKey: 'ticket_type_id', as: 'pricings', onDelete: 'CASCADE' });
 
 EventSlots.belongsTo(Event, { foreignKey: 'event_id', as: 'event' });
@@ -149,5 +152,5 @@ module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries,
   Event, TicketType, OrderItems, User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness,
   WellnessSlots, Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup,
-  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog,Coupons,requestDemo
+  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog,Coupons,requestDemo,EventGates
 };
