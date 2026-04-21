@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { Company, Event, EventSlots, TicketType, TicketPricing, Wellness, WellnessSlots, Currency, OrderItems, User } = require('../../../models');
+const { Company, Event, EventSlots, TicketType, TicketPricing, Wellness, WellnessSlots, Currency, OrderItems, User,EventGates } = require('../../../models');
 const { convertToUTC, convertUTCToLocal } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const moment = require('moment');
 const config = require('../../../config/app');
@@ -397,7 +397,8 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
             refund_enabled,
             refund_allowed,
             refund_deadline,
-            cancellation_policy
+            cancellation_policy,
+            gates
         } = updateData;
         if (
             Object.keys(updateData).length == 1 &&      // only one key in object
@@ -508,7 +509,70 @@ module.exports.updateEvent = async (eventId, updateData, user) => {
         // Save updates
         // console.log('existingEvent :', existingEvent);
         await existingEvent.save();
+// ✅ Save updates
+        await existingEvent.save();
+        // ================= UPDATE GATES =================
+        let parsedGates = gates;
 
+        if (typeof parsedGates === "string") {
+            parsedGates = JSON.parse(parsedGates);
+        }
+
+        if (Array.isArray(parsedGates)) {
+
+            // 🔹 1. Existing DB gates
+            const existingGates = await EventGates.findAll({
+                where: { event_id: eventId },
+                include: [
+                    {
+                        model: TicketType,
+                        as: "tickets",
+                        attributes: ["id"]
+                    }
+                ]
+            });
+            const existingGateMap = {};
+            existingGates.forEach(g => {
+                existingGateMap[g.id] = g;
+            });
+
+            // 🔹 2. Incoming IDs
+            const incomingIds = parsedGates
+                .filter(g => g.id)
+                .map(g => g.id);
+
+            // 🔹 3. DELETE removed gates (only if not used)
+            for (const gate of existingGates) {
+                if (!incomingIds.includes(gate.id)) {
+
+                    if (gate.tickets && gate.tickets.length > 0) {
+                        // ❌ Skip delete (used)
+                        continue;
+                    }
+
+                    await gate.destroy();
+                }
+            }
+
+            // 🔹 4. CREATE / UPDATE
+            for (const gate of parsedGates) {
+
+                if (gate.id) {
+                    // UPDATE
+                    await EventGates.update(
+                        { title: gate.name.trim() },
+                        { where: { id: gate.id } }
+                    );
+
+                } else {
+                    // CREATE
+                    await EventGates.create({
+                        event_id: eventId,
+                        title: gate.name.trim()
+                    });
+                }
+            }
+        }
         await User.update(
             { role_id: config.ORGANIZER_ROLE },
             { where: { id: user.id } }

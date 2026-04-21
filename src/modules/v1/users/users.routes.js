@@ -86,4 +86,11 @@ router.put('/staff/:id',
     userController.editStaff
 );
 
+
+router.get("/staff/:id/gate-access", userController.getStaffGateAccess);
+router.post("/staff/gate-access", userController.saveStaffGateAccess);
+
+
+
+
 module.exports = router;

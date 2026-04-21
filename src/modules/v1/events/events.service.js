@@ -243,7 +243,18 @@ module.exports.eventList = async (req, res) => {
             where: whereCondition,
             include: [
                 { model: Company, as: "companyInfo", attributes: ["name"] },
-                { model: EventGates, as: "eventGates", attributes: ["id","title"] },
+                {
+                    model: EventGates,
+                    as: "eventGates",
+                    attributes: ["id", "title"],
+                    include: [
+                        {
+                            model: TicketType,
+                            as: "tickets",
+                            attributes: ["id", "gate_id"]
+                        }
+                    ]
+                },
                 { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] },
                 { model: User, as: "Organizer", attributes: ["id", "email", "first_name", "last_name", "payment_gateway_charges", "default_platform_charges", "admin_approval_required", "approval_type"] }
             ],
@@ -803,7 +814,8 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
             refund_enabled,
             refund_allowed,
             refund_deadline,
-            cancellation_policy
+            cancellation_policy,
+            gates
         } = updateData;
         if (
             Object.keys(updateData).length == 1 &&      // only one key in object
@@ -959,6 +971,68 @@ module.exports.updateEvent = async (eventId, updateData, authUser) => {
 
         // ✅ Save updates
         await existingEvent.save();
+        // ================= UPDATE GATES =================
+        let parsedGates = gates;
+
+        if (typeof parsedGates === "string") {
+            parsedGates = JSON.parse(parsedGates);
+        }
+
+        if (Array.isArray(parsedGates)) {
+
+            // 🔹 1. Existing DB gates
+            const existingGates = await EventGates.findAll({
+                where: { event_id: eventId },
+                include: [
+                    {
+                        model: TicketType,
+                        as: "tickets",
+                        attributes: ["id"]
+                    }
+                ]
+            });
+            const existingGateMap = {};
+            existingGates.forEach(g => {
+                existingGateMap[g.id] = g;
+            });
+
+            // 🔹 2. Incoming IDs
+            const incomingIds = parsedGates
+                .filter(g => g.id)
+                .map(g => g.id);
+
+            // 🔹 3. DELETE removed gates (only if not used)
+            for (const gate of existingGates) {
+                if (!incomingIds.includes(gate.id)) {
+
+                    if (gate.tickets && gate.tickets.length > 0) {
+                        // ❌ Skip delete (used)
+                        continue;
+                    }
+
+                    await gate.destroy();
+                }
+            }
+
+            // 🔹 4. CREATE / UPDATE
+            for (const gate of parsedGates) {
+
+                if (gate.id) {
+                    // UPDATE
+                    await EventGates.update(
+                        { title: gate.name.trim() },
+                        { where: { id: gate.id } }
+                    );
+
+                } else {
+                    // CREATE
+                    await EventGates.create({
+                        event_id: eventId,
+                        title: gate.name.trim()
+                    });
+                }
+            }
+        }
 
         await User.update(
             { role_id: config.ORGANIZER_ROLE },

@@ -39,6 +39,7 @@ const EventActivationLog = require('./event_activation_logs.model');
 const Coupons = require('./coupons.model');
 const requestDemo = require('./demo.model');
 const EventGates = require('./event_gates.model');
+const StaffGateAccess = require('./staff_gate_access.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
@@ -123,6 +124,7 @@ QuestionsBook.belongsTo(Questions, { foreignKey: "question_id", targetKey: "id",
 TicketType.belongsTo(Event, { foreignKey: 'eventid', as: 'event' });
 TicketType.belongsTo(EventGates, { foreignKey: 'gate_id', as: 'gates' });
 TicketType.hasMany(TicketPricing, { foreignKey: 'ticket_type_id', as: 'pricings', onDelete: 'CASCADE' });
+EventGates.hasMany(TicketType, { foreignKey: 'gate_id', as: 'tickets' });
 
 EventSlots.belongsTo(Event, { foreignKey: 'event_id', as: 'event' });
 EventSlots.hasMany(TicketPricing, { foreignKey: 'event_slot_id', as: 'pricings', onDelete: 'CASCADE' });
@@ -152,5 +154,5 @@ module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries,
   Event, TicketType, OrderItems, User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness,
   WellnessSlots, Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup,
-  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog,Coupons,requestDemo,EventGates
+  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog,Coupons,requestDemo,EventGates,StaffGateAccess
 };
