@@ -1,5 +1,5 @@
 
-const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots, Package, AddonTypes, WellnessSlots, Wellness } = require('../../../models/index');
+const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots, Package, AddonTypes, WellnessSlots, Wellness,EventGates } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
 const { Op,Sequelize } = require('sequelize');
 const path = require('path');
@@ -1070,7 +1070,11 @@ module.exports.listTicketsByEvent = async (event_id) => {
                         as: "slot",
                         attributes: ['start_time', 'end_time', 'slot_date', 'slot_name']
                     }
-                }
+                }, {
+                model: EventGates,
+                as: "gates", // ⚠️ same as relation
+                attributes: ["id", "title"]
+              }
             ],
 
             order: [["createdAt", "DESC"]],
