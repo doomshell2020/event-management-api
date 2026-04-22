@@ -1119,14 +1119,12 @@ module.exports.fulfilOrderFromSnapshot = async ({
                   ${snapshotItems.map(item => {
 
                     const data = item?.dataValues || item;
+                    console.log("data---------",data)
                     const itemType = data.item_type;
                     // ✅ ADD THIS BLOCK
                     const ticket = data.ticketType?.dataValues || data.ticketType || {};
-                    const gateName =
-                        ticket?.gates?.dataValues?.title ||
-                        ticket?.gates?.title ||
-                        "";
-
+                    const gateName = ticket?.gates?.dataValues?.title || ticket?.gates?.title || "";
+                      console.log("gateName---------",gateName)
                     const quantity = Number(data.quantity || 0);
                     const price = Number(data.price || 0);
                     //  PACKAGE
