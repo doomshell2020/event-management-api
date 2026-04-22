@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency, Questions, QuestionItems, Templates } = require('../../../models');
+const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency, Questions, QuestionItems, Templates, EventGates } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
@@ -2174,7 +2174,16 @@ exports.getOrderDetails = async (req, res) => {
                         "scanned_date"
                     ],
                     include: [
-                        { model: TicketType, as: "ticketType", attributes: ["id", "title"] },
+                        {
+                            model: TicketType, as: "ticketType", attributes: ["id", "title"],
+                            include: [
+                                {
+                                    model: EventGates,
+                                    as: "gates", // ⚠️ same as relation
+                                    attributes: ["id", "title"]
+                                }
+                            ]
+                        },
                         { model: AddonTypes, as: "addonType", attributes: ["id", "name"] },
                         { model: Package, as: "package", attributes: ["id", "name"] },
                         {
@@ -2186,6 +2195,13 @@ exports.getOrderDetails = async (req, res) => {
                                     as: "ticket",
                                     required: false,
                                     attributes: ["id", "count", "title", "access_type"],
+                                    include: [
+                                        {
+                                            model: EventGates,
+                                            as: "gates", // ⚠️ same as relation
+                                            attributes: ["id", "title"]
+                                        }
+                                    ]
                                 },
                                 {
                                     model: EventSlots,
