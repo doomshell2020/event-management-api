@@ -40,6 +40,9 @@ const Coupons = require('./coupons.model');
 const requestDemo = require('./demo.model');
 const EventGates = require('./event_gates.model');
 const StaffGateAccess = require('./staff_gate_access.model');
+const EventExhibitors = require('./event_exhibitors.model');
+const EventGallery = require('./event_gallery.model');
+const EventSliders = require('./event_sliders.model');
 
 CommitteeMembers.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 CommitteeMembers.hasMany(CommitteeAssignTickets, { foreignKey: 'user_id', sourceKey: 'user_id', as: 'assignedTickets' });
@@ -102,6 +105,9 @@ Event.hasMany(Wellness, { foreignKey: 'event_id', as: 'wellness', });
 Event.hasMany(TicketType, { foreignKey: 'eventid', as: 'tickets', onDelete: 'CASCADE' });
 Event.hasMany(TicketPricing, { foreignKey: 'event_id', as: 'ticketPrices', onDelete: 'CASCADE' });
 Event.hasMany(EventGates, { foreignKey: 'event_id', as: 'eventGates' });
+Event.hasMany(EventExhibitors, { foreignKey: 'event_id', as: 'exhibitors' });
+Event.hasMany(EventGallery, { foreignKey: 'event_id', as: 'gallery' });
+Event.hasMany(EventSliders, { foreignKey: 'event_id', as: 'sliders' });
 
 OrderItems.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 OrderItems.belongsTo(Orders, { foreignKey: "order_id", as: "order" });
@@ -154,5 +160,5 @@ module.exports = {
   sequelize, Questions, QuestionItems, QuestionsBook, CartQuestionsDetails, AddonTypes, Company, Countries,
   Event, TicketType, OrderItems, User, Package, PackageDetails, TicketPricing, EventSlots, Cart, Orders, Wellness,
   WellnessSlots, Currency, Payment, PaymentSnapshotItems, CommitteeMembers, CommitteeAssignTickets, CommitteeGroup,
-  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog,Coupons,requestDemo,EventGates,StaffGateAccess
+  CommitteeGroupMember, ContactUs, Seo, Templates, Static, Payouts, EventActivationLog,Coupons,requestDemo,EventGates,StaffGateAccess,EventExhibitors,EventGallery,EventSliders
 };

@@ -247,5 +247,111 @@ router.get('/search',
 
 router.get('/gate-list/:event_id', eventController.gateList);
 
+// routes/eventExhibitor.routes.js
+router.post(
+    '/create/event-exhibitors',
+    authenticate,
+
+    uploadFiles({
+        type: 'array',
+        fieldName: 'exhibitor_logos',
+        maxCount: 10,
+        folder: 'uploads/exhibitors'
+    }),
+
+    [
+        body('event_id')
+            .notEmpty().withMessage('Event ID is required')
+            .isInt().withMessage('Event ID must be a number'),
+
+        body('exhibitors')
+            .notEmpty().withMessage('Exhibitors data is required'),
+    ],
+
+    validate,
+
+    eventController.createEventExhibitors
+);
+
+// event gallery routes...
+router.post(
+    "/create/event-gallery",
+    authenticate,
+
+    uploadFiles({
+        type: "array",
+        fieldName: "gallery_images",
+        maxCount: 10,
+        folder: "uploads/gallery"
+    }),
+
+    eventController.createEventGallery
+);
+
+router.post(
+    "/create/event-sliders",
+    authenticate,
+
+    uploadFiles({
+        type: "array",
+        fieldName: "slider_images",
+        maxCount: 10,
+        folder: "uploads/sliders"
+    }),
+
+    [
+        body("event_id")
+            .notEmpty().withMessage("Event ID is required")
+            .isInt().withMessage("Event ID must be a number")
+    ],
+
+    validate,
+
+    eventController.createEventSliders
+);
+
+// UPDATE EVENT EXHIBITORS (ROUTES)
+router.post(
+    "/update/event-exhibitors",
+    authenticate,
+    uploadFiles({
+        type: "array",
+        fieldName: "exhibitor_logos",
+        maxCount: 10,
+        folder: "uploads/exhibitors"
+    }),
+    eventController.updateEventExhibitors
+);
+
+// UPDATE EVENT GALLERY (ROUTES)
+router.post(
+    "/update/event-gallery",
+    authenticate,
+    uploadFiles({
+        type: "array",
+        fieldName: "gallery_images",
+        maxCount: 10,
+        folder: "uploads/gallery"
+    }),
+    eventController.updateEventGallery
+);
+
+// UPDATE EVENT SLIDERS (ROUTES)
+router.post(
+    "/update/event-sliders",
+    authenticate,
+    uploadFiles({
+        type: "array",
+        fieldName: "slider_images",
+        maxCount: 10,
+        folder: "uploads/sliders"
+    }),
+    eventController.updateEventSliders
+);
+
+
+
+
+
 
 module.exports = router;

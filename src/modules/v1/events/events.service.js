@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Op, where } = require('sequelize');
-const { Company, Event, TicketType, AddonTypes, Currency, Templates, User, Orders, EventActivationLog, Wellness, WellnessSlots, TicketPricing, sequelize, Package, CommitteeMembers, EventGates } = require('../../../models');
+const { Company, Event, TicketType, AddonTypes, Currency, Templates, User, Orders, EventActivationLog, Wellness, WellnessSlots, TicketPricing, sequelize, Package, CommitteeMembers, EventGates, EventExhibitors, EventGallery, EventSliders } = require('../../../models');
 const { convertToUTC, convertUTCToLocal, formatFriendlyDate } = require('../../../common/utils/timezone'); // ✅ Reuse timezone util
 const config = require('../../../config/app');
 const { replaceTemplateVariables } = require('../../../common/utils/helpers');
@@ -255,6 +255,28 @@ module.exports.eventList = async (req, res) => {
                         }
                     ]
                 },
+
+                // Exhibitors
+                {
+                    model: EventExhibitors,
+                    as: "exhibitors",
+                    attributes: ["id", "name", "image", "description", "website"]
+                },
+
+                // Gallery
+                {
+                    model: EventGallery,
+                    as: "gallery",
+                    attributes: ["id", "image", "sort_order"]
+                },
+
+                // Sliders
+                {
+                    model: EventSliders,
+                    as: "sliders",
+                    attributes: ["id", "image", "sort_order"]
+                },
+
                 { model: Currency, as: "currencyName", attributes: ["Currency_symbol", "Currency"] },
                 { model: User, as: "Organizer", attributes: ["id", "email", "first_name", "last_name", "payment_gateway_charges", "default_platform_charges", "admin_approval_required", "approval_type"] }
             ],
@@ -280,6 +302,29 @@ module.exports.eventList = async (req, res) => {
                 feat_image: data.feat_image
                     ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
                     : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
+                exhibitors: data.exhibitors?.map(ex => ({
+                    ...ex,
+                    image: ex.image
+                        ? `${baseUrl}uploads/exhibitors/${ex.image}`
+                        : null
+                })),
+                //  Gallery Image URL
+                gallery: data.gallery?.map(img => ({
+                    ...img,
+                    image: img.image
+                        ? `${baseUrl}uploads/gallery/${img.image}`
+                        : null
+                })),
+
+                //  Sliders Image URL
+                sliders: data.sliders?.map(slide => ({
+                    ...slide,
+                    image: slide.image
+                        ? `${baseUrl}uploads/sliders/${slide.image}`
+                        : null
+                })),
+
                 date_from: formatDate(data.date_from),
                 date_to: formatDate(data.date_to),
                 sale_start: formatDate(data.sale_start),
@@ -456,7 +501,27 @@ module.exports.publicEventList = async (req, res) => {
             include: [
                 { model: TicketType, as: "tickets" },
                 { model: AddonTypes, as: "addons" },
-                { model: Company, as: "companyInfo", attributes: ["name"] }
+                { model: Company, as: "companyInfo", attributes: ["name"] },
+                // Exhibitors
+                {
+                    model: EventExhibitors,
+                    as: "exhibitors",
+                    attributes: ["id", "name", "image", "description", "website"]
+                },
+
+                // Gallery
+                {
+                    model: EventGallery,
+                    as: "gallery",
+                    attributes: ["id", "image", "sort_order"]
+                },
+
+                // Sliders
+                {
+                    model: EventSliders,
+                    as: "sliders",
+                    attributes: ["id", "image", "sort_order"]
+                },
             ],
             order: [
                 ["featured", "ASC"],      // Y will come first
@@ -542,6 +607,29 @@ module.exports.publicEventList = async (req, res) => {
                 feat_image: data.feat_image
                     ? `${baseUrl.replace(/\/$/, "")}/${imagePath}/${data.feat_image}`
                     : `${baseUrl.replace(/\/$/, "")}/${imagePath}/default.jpg`,
+
+                exhibitors: data.exhibitors?.map(ex => ({
+                    ...ex,
+                    image: ex.image
+                        ? `${baseUrl}uploads/exhibitors/${ex.image}`
+                        : null
+                })),
+                //  Gallery Image URL
+                gallery: data.gallery?.map(img => ({
+                    ...img,
+                    image: img.image
+                        ? `${baseUrl}uploads/gallery/${img.image}`
+                        : null
+                })),
+
+                //  Sliders Image URL
+                sliders: data.sliders?.map(slide => ({
+                    ...slide,
+                    image: slide.image
+                        ? `${baseUrl}uploads/sliders/${slide.image}`
+                        : null
+                })),
+
 
                 date_from: formatDate(data.date_from),
                 date_to: formatDate(data.date_to),
@@ -745,10 +833,6 @@ module.exports.createEvent = async (req, res) => {
             }));
             const result = await EventGates.bulkCreate(gateData);
         }
-
-
-
-
         if (!newEvent) {
             return {
                 success: false,
@@ -1202,5 +1286,325 @@ module.exports.gateList = async (event_id) => {
             success: false,
             message: error.message
         };
+    }
+};
+
+
+
+// service...
+module.exports.createEventExhibitors = async (req, res) => {
+    try {
+        const { event_id, exhibitors } = req.body;
+
+        if (!event_id) {
+            return {
+                success: false,
+                message: 'event_id is required',
+                code: 'VALIDATION_FAILED'
+            };
+        }
+
+        if (!exhibitors) {
+            return {
+                success: false,
+                message: 'Exhibitors data missing',
+                code: 'VALIDATION_FAILED'
+            };
+        }
+
+        let parsed = exhibitors;
+
+        if (typeof parsed === "string") {
+            parsed = JSON.parse(parsed);
+        }
+
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            return {
+                success: false,
+                message: 'Invalid exhibitors data',
+                code: 'VALIDATION_FAILED'
+            };
+        }
+
+        // ✅ FIX HERE
+        const files = req.files || [];
+
+        const exhibitorData = parsed.map((ex, index) => ({
+            event_id: event_id,
+            name: ex.name?.trim(),
+            image: files[index]?.filename || null,
+            description: ex.description || "",
+            website: ex.website || ""
+        }));
+
+        await EventExhibitors.bulkCreate(exhibitorData);
+
+        return {
+            success: true,
+            data: exhibitorData
+        };
+
+    } catch (error) {
+        console.error('Service Error:', error);
+
+        return {
+            success: false,
+            message: 'Internal server error',
+            code: 'INTERNAL_ERROR'
+        };
+    }
+};
+
+// save data in event gallery table
+module.exports.createEventGallery = async (req) => {
+    try {
+        const { event_id } = req.body;
+
+        if (!event_id) {
+            return {
+                success: false,
+                message: "event_id is required"
+            };
+        }
+        const files = req.files || [];
+        if (files.length === 0) {
+            return {
+                success: false,
+                message: "At least one image is required"
+            };
+        }
+
+        const galleryData = files.map((file, index) => ({
+            event_id,
+            image: file.filename,
+            sort_order: index
+        }));
+
+        await EventGallery.bulkCreate(galleryData);
+
+        return {
+            success: true,
+            data: galleryData
+        };
+
+    } catch (error) {
+        console.error("Gallery Service Error:", error);
+        return {
+            success: false,
+            message: "Internal server error"
+        };
+    }
+};
+
+
+// create event slider
+module.exports.createEventSliders = async (req) => {
+    try {
+        const { event_id } = req.body;
+
+        if (!event_id) {
+            return {
+                success: false,
+                message: "event_id is required"
+            };
+        }
+
+        const files = req.files || [];
+
+        if (files.length === 0) {
+            return {
+                success: false,
+                message: "At least one slider image is required"
+            };
+        }
+
+        // sort_order = index (important for order)
+        const sliderData = files.map((file, index) => ({
+            event_id,
+            image: file.filename,
+            sort_order: index,
+        }));
+
+        await EventSliders.bulkCreate(sliderData);
+
+        return {
+            success: true,
+            data: sliderData
+        };
+
+    } catch (error) {
+        console.error("Slider Service Error:", error);
+
+        return {
+            success: false,
+            message: "Internal server error"
+        };
+    }
+};
+
+
+
+
+
+// UPDATE EVENT EXHIBITORS (SERVICE)
+module.exports.updateEventExhibitors = async (req) => {
+    try {
+        const { event_id, exhibitors } = req.body;
+
+        if (!event_id) {
+            return { success: false, message: 'event_id is required' };
+        }
+
+        let parsed = typeof exhibitors === "string"
+            ? JSON.parse(exhibitors)
+            : exhibitors;
+
+        const files = req.files || [];
+        let fileIndex = 0;
+
+        // ✅ existing DB data
+        const existing = await EventExhibitors.findAll({ where: { event_id } });
+        const existingIds = existing.map(e => e.id);
+
+        const incomingIds = parsed.filter(e => e.id).map(e => e.id);
+
+        // 🗑️ DELETE removed
+        const deleteIds = existingIds.filter(id => !incomingIds.includes(id));
+        if (deleteIds.length > 0) {
+            await EventExhibitors.destroy({ where: { id: deleteIds } });
+        }
+
+        // 🔄 UPDATE + CREATE
+        for (const ex of parsed) {
+
+            let image = ex.image;
+
+            // ✅ new image upload
+            if (files[fileIndex]) {
+                image = files[fileIndex].filename;
+                fileIndex++;
+            }
+
+            if (ex.id) {
+                // UPDATE
+                await EventExhibitors.update(
+                    {
+                        name: ex.name,
+                        description: ex.description,
+                        website: ex.website,
+                        image
+                    },
+                    { where: { id: ex.id } }
+                );
+            } else {
+                // CREATE
+                await EventExhibitors.create({
+                    event_id,
+                    name: ex.name,
+                    description: ex.description,
+                    website: ex.website,
+                    image
+                });
+            }
+        }
+
+        return { success: true };
+
+    } catch (error) {
+        console.error("Update Exhibitor Error:", error);
+        return { success: false, message: "Internal server error" };
+    }
+};
+
+
+// UPDATE EVENT GALLERY (SERVICE)
+module.exports.updateEventGallery = async (req) => {
+    try {
+        const { event_id } = req.body;
+
+        if (!event_id) {
+            return { success: false, message: "event_id required" };
+        }
+
+        const files = req.files || [];
+
+        // 👉 agar koi new file nahi hai → kuch mat karo
+        if (files.length === 0) {
+            return {
+                success: true,
+                message: "No new images, old preserved"
+            };
+        }
+
+        // 🔥 get last sort_order
+        const lastImage = await EventGallery.findOne({
+            where: { event_id },
+            order: [["sort_order", "DESC"]],
+        });
+
+        let startOrder = lastImage ? lastImage.sort_order + 1 : 0;
+
+        const newData = files.map((file, index) => ({
+            event_id,
+            image: file.filename,
+            sort_order: startOrder + index
+        }));
+
+        await EventGallery.bulkCreate(newData);
+
+        return {
+            success: true,
+            data: newData
+        };
+
+    } catch (error) {
+        console.error("Gallery Update Error:", error);
+        return { success: false, message: "Internal error" };
+    }
+};
+
+
+// UPDATE EVENT SLIDERS (SERVICE)
+
+module.exports.updateEventSliders = async (req) => {
+    try {
+        const { event_id } = req.body;
+
+        if (!event_id) {
+            return { success: false, message: "event_id required" };
+        }
+
+        const files = req.files || [];
+
+        if (files.length === 0) {
+            return {
+                success: true,
+                message: "No new sliders, old preserved"
+            };
+        }
+
+        const lastSlider = await EventSliders.findOne({
+            where: { event_id },
+            order: [["sort_order", "DESC"]],
+        });
+
+        let startOrder = lastSlider ? lastSlider.sort_order + 1 : 0;
+
+        const sliderData = files.map((file, index) => ({
+            event_id,
+            image: file.filename,
+            sort_order: startOrder + index
+        }));
+
+        await EventSliders.bulkCreate(sliderData);
+
+        return {
+            success: true,
+            data: sliderData
+        };
+
+    } catch (error) {
+        console.error("Slider Update Error:", error);
+        return { success: false, message: "Internal error" };
     }
 };

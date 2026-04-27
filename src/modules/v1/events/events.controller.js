@@ -405,3 +405,101 @@ module.exports.gateList = async (req, res) => {
         return apiResponse.error(res, 'Internal server error', 500);
     }
 };
+
+
+
+// controllers/eventExhibitor.controller.js
+module.exports.createEventExhibitors = async (req, res) => {
+  try {
+    const { event_id, exhibitors } = req.body;
+
+    if (!event_id || !exhibitors) {
+      return apiResponse.validation(res, [], 'event_id and exhibitors are required');
+    }
+
+    const result = await eventService.createEventExhibitors(req, res);
+
+    if (!result.success) {
+      return apiResponse.error(res, result.message);
+    }
+
+    return apiResponse.success(
+      res,
+      'Exhibitors added successfully',
+      result.data
+    );
+
+  } catch (error) {
+    console.error('Controller Error:', error);
+    return apiResponse.error(res, 'Internal server error');
+  }
+};
+
+
+
+// event gallery controller......
+module.exports.createEventGallery = async (req, res) => {
+  try {
+    const result = await eventService.createEventGallery(req);
+
+    if (!result.success) {
+      return apiResponse.error(res, result.message);
+    }
+
+    return apiResponse.success(
+      res,
+      "Gallery uploaded successfully",
+      result.data
+    );
+
+  } catch (error) {
+    console.error("Controller Error:", error);
+    return apiResponse.error(res, "Internal server error");
+  }
+};
+
+
+
+// create event sliders
+module.exports.createEventSliders = async (req, res) => {
+  try {
+    const result = await eventService.createEventSliders(req);
+
+    if (!result.success) {
+      return apiResponse.error(res, result.message);
+    }
+
+    return apiResponse.success(
+      res,
+      "Sliders uploaded successfully",
+      result.data
+    );
+
+  } catch (error) {
+    console.error("Controller Error:", error);
+    return apiResponse.error(res, "Internal server error");
+  }
+};
+
+
+
+// UPDATE EVENT EXHIBITORS (CONTROLLER)
+module.exports.updateEventExhibitors = async (req, res) => {
+    const result = await eventService.updateEventExhibitors(req);
+    if (!result.success) return apiResponse.error(res, result.message);
+    return apiResponse.success(res, "Exhibitors updated");
+};
+
+// UPDATE EVENT GALLERY (CONTROLLER)
+module.exports.updateEventGallery = async (req, res) => {
+    const result = await eventService.updateEventGallery(req);
+    if (!result.success) return apiResponse.error(res, result.message);
+    return apiResponse.success(res, "Gallery updated");
+};
+
+// UPDATE EVENT SLIDERS (CONTROLLER )
+module.exports.updateEventSliders = async (req, res) => {
+    const result = await eventService.updateEventSliders(req);
+    if (!result.success) return apiResponse.error(res, result.message);
+    return apiResponse.success(res, "Sliders updated");
+};
