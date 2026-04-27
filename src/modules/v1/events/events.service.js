@@ -1520,7 +1520,7 @@ module.exports.updateEventExhibitors = async (req) => {
 // UPDATE EVENT GALLERY (SERVICE)
 module.exports.updateEventGallery = async (req) => {
     try {
-        const { event_id } = req.body;
+        const { event_id, deleted_ids } = req.body;
 
         if (!event_id) {
             return { success: false, message: "event_id required" };
@@ -1528,33 +1528,38 @@ module.exports.updateEventGallery = async (req) => {
 
         const files = req.files || [];
 
-        // 👉 agar koi new file nahi hai → kuch mat karo
-        if (files.length === 0) {
-            return {
-                success: true,
-                message: "No new images, old preserved"
-            };
+        // ================= DELETE OLD =================
+        // DELETE
+        if (deleted_ids) {
+            const ids = JSON.parse(deleted_ids);
+            if (ids.length > 0) {
+                await EventGallery.destroy({
+                    where: { id: ids, event_id }
+                });
+            }
         }
 
-        // 🔥 get last sort_order
-        const lastImage = await EventGallery.findOne({
-            where: { event_id },
-            order: [["sort_order", "DESC"]],
-        });
+        // ================= ADD NEW =================
+        if (files.length > 0) {
+            const lastImage = await EventGallery.findOne({
+                where: { event_id },
+                order: [["sort_order", "DESC"]],
+            });
 
-        let startOrder = lastImage ? lastImage.sort_order + 1 : 0;
+            let startOrder = lastImage ? lastImage.sort_order + 1 : 0;
 
-        const newData = files.map((file, index) => ({
-            event_id,
-            image: file.filename,
-            sort_order: startOrder + index
-        }));
+            const newData = files.map((file, index) => ({
+                event_id,
+                image: file.filename,
+                sort_order: startOrder + index
+            }));
 
-        await EventGallery.bulkCreate(newData);
+            await EventGallery.bulkCreate(newData);
+        }
 
         return {
             success: true,
-            data: newData
+            message: "Gallery updated successfully"
         };
 
     } catch (error) {
@@ -1562,49 +1567,173 @@ module.exports.updateEventGallery = async (req) => {
         return { success: false, message: "Internal error" };
     }
 };
+// module.exports.updateEventGallery = async (req) => {
+//     try {
+//         const { event_id } = req.body;
+
+//         if (!event_id) {
+//             return { success: false, message: "event_id required" };
+//         }
+
+//         const files = req.files || [];
+
+
+//         if (files.length === 0) {
+//             return {
+//                 success: true,
+//                 message: "No new images, old preserved"
+//             };
+//         }
+
+//         // 🔥 get last sort_order
+//         const lastImage = await EventGallery.findOne({
+//             where: { event_id },
+//             order: [["sort_order", "DESC"]],
+//         });
+
+//         let startOrder = lastImage ? lastImage.sort_order + 1 : 0;
+
+//         const newData = files.map((file, index) => ({
+//             event_id,
+//             image: file.filename,
+//             sort_order: startOrder + index
+//         }));
+
+//         await EventGallery.bulkCreate(newData);
+
+//         return {
+//             success: true,
+//             data: newData
+//         };
+
+//     } catch (error) {
+//         console.error("Gallery Update Error:", error);
+//         return { success: false, message: "Internal error" };
+//     }
+// };
 
 
 // UPDATE EVENT SLIDERS (SERVICE)
 
 module.exports.updateEventSliders = async (req) => {
-    try {
-        const { event_id } = req.body;
+  try {
+    const { event_id } = req.body;
 
-        if (!event_id) {
-            return { success: false, message: "event_id required" };
-        }
-
-        const files = req.files || [];
-
-        if (files.length === 0) {
-            return {
-                success: true,
-                message: "No new sliders, old preserved"
-            };
-        }
-
-        const lastSlider = await EventSliders.findOne({
-            where: { event_id },
-            order: [["sort_order", "DESC"]],
-        });
-
-        let startOrder = lastSlider ? lastSlider.sort_order + 1 : 0;
-
-        const sliderData = files.map((file, index) => ({
-            event_id,
-            image: file.filename,
-            sort_order: startOrder + index
-        }));
-
-        await EventSliders.bulkCreate(sliderData);
-
-        return {
-            success: true,
-            data: sliderData
-        };
-
-    } catch (error) {
-        console.error("Slider Update Error:", error);
-        return { success: false, message: "Internal error" };
+    if (!event_id) {
+      return { success: false, message: "event_id required" };
     }
+
+    const files = req.files || [];
+    const deletedIds = JSON.parse(req.body.deleted_ids || "[]");
+    const orderData = JSON.parse(req.body.order || "[]");
+
+    console.log("orderData =>", orderData);
+
+    // ================= DELETE =================
+    if (deletedIds.length > 0) {
+      await EventSliders.destroy({
+        where: {
+          id: deletedIds,
+          event_id,
+        },
+      });
+    }
+
+    // ================= ADD NEW FILES =================
+    let newCreated = [];
+
+    if (files.length > 0) {
+      const newData = files.map((file) => ({
+        event_id,
+        image: file.filename,
+        sort_order: 0, // temporary
+      }));
+
+      newCreated = await EventSliders.bulkCreate(newData);
+    }
+
+    // ================= APPLY ORDER =================
+    let newIndex = 0;
+
+    const updates = [];
+
+    for (let item of orderData) {
+      if (item.id) {
+        // OLD IMAGE
+        updates.push(
+          EventSliders.update(
+            { sort_order: item.sort_order },
+            { where: { id: item.id } }
+          )
+        );
+      } else {
+        // NEW IMAGE
+        if (newCreated[newIndex]) {
+          updates.push(
+            EventSliders.update(
+              { sort_order: item.sort_order },
+              { where: { id: newCreated[newIndex].id } }
+            )
+          );
+          newIndex++;
+        }
+      }
+    }
+
+    await Promise.all(updates);
+
+    return {
+      success: true,
+      message: "Sliders updated successfully",
+    };
+
+  } catch (error) {
+    console.error("Slider Update Error:", error);
+    return { success: false, message: "Internal error" };
+  }
 };
+
+
+
+// module.exports.updateEventSliders = async (req) => {
+//     try {
+//         const { event_id } = req.body;
+
+//         if (!event_id) {
+//             return { success: false, message: "event_id required" };
+//         }
+
+//         const files = req.files || [];
+
+//         if (files.length === 0) {
+//             return {
+//                 success: true,
+//                 message: "No new sliders, old preserved"
+//             };
+//         }
+
+//         const lastSlider = await EventSliders.findOne({
+//             where: { event_id },
+//             order: [["sort_order", "DESC"]],
+//         });
+
+//         let startOrder = lastSlider ? lastSlider.sort_order + 1 : 0;
+
+//         const sliderData = files.map((file, index) => ({
+//             event_id,
+//             image: file.filename,
+//             sort_order: startOrder + index
+//         }));
+
+//         await EventSliders.bulkCreate(sliderData);
+
+//         return {
+//             success: true,
+//             data: sliderData
+//         };
+
+//     } catch (error) {
+//         console.error("Slider Update Error:", error);
+//         return { success: false, message: "Internal error" };
+//     }
+// };
