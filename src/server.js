@@ -1,4 +1,5 @@
 // src/server.js
+require('newrelic');
 require('dotenv').config(); // must be first line
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -9,7 +10,8 @@ const { sequelize } = require('./models'); // ✅ connection + models + associat
 const config = require('./config/app');
 const apiResponse = require('../src/common/utils/apiResponse');
 const cookieParser = require('cookie-parser');
-
+console.log('🔥 NEW RELIC LOG WORKING');
+console.error('❌ NEW RELIC ERROR WORKING');
 // Load environment variables
 
 // console.log('🔍 ENV CHECK ---');
