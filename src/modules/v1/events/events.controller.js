@@ -130,6 +130,32 @@ module.exports.publicEventList = async (req, res) => {
     }
 };
 
+// new public event details
+module.exports.getPublicEventDetailNew = async (req, res) => {
+    try {
+        const result = await eventService.getPublicEventDetailNew(req, res);
+
+        if (!result.success) {
+            switch (result.code) {
+                case 'VALIDATION_FAILED':
+                    return apiResponse.validation(res, [], result.message);
+                default:
+                    return apiResponse.error(res, result.message);
+            }
+        }
+
+        return apiResponse.success(
+            res,
+            result.message || 'Event list fetched successfully',
+            { events: result.data }  // plural naming convention
+        );
+
+    } catch (error) {
+        console.log('Error in eventList controller:', error);
+        return apiResponse.error(res, 'Internal server error: ' + error.message, 500);
+    }
+};
+
 module.exports.createEvent = async (req, res) => {
     try {
         // ✅ Check if image is uploaded

@@ -119,6 +119,7 @@ module.exports.registerUser = async ({ firstName, lastName, gender, dob, email, 
         password: hashedPassword,
         confirm_pass: password,
         is_email_verified: 'N',
+        role_id:3
     });
 
     // 6️⃣ Generate verification token & link

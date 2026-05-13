@@ -77,6 +77,8 @@ const uploadFiles = ({
             return multerInstance.array(fieldName, maxCount);
         case 'fields':
             return multerInstance.fields(fieldName);
+        case 'any': // 🔥 ADD THIS
+            return multerInstance.any();
         default:
             throw new Error('Invalid upload type. Use single, array, or fields.');
     }

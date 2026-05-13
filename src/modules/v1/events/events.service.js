@@ -1455,20 +1455,26 @@ module.exports.updateEventExhibitors = async (req) => {
             return { success: false, message: 'event_id is required' };
         }
 
+        // ✅ Parse data
         let parsed = typeof exhibitors === "string"
             ? JSON.parse(exhibitors)
             : exhibitors;
 
         const files = req.files || [];
-        let fileIndex = 0;
 
-        // ✅ existing DB data
+        // ✅ Convert files → map
+        const fileMap = {};
+        files.forEach(file => {
+            fileMap[file.fieldname] = file.filename;
+        });
+
+        // ✅ Existing DB data
         const existing = await EventExhibitors.findAll({ where: { event_id } });
         const existingIds = existing.map(e => e.id);
 
         const incomingIds = parsed.filter(e => e.id).map(e => e.id);
 
-        // 🗑️ DELETE removed
+        // 🗑️ DELETE removed exhibitors
         const deleteIds = existingIds.filter(id => !incomingIds.includes(id));
         if (deleteIds.length > 0) {
             await EventExhibitors.destroy({ where: { id: deleteIds } });
@@ -1477,16 +1483,20 @@ module.exports.updateEventExhibitors = async (req) => {
         // 🔄 UPDATE + CREATE
         for (const ex of parsed) {
 
-            let image = ex.image;
+            let image = null;
 
-            // ✅ new image upload
-            if (files[fileIndex]) {
-                image = files[fileIndex].filename;
-                fileIndex++;
+            // 🔥 Check new uploaded image by ID
+            const key = `exhibitor_logos_${ex.id}`;
+            if (fileMap[key]) {
+                image = fileMap[key];
+            } else if (ex.id) {
+                // 🔥 Preserve old image
+                const existingItem = existing.find(e => e.id === ex.id);
+                image = existingItem ? existingItem.image : null;
             }
 
             if (ex.id) {
-                // UPDATE
+                // ✅ UPDATE
                 await EventExhibitors.update(
                     {
                         name: ex.name,
@@ -1497,7 +1507,7 @@ module.exports.updateEventExhibitors = async (req) => {
                     { where: { id: ex.id } }
                 );
             } else {
-                // CREATE
+                // ✅ CREATE (new exhibitor)
                 await EventExhibitors.create({
                     event_id,
                     name: ex.name,
@@ -1512,7 +1522,10 @@ module.exports.updateEventExhibitors = async (req) => {
 
     } catch (error) {
         console.error("Update Exhibitor Error:", error);
-        return { success: false, message: "Internal server error" };
+        return {
+            success: false,
+            message: "Internal server error"
+        };
     }
 };
 
@@ -1567,173 +1580,228 @@ module.exports.updateEventGallery = async (req) => {
         return { success: false, message: "Internal error" };
     }
 };
-// module.exports.updateEventGallery = async (req) => {
-//     try {
-//         const { event_id } = req.body;
-
-//         if (!event_id) {
-//             return { success: false, message: "event_id required" };
-//         }
-
-//         const files = req.files || [];
-
-
-//         if (files.length === 0) {
-//             return {
-//                 success: true,
-//                 message: "No new images, old preserved"
-//             };
-//         }
-
-//         // 🔥 get last sort_order
-//         const lastImage = await EventGallery.findOne({
-//             where: { event_id },
-//             order: [["sort_order", "DESC"]],
-//         });
-
-//         let startOrder = lastImage ? lastImage.sort_order + 1 : 0;
-
-//         const newData = files.map((file, index) => ({
-//             event_id,
-//             image: file.filename,
-//             sort_order: startOrder + index
-//         }));
-
-//         await EventGallery.bulkCreate(newData);
-
-//         return {
-//             success: true,
-//             data: newData
-//         };
-
-//     } catch (error) {
-//         console.error("Gallery Update Error:", error);
-//         return { success: false, message: "Internal error" };
-//     }
-// };
-
 
 // UPDATE EVENT SLIDERS (SERVICE)
 
 module.exports.updateEventSliders = async (req) => {
-  try {
-    const { event_id } = req.body;
+    try {
+        const { event_id } = req.body;
 
-    if (!event_id) {
-      return { success: false, message: "event_id required" };
-    }
-
-    const files = req.files || [];
-    const deletedIds = JSON.parse(req.body.deleted_ids || "[]");
-    const orderData = JSON.parse(req.body.order || "[]");
-
-    console.log("orderData =>", orderData);
-
-    // ================= DELETE =================
-    if (deletedIds.length > 0) {
-      await EventSliders.destroy({
-        where: {
-          id: deletedIds,
-          event_id,
-        },
-      });
-    }
-
-    // ================= ADD NEW FILES =================
-    let newCreated = [];
-
-    if (files.length > 0) {
-      const newData = files.map((file) => ({
-        event_id,
-        image: file.filename,
-        sort_order: 0, // temporary
-      }));
-
-      newCreated = await EventSliders.bulkCreate(newData);
-    }
-
-    // ================= APPLY ORDER =================
-    let newIndex = 0;
-
-    const updates = [];
-
-    for (let item of orderData) {
-      if (item.id) {
-        // OLD IMAGE
-        updates.push(
-          EventSliders.update(
-            { sort_order: item.sort_order },
-            { where: { id: item.id } }
-          )
-        );
-      } else {
-        // NEW IMAGE
-        if (newCreated[newIndex]) {
-          updates.push(
-            EventSliders.update(
-              { sort_order: item.sort_order },
-              { where: { id: newCreated[newIndex].id } }
-            )
-          );
-          newIndex++;
+        if (!event_id) {
+            return { success: false, message: "event_id required" };
         }
-      }
+
+        const files = req.files || [];
+        const deletedIds = JSON.parse(req.body.deleted_ids || "[]");
+        const orderData = JSON.parse(req.body.order || "[]");
+
+        console.log("orderData =>", orderData);
+
+        // ================= DELETE =================
+        if (deletedIds.length > 0) {
+            await EventSliders.destroy({
+                where: {
+                    id: deletedIds,
+                    event_id,
+                },
+            });
+        }
+
+        // ================= ADD NEW FILES =================
+        let newCreated = [];
+
+        if (files.length > 0) {
+            const newData = files.map((file) => ({
+                event_id,
+                image: file.filename,
+                sort_order: 0, // temporary
+            }));
+
+            newCreated = await EventSliders.bulkCreate(newData);
+        }
+
+        // ================= APPLY ORDER =================
+        let newIndex = 0;
+
+        const updates = [];
+
+        for (let item of orderData) {
+            if (item.id) {
+                // OLD IMAGE
+                updates.push(
+                    EventSliders.update(
+                        { sort_order: item.sort_order },
+                        { where: { id: item.id } }
+                    )
+                );
+            } else {
+                // NEW IMAGE
+                if (newCreated[newIndex]) {
+                    updates.push(
+                        EventSliders.update(
+                            { sort_order: item.sort_order },
+                            { where: { id: newCreated[newIndex].id } }
+                        )
+                    );
+                    newIndex++;
+                }
+            }
+        }
+
+        await Promise.all(updates);
+
+        return {
+            success: true,
+            message: "Sliders updated successfully",
+        };
+
+    } catch (error) {
+        console.error("Slider Update Error:", error);
+        return { success: false, message: "Internal error" };
     }
-
-    await Promise.all(updates);
-
-    return {
-      success: true,
-      message: "Sliders updated successfully",
-    };
-
-  } catch (error) {
-    console.error("Slider Update Error:", error);
-    return { success: false, message: "Internal error" };
-  }
 };
 
 
+// 🔥 simple in-memory cache
+const cache = new Map();
 
-// module.exports.updateEventSliders = async (req) => {
-//     try {
-//         const { event_id } = req.body;
+module.exports.getPublicEventDetailNew = async (req, res) => {
+    try {
+        const { id, slug } = req.body;
 
-//         if (!event_id) {
-//             return { success: false, message: "event_id required" };
-//         }
+        if (!id && !slug) {
+            return res.json({
+                success: false,
+                message: "id or slug is required",
+            });
+        }
 
-//         const files = req.files || [];
+        const cacheKey = `event:${id || slug}`;
 
-//         if (files.length === 0) {
-//             return {
-//                 success: true,
-//                 message: "No new sliders, old preserved"
-//             };
-//         }
+        // ✅ 1. CHECK CACHE
+        if (cache.has(cacheKey)) {
+            return res.json(cache.get(cacheKey));
+        }
 
-//         const lastSlider = await EventSliders.findOne({
-//             where: { event_id },
-//             order: [["sort_order", "DESC"]],
-//         });
+        const baseUrl = process.env.BASE_URL || "http://localhost:5000";
 
-//         let startOrder = lastSlider ? lastSlider.sort_order + 1 : 0;
+        let whereCondition = {
+            admineventstatus: "Y",
+            status: "Y",
+        };
 
-//         const sliderData = files.map((file, index) => ({
-//             event_id,
-//             image: file.filename,
-//             sort_order: startOrder + index
-//         }));
+        if (id) whereCondition.id = id;
+        if (slug) whereCondition.slug = slug;
 
-//         await EventSliders.bulkCreate(sliderData);
+        // ✅ 2. OPTIMIZED QUERY
+        const event = await Event.findOne({
+            where: whereCondition,
+            attributes: [
+                "id",
+                "name",
+                "slug",
+                "date_from",
+                "date_to",
+                "feat_image",
+                "event_timezone",
+                "location",
+                "company_id",
+                // "sale_start",
+                // "sale_end",
+                "status"
+            ],
+            include: [
+                {
+                    model: Company,
+                    as: "companyInfo",
+                    attributes: ["name"]
+                },
+                {
+                    model: EventExhibitors,
+                    as: "exhibitors",
+                    attributes: ["id", "name", "image"],
+                    separate: true,
+                    limit: 10
+                },
+                {
+                    model: EventGallery,
+                    as: "gallery",
+                    attributes: ["id", "image"],
+                    separate: true,
+                    limit: 10
+                },
+                {
+                    model: EventSliders,
+                    as: "sliders",
+                    attributes: ["id", "image"],
+                    separate: true,
+                    limit: 5
+                },
+            ],
+        });
 
-//         return {
-//             success: true,
-//             data: sliderData
-//         };
+        if (!event) {
+            return res.json({
+                success: false,
+                message: "Event not found",
+            });
+        }
 
-//     } catch (error) {
-//         console.error("Slider Update Error:", error);
-//         return { success: false, message: "Internal error" };
-//     }
-// };
+        const data = event.toJSON();
+
+        // ✅ fast image mapper
+        const mapImage = (arr, path) =>
+            arr?.map(i => ({
+                ...i,
+                image: i.image ? `${baseUrl}/${path}/${i.image}` : null
+            }));
+
+        // ✅ optimized date formatter (old format restored)
+        const formatDate = (date, tz) => {
+            if (!date) return null;
+
+            return {
+                utc: date,
+                local: convertUTCToLocal(date, tz),
+                timezone: tz,
+            };
+        };
+
+        const tz = data.event_timezone || "UTC";
+
+        const response = {
+            success: true,
+            message: "Event fetched successfully",
+            data: {
+                ...data,
+                feat_image: data.feat_image
+                    ? `${baseUrl}/uploads/events/${data.feat_image}`
+                    : `${baseUrl}/uploads/events/default.jpg`,
+
+                exhibitors: mapImage(data.exhibitors, "uploads/exhibitors"),
+                gallery: mapImage(data.gallery, "uploads/gallery"),
+                sliders: mapImage(data.sliders, "uploads/sliders"),
+
+                date_from: formatDate(data.date_from, tz),
+                date_to: formatDate(data.date_to, tz),
+                // sale_start: formatDate(data.sale_start, tz),
+                // sale_end: formatDate(data.sale_end, tz),
+            },
+        };
+
+        // ✅ 3. SAVE CACHE (TTL: 60 sec)
+        cache.set(cacheKey, response);
+
+        setTimeout(() => {
+            cache.delete(cacheKey);
+        }, 60000);
+
+        return res.json(response);
+
+    } catch (error) {
+        return res.json({
+            success: false,
+            message: "Internal server error: " + error.message,
+        });
+    }
+};

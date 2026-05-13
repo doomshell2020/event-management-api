@@ -209,6 +209,25 @@ router.post('/public-event-list',
     eventController.publicEventList
 );
 
+
+router.post(
+  '/get-event-detail',
+  [
+    body('id')
+      .optional()
+      .isInt().withMessage('ID must be a number'),
+
+    body('slug')
+      .optional()
+      .isString()
+      .notEmpty().withMessage('Slug must not be empty'),
+  ],
+  validate,
+  eventController.getPublicEventDetailNew
+);
+
+
+
 router.delete('/delete/:id', authenticate,
     [
         param('id')
@@ -315,7 +334,8 @@ router.post(
     "/update/event-exhibitors",
     authenticate,
     uploadFiles({
-        type: "array",
+        // type: "array",
+        type: "any",
         fieldName: "exhibitor_logos",
         maxCount: 10,
         folder: "uploads/exhibitors"

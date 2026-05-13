@@ -180,15 +180,86 @@ exports.getEventDetails = async (req, res) => {
                 [fn("SUM", col("platform_fee_tax")), "platform_fee_tax"],
                 [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"],
                 [fn("SUM", col("discount_amount")), "total_discount"],
+                // Cancelled Revenue
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN grand_total 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_revenue"
+                ],
+                // cancel total tax..
+                 [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN tax_total 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_tax"
+                ],
+                // cancel platform_fee_tax..
+                 [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN platform_fee_tax 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_platform_tax"
+                ],
+                // cancel payment_gateway_tax..
+                 [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN payment_gateway_tax 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_payment_gateway_tax"
+                ]
             ],
             raw: true
         });
-        const totalRevenue = Number(revenueData.total_revenue || 0);
 
+        // console.log("revenueData",revenueData.cancelled_revenue)
+
+        const totalRevenue = Number(revenueData.total_revenue || 0);
+        const totalCancelledRevenue= Number(revenueData.cancelled_revenue || 0);
+
+        const totalCancelledTax = Number(revenueData.cancelled_tax || 0);
+
+        const cancelledPlatformTax = Number(revenueData.cancelled_platform_tax || 0);
+        const cancelledPaymentGatewayTax = Number(revenueData.cancelled_payment_gateway_tax || 0);
+        console.log("cancelledPlatformTax",cancelledPlatformTax)
+        console.log("cancelledPaymentGatewayTax",cancelledPaymentGatewayTax)
+
+        const OrgCancelRevenue = Number(totalCancelledRevenue -totalCancelledTax|| 0);
+        // console.log("OrgCancelRevenue",OrgCancelRevenue)
         const totalDiscount = Number(revenueData.total_discount || 0);
         const netTotalEarning = Number(revenueData.gross_amount || 0);
 
-        const netEarning = netTotalEarning - totalDiscount;
+        const netEarningWithoutDiscount = netTotalEarning - totalDiscount;
+        // const netEarning = netTotalEarning - totalDiscount;
+        const netEarning = netEarningWithoutDiscount - OrgCancelRevenue;
 
         // const netEarning = Number(revenueData.gross_amount || 0);
 
@@ -292,6 +363,11 @@ exports.getEventDetails = async (req, res) => {
             }
         });
 
+
+
+        // console.log("totalTicketsSoldOut---",totalTicketsSold)
+
+
         // Total addons created
         const totalAddons = await AddonTypes.sum('count', {
             where: { event_id: event_id }
@@ -368,7 +444,28 @@ exports.getEventDetails = async (req, res) => {
                 `)
                     ),
                     "member_earning"
+                ],
+
+                //Total assigned tickets
+                [
+                    Sequelize.literal(`(
+        SELECT COALESCE(SUM(cat.count), 0)
+        FROM tblcommittee_assigntickets AS cat
+        WHERE cat.user_id = CommitteeMembers.user_id
+        AND cat.event_id = ${event_id}
+    )`),
+                    "assigned_ticket_count"
+                ],
+                // Total purchased tickets
+                [
+                    fn(
+                        "COUNT",
+                        literal(`DISTINCT order_items.id`)
+                    ),
+                    "purchased_ticket_count"
                 ]
+
+
             ],
             include: [
                 {
@@ -391,19 +488,42 @@ exports.getEventDetails = async (req, res) => {
             group: ["CommitteeMembers.user_id"],
             raw: true
         });
-
+        // console.log("committeeRaw------------", committeeRaw)
         const committeePerformance = committeeRaw.map(item => {
             const totalSales = Number(item.total_sales || 0);
             const earning = Number(item.member_earning || 0);
+            const assignedTickets = Number(item.assigned_ticket_count || 0);
+            const soldTickets = Number(item.purchased_ticket_count || 0);
+
+            const progressPercentage = assignedTickets
+                ? Number(((soldTickets / assignedTickets) * 100).toFixed(2))
+                : 0;
 
             return {
                 committee_user_id: item.user_id,
                 first_name: item.first_name,
                 last_name: item.last_name,
+
                 commission_percentage: Number(item.commission),
+
                 total_sales: totalSales,
                 earning,
+
+                assigned_ticket_count: assignedTickets,
+                sold_ticket_count: soldTickets,
+
+                progress_percentage: progressPercentage
             };
+
+
+            // return {
+            //     committee_user_id: item.user_id,
+            //     first_name: item.first_name,
+            //     last_name: item.last_name,
+            //     commission_percentage: Number(item.commission),
+            //     total_sales: totalSales,
+            //     earning,
+            // };
         });
 
         // ✅ Total earning
@@ -413,12 +533,12 @@ exports.getEventDetails = async (req, res) => {
         );
 
         // Ab earning percentage calculate karo
-        const finalCommitteePerformance = committeePerformance.map(member => ({
-            ...member,
-            earning_percentage: committeeEarning
-                ? Number(((member.earning / committeeEarning) * 100).toFixed(2))
-                : 0
-        }));
+        // const finalCommitteePerformance = committeePerformance.map(member => ({
+        //     ...member,
+        //     earning_percentage: committeeEarning
+        //         ? Number(((member.earning / committeeEarning) * 100).toFixed(2))
+        //         : 0
+        // }));
 
         return res.json({
             success: true,
@@ -429,6 +549,7 @@ exports.getEventDetails = async (req, res) => {
                     totalTicketsCreated,
                     totalTicketsSold,
                     totalRevenue,
+                    totalCancelledRevenue,
                     netEarning,
                     totalAddonsCreated: totalAddonsCreated || 0,
                     totalAddonsSold: totalAddonsSoldOut || 0,
@@ -461,19 +582,23 @@ exports.getEventDetails = async (req, res) => {
                 salesProgress: {
                     tickets: {
                         total: totalTickets,
-                        sold: totalTicketsSoldOut,
+                        sold: totalTicketsSoldOut + totalSoldPackageTickets,
                         percentage: ticketSalesPercent
                     },
                     addons: {
                         total: totalAddons,
-                        sold: totalAddonsSold,
+                        sold: totalAddonsSold + totalSoldPackageAddons,
                         percentage: addonSalesPercent
                     }
                 },
                 committeePerformance: {
                     totalCommitteeEarning: committeeTotalEarning,
-                    members: finalCommitteePerformance
+                    members: committeePerformance
                 }
+                // committeePerformance: {
+                //     totalCommitteeEarning: committeeTotalEarning,
+                //     // members: finalCommitteePerformance
+                // }
             }
         });
 
@@ -1058,7 +1183,7 @@ exports.getOrganizersEvent = async (req, res) => {
 
             salesProgress = {
                 soldPercent,
-                soldTickets:totalSoldTicketsWithPkg,
+                soldTickets: totalSoldTicketsWithPkg,
                 totalTickets,
                 soldRevenue,
                 potentialRevenue

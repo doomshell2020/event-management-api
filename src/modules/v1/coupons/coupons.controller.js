@@ -2,28 +2,28 @@ const apiResponse = require('../../../common/utils/apiResponse');
 const { Coupons, Event, Currency, Orders, Cart, WellnessSlots, TicketType, Package, AddonTypes, TicketPricing, sequelize } = require('../../../models');
 const { Op, fn, col, literal } = require("sequelize");
 
+
+
 // exports.applyCoupon = async (req, res) => {
-//     // console.log("req", req.body);
 //     try {
+//         const userId = req.user.id;
 //         const { coupon_code, event_id, total_amount = 0 } = req.body;
 
-//         // Basic validation
+//         /* ---------- Basic Validation ---------- */
 //         if (!coupon_code || !event_id) {
 //             return apiResponse.validation(res, [
-//                 "coupon_code and event_id are required"
+//                 "coupon_code and event_id are required",
 //             ]);
 //         }
 
-//         const cartTotal = parseFloat(total_amount);
-//         console.log("cartTotal",cartTotal)
-
+//         const cartTotal = Number(total_amount);
 //         if (!cartTotal || cartTotal <= 0) {
 //             return apiResponse.validation(res, [
-//                 "Total amount must be greater than zero"
+//                 "Total amount must be greater than zero",
 //             ]);
 //         }
 
-//         // Find coupon for this event
+//         /* ---------- Coupon Fetch ---------- */
 //         const coupon = await Coupons.findOne({
 //             where: {
 //                 code: coupon_code,
@@ -31,7 +31,7 @@ const { Op, fn, col, literal } = require("sequelize");
 //                 status: "Y",
 //             },
 //         });
-//         // console.log("coupon--", coupon)
+
 //         if (!coupon) {
 //             return apiResponse.notFound(
 //                 res,
@@ -40,108 +40,197 @@ const { Op, fn, col, literal } = require("sequelize");
 //             );
 //         }
 
-//         // Check max redeems (how many times this coupon has been used in Orders)
-//         const redeemedCount = await Orders.count({
-//             where: {
-//                 discount_code: coupon_code
-//             }
-//         });
-
-//         if (coupon.max_redeems && redeemedCount >= coupon.max_redeems) {
-//             return apiResponse.conflict(
-//                 res,
-//                 "Coupon has reached its maximum number of uses",
-//                 "COUPON_MAX_REDEEMED"
-//             );
-//         }
-
-//         // Date Validation
-//         if (coupon.validity_period == "specified_date") {
+//         /* ---------- Date Validation ---------- */
+//         if (coupon.validity_period === "specified_date") {
 //             const today = new Date();
+//             today.setHours(0, 0, 0, 0);
+
+//             const fromDate = coupon.specific_date_from
+//                 ? new Date(coupon.specific_date_from)
+//                 : null;
+
+//             const toDate = coupon.specific_date_to
+//                 ? new Date(coupon.specific_date_to)
+//                 : null;
+
+//             if (fromDate) fromDate.setHours(0, 0, 0, 0);
+//             if (toDate) toDate.setHours(23, 59, 59, 999); // 🔥 full day valid
 
 //             if (
-//                 today < new Date(coupon.specific_date_from) ||
-//                 today > new Date(coupon.specific_date_to)
+//                 (fromDate && today < fromDate) ||
+//                 (toDate && today > toDate)
 //             ) {
 //                 return apiResponse.conflict(
 //                     res,
-//                     "Coupon is expired",
+//                     "This coupon is not valid today.",
 //                     "COUPON_EXPIRED"
 //                 );
 //             }
 //         }
 
-//         // Determine applicable amount
-//         let amountToApply = cartTotal;
 
-//         // Coupon applicability validation
-//         if (coupon.applicable_for != "all") {
+//         /* ---------- Redeem Count ---------- */
+//         const redeemedCount = await Orders.count({
+//             where: { discount_code: coupon_code },
+//         });
+
+//         if (coupon.max_redeems && redeemedCount >= Number(coupon.max_redeems)) {
 //             return apiResponse.conflict(
 //                 res,
-//                 `This coupon is only applicable for ${coupon.applicable_for} items`,
-//                 "COUPON_NOT_APPLICABLE"
+//                 "Coupon redemption limit reached",
+//                 "COUPON_MAX_REDEEMED"
 //             );
 //         }
 
-//         // Calculate Discount
-//         let discount = 0;
+//         /* ---------- Discount Calculator ---------- */
+//         const discountValue = Number(coupon.discount_value);
+//         const calculateDiscount = (amount) =>
+//             coupon.discount_type === "percentage"
+//                 ? (amount * discountValue) / 100
+//                 : discountValue;
 
-//         if (coupon.discount_type == "percentage") {
-//             discount = (amountToApply * parseFloat(coupon.discount_value)) / 100;
-//         } else {
-//             discount = parseFloat(coupon.discount_value);
+//         let applicableAmount = null;
+
+//         /* ---------- STRICT Applicability ---------- */
+//         switch (coupon.applicable_for) {
+
+//             case "package": {
+//                 const cart = await Cart.findOne({
+//                     where: { user_id: userId, ticket_type: "package" },
+//                     include: [{ model: Package }],
+//                 });
+
+//                 if (!cart || !cart.Package) {
+//                     return apiResponse.conflict(
+//                         res,
+//                         "Coupon valid only when package is in cart",
+//                         "PACKAGE_NOT_IN_CART"
+//                     );
+//                 }
+
+//                 applicableAmount = Number(cart.Package.grandtotal);
+//                 break;
+//             }
+
+//             case "ticket": {
+//                 let cart = await Cart.findOne({
+//                     where: { user_id: userId, ticket_type: "ticket" },
+//                     include: [{ model: TicketType }],
+//                 });
+
+//                 if (cart?.TicketType) {
+//                     applicableAmount = Number(cart.TicketType.price);
+//                     break;
+//                 }
+
+//                 cart = await Cart.findOne({
+//                     where: { user_id: userId, ticket_type: "ticket_price" },
+//                     include: [{ model: TicketPricing }],
+//                 });
+
+//                 if (cart?.TicketPricing) {
+//                     applicableAmount = Number(cart.TicketPricing.price);
+//                     break;
+//                 }
+
+//                 return apiResponse.conflict(
+//                     res,
+//                     "Coupon valid only when ticket is in cart",
+//                     "TICKET_NOT_IN_CART"
+//                 );
+//             }
+
+//             case "addon": {
+//                 const cart = await Cart.findOne({
+//                     where: { user_id: userId, ticket_type: "addon" },
+//                     include: [{ model: AddonTypes }],
+//                 });
+
+//                 if (!cart || !cart.AddonType) {
+//                     return apiResponse.conflict(
+//                         res,
+//                         "Coupon valid only when addon is in cart",
+//                         "ADDON_NOT_IN_CART"
+//                     );
+//                 }
+
+//                 applicableAmount = Number(cart.AddonType.price);
+//                 break;
+//             }
+
+//             case "committesale": {
+//                 const cart = await Cart.findOne({
+//                     where: { user_id: userId, ticket_type: "committesale" },
+//                     include: [{ model: TicketType }],
+//                 });
+
+//                 if (!cart || !cart.TicketType) {
+//                     return apiResponse.conflict(
+//                         res,
+//                         "Coupon valid only for committee sale",
+//                         "COMMITTEE_SALE_NOT_IN_CART"
+//                     );
+//                 }
+
+//                 applicableAmount = Number(cart.TicketType.price);
+//                 break;
+//             }
+
+//             case "all":
+//                 applicableAmount = cartTotal;
+//                 break;
+
+//             default:
+//                 return apiResponse.conflict(
+//                     res,
+//                     "Invalid coupon applicability",
+//                     "INVALID_APPLICABLE_FOR"
+//                 );
 //         }
 
-//         // Discount validations
-//         if (!discount || discount <= 0) {
-//             return apiResponse.error(
+//         /* ---------- 🚨 STRICT DISCOUNT VALIDATION ---------- */
+//         let discount = calculateDiscount(applicableAmount);
+
+//         // ❌ Flat discount >= item price
+//         if (coupon.discount_type === "flat" && discount >= applicableAmount) {
+//             return apiResponse.conflict(
 //                 res,
-//                 "Coupon discount value is invalid",
-//                 400,
-//                 [],
-//                 "INVALID_DISCOUNT"
+//                 "Coupon discount cannot be equal or greater than item price",
+//                 "INVALID_DISCOUNT_AMOUNT"
 //             );
 //         }
 
-//         if (discount > amountToApply) {
-//             return apiResponse.error(
+//         // ❌ Percentage >= 100
+//         if (coupon.discount_type === "percentage" && discount >= applicableAmount) {
+//             return apiResponse.conflict(
 //                 res,
-//                 `Discount amount (${discount}) cannot be greater than cart amount (${amountToApply})`,
-//                 400,
-//                 [],
-//                 "DISCOUNT_EXCEEDS_TOTAL"
+//                 "A full discount isn’t allowed with this order.",
+//                 "INVALID_DISCOUNT_PERCENTAGE"
 //             );
 //         }
 
 //         const finalAmount = cartTotal - discount;
 
-//         if (finalAmount < 0) {
-//             return apiResponse.error(
+//         // ❌ Final safety net
+//         if (finalAmount <= 0) {
+//             return apiResponse.conflict(
 //                 res,
-//                 "Final amount cannot be negative",
-//                 400,
-//                 [],
-//                 "NEGATIVE_FINAL_AMOUNT"
+//                 "A full discount isn’t allowed with this coupon.",
+//                 "FREE_ORDER_NOT_ALLOWED"
 //             );
 //         }
 
-//         return apiResponse.success(
-//             res,
-//             "Coupon applied successfully",
-//             {
-//                 coupon_code,
-//                 original_amount: cartTotal,
-//                 discount,
-//                 final_amount: finalAmount,
-//                 applicable_on: amountToApply,
-//                 redeemed_count: redeemedCount,
-//                 max_redeems: coupon.max_redeems || "unlimited"
-//             }
-//         );
+//         /* ---------- SUCCESS ---------- */
+//         return apiResponse.success(res, "Coupon applied successfully", {
+//             coupon_code,
+//             original_amount: cartTotal,
+//             applicable_on: applicableAmount,
+//             discount,
+//             final_amount: finalAmount,
+//         });
 
 //     } catch (error) {
 //         console.error("Apply coupon error:", error);
-
 //         return apiResponse.error(
 //             res,
 //             "Failed to apply coupon",
@@ -156,23 +245,22 @@ const { Op, fn, col, literal } = require("sequelize");
 exports.applyCoupon = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { coupon_code, event_id, total_amount = 0 } = req.body;
+        const { coupon_code, event_id } = req.body;
 
-        /* ---------- Basic Validation ---------- */
+        /* -------------------------------------------------------------------------- */
+        /*                                VALIDATIONS                                 */
+        /* -------------------------------------------------------------------------- */
+
         if (!coupon_code || !event_id) {
             return apiResponse.validation(res, [
                 "coupon_code and event_id are required",
             ]);
         }
 
-        const cartTotal = Number(total_amount);
-        if (!cartTotal || cartTotal <= 0) {
-            return apiResponse.validation(res, [
-                "Total amount must be greater than zero",
-            ]);
-        }
+        /* -------------------------------------------------------------------------- */
+        /*                               FETCH COUPON                                 */
+        /* -------------------------------------------------------------------------- */
 
-        /* ---------- Coupon Fetch ---------- */
         const coupon = await Coupons.findOne({
             where: {
                 code: coupon_code,
@@ -189,7 +277,10 @@ exports.applyCoupon = async (req, res) => {
             );
         }
 
-        /* ---------- Date Validation ---------- */
+        /* -------------------------------------------------------------------------- */
+        /*                              DATE VALIDATION                               */
+        /* -------------------------------------------------------------------------- */
+
         if (coupon.validity_period === "specified_date") {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -203,7 +294,7 @@ exports.applyCoupon = async (req, res) => {
                 : null;
 
             if (fromDate) fromDate.setHours(0, 0, 0, 0);
-            if (toDate) toDate.setHours(23, 59, 59, 999); // 🔥 full day valid
+            if (toDate) toDate.setHours(23, 59, 59, 999);
 
             if (
                 (fromDate && today < fromDate) ||
@@ -216,27 +307,21 @@ exports.applyCoupon = async (req, res) => {
                 );
             }
         }
-        // if (coupon.validity_period === "specified_date") {
-        //     const today = new Date();
 
-        //     if (
-        //         (coupon.specific_date_from && new Date(coupon.specific_date_from) > today) ||
-        //         (coupon.specific_date_to && new Date(coupon.specific_date_to) < today)
-        //     ) {
-        //         return apiResponse.conflict(
-        //             res,
-        //             "Coupon is expired",
-        //             "COUPON_EXPIRED"
-        //         );
-        //     }
-        // }
+        /* -------------------------------------------------------------------------- */
+        /*                            MAX REDEEM VALIDATION                           */
+        /* -------------------------------------------------------------------------- */
 
-        /* ---------- Redeem Count ---------- */
         const redeemedCount = await Orders.count({
-            where: { discount_code: coupon_code },
+            where: {
+                discount_code: coupon_code,
+            },
         });
 
-        if (coupon.max_redeems && redeemedCount >= Number(coupon.max_redeems)) {
+        if (
+            coupon.max_redeems &&
+            redeemedCount >= Number(coupon.max_redeems)
+        ) {
             return apiResponse.conflict(
                 res,
                 "Coupon redemption limit reached",
@@ -244,102 +329,138 @@ exports.applyCoupon = async (req, res) => {
             );
         }
 
-        /* ---------- Discount Calculator ---------- */
-        const discountValue = Number(coupon.discount_value);
-        const calculateDiscount = (amount) =>
-            coupon.discount_type === "percentage"
-                ? (amount * discountValue) / 100
-                : discountValue;
+        /* -------------------------------------------------------------------------- */
+        /*                                FETCH CART                                  */
+        /* -------------------------------------------------------------------------- */
 
-        let applicableAmount = null;
+        const cartItems = await Cart.findAll({
+            where: {
+                user_id: userId,
+            },
+            include: [
+                { model: TicketType },
+                { model: TicketPricing },
+                { model: Package },
+                { model: AddonTypes },
+            ],
+        });
 
-        /* ---------- STRICT Applicability ---------- */
+        if (!cartItems.length) {
+            return apiResponse.conflict(
+                res,
+                "Cart is empty",
+                "EMPTY_CART"
+            );
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /*                           CALCULATE CART TOTALS                            */
+        /* -------------------------------------------------------------------------- */
+
+        let totalCartAmount = 0;
+
+        const totals = {
+            ticket: 0,
+            addon: 0,
+            package: 0,
+            committesale: 0,
+        };
+
+        for (const item of cartItems) {
+            let itemAmount = 0;
+
+            switch (item.ticket_type) {
+
+                case "ticket": {
+
+                    const qty = Number(item.no_tickets || 1);
+
+                    itemAmount =
+                        Number(item?.TicketType?.price || 0) * qty;
+
+                    totals.ticket += itemAmount;
+
+                    break;
+                }
+
+                case "ticket_price": {
+
+                    const qty = Number(item.no_tickets || 1);
+
+                    itemAmount =
+                        Number(item?.TicketPricing?.price || 0) * qty;
+
+                    totals.ticket += itemAmount;
+
+                    break;
+                }
+
+                case "addon": {
+
+                    const qty = Number(item.no_tickets || 1);
+
+                    itemAmount =
+                        Number(item?.AddonType?.price || 0) * qty;
+
+                    totals.addon += itemAmount;
+
+                    break;
+                }
+
+                case "package": {
+
+                    const qty = Number(item.no_tickets || 1);
+
+                    itemAmount =
+                        Number(item?.Package?.grandtotal || 0) * qty;
+
+                    totals.package += itemAmount;
+
+                    break;
+                }
+
+                case "committesale": {
+
+                    const qty = Number(item.no_tickets || 1);
+
+                    itemAmount =
+                        Number(item?.TicketType?.price || 0) * qty;
+
+                    totals.committesale += itemAmount;
+
+                    break;
+                }
+            }
+
+            totalCartAmount += itemAmount;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /*                         DETERMINE APPLICABLE AMOUNT                        */
+        /* -------------------------------------------------------------------------- */
+
+        let applicableAmount = 0;
+
         switch (coupon.applicable_for) {
 
-            case "package": {
-                const cart = await Cart.findOne({
-                    where: { user_id: userId, ticket_type: "package" },
-                    include: [{ model: Package }],
-                });
-
-                if (!cart || !cart.Package) {
-                    return apiResponse.conflict(
-                        res,
-                        "Coupon valid only when package is in cart",
-                        "PACKAGE_NOT_IN_CART"
-                    );
-                }
-
-                applicableAmount = Number(cart.Package.grandtotal);
+            case "ticket":
+                applicableAmount = totals.ticket;
                 break;
-            }
 
-            case "ticket": {
-                let cart = await Cart.findOne({
-                    where: { user_id: userId, ticket_type: "ticket" },
-                    include: [{ model: TicketType }],
-                });
-
-                if (cart?.TicketType) {
-                    applicableAmount = Number(cart.TicketType.price);
-                    break;
-                }
-
-                cart = await Cart.findOne({
-                    where: { user_id: userId, ticket_type: "ticket_price" },
-                    include: [{ model: TicketPricing }],
-                });
-
-                if (cart?.TicketPricing) {
-                    applicableAmount = Number(cart.TicketPricing.price);
-                    break;
-                }
-
-                return apiResponse.conflict(
-                    res,
-                    "Coupon valid only when ticket is in cart",
-                    "TICKET_NOT_IN_CART"
-                );
-            }
-
-            case "addon": {
-                const cart = await Cart.findOne({
-                    where: { user_id: userId, ticket_type: "addon" },
-                    include: [{ model: AddonTypes }],
-                });
-
-                if (!cart || !cart.AddonType) {
-                    return apiResponse.conflict(
-                        res,
-                        "Coupon valid only when addon is in cart",
-                        "ADDON_NOT_IN_CART"
-                    );
-                }
-
-                applicableAmount = Number(cart.AddonType.price);
+            case "addon":
+                applicableAmount = totals.addon;
                 break;
-            }
 
-            case "committesale": {
-                const cart = await Cart.findOne({
-                    where: { user_id: userId, ticket_type: "committesale" },
-                    include: [{ model: TicketType }],
-                });
-
-                if (!cart || !cart.TicketType) {
-                    return apiResponse.conflict(
-                        res,
-                        "Coupon valid only for committee sale",
-                        "COMMITTEE_SALE_NOT_IN_CART"
-                    );
-                }
-
-                applicableAmount = Number(cart.TicketType.price);
+            case "package":
+                applicableAmount = totals.package;
                 break;
-            }
+
+            case "committesale":
+                applicableAmount = totals.committesale;
+                break;
 
             case "all":
-                applicableAmount = cartTotal;
+                applicableAmount = totalCartAmount;
                 break;
 
             default:
@@ -350,49 +471,94 @@ exports.applyCoupon = async (req, res) => {
                 );
         }
 
-        /* ---------- 🚨 STRICT DISCOUNT VALIDATION ---------- */
-        let discount = calculateDiscount(applicableAmount);
-
-        // ❌ Flat discount >= item price
-        if (coupon.discount_type === "flat" && discount >= applicableAmount) {
+        if (applicableAmount <= 0) {
             return apiResponse.conflict(
                 res,
-                "Coupon discount cannot be equal or greater than item price",
-                "INVALID_DISCOUNT_AMOUNT"
+                `Coupon valid only for ${coupon.applicable_for}`,
+                "INVALID_COUPON_APPLICABILITY"
             );
         }
 
-        // ❌ Percentage >= 100
-        if (coupon.discount_type === "percentage" && discount >= applicableAmount) {
-            return apiResponse.conflict(
-                res,
-                "A full discount isn’t allowed with this order.",
-                "INVALID_DISCOUNT_PERCENTAGE"
-            );
+        /* -------------------------------------------------------------------------- */
+        /*                           DISCOUNT CALCULATION                             */
+        /* -------------------------------------------------------------------------- */
+
+        const discountValue = Number(coupon.discount_value);
+
+        let discount = 0;
+
+        if (coupon.discount_type === "percentage") {
+
+            // Prevent 100% or more discount
+            if (discountValue >= 100) {
+                return apiResponse.conflict(
+                    res,
+                    "100% discount is not allowed",
+                    "INVALID_DISCOUNT_PERCENTAGE"
+                );
+            }
+
+            discount = (applicableAmount * discountValue) / 100;
+
+        } else if (coupon.discount_type === "flat") {
+
+            discount = discountValue;
+
+            // Flat discount cannot exceed applicable amount
+            if (discount >= applicableAmount) {
+                return apiResponse.conflict(
+                    res,
+                    "Coupon discount cannot be equal or greater than applicable amount",
+                    "INVALID_DISCOUNT_AMOUNT"
+                );
+            }
         }
 
-        const finalAmount = cartTotal - discount;
+        /* -------------------------------------------------------------------------- */
+        /*                              FINAL AMOUNT                                  */
+        /* -------------------------------------------------------------------------- */
 
-        // ❌ Final safety net
+        const finalAmount = totalCartAmount - discount;
+
         if (finalAmount <= 0) {
             return apiResponse.conflict(
                 res,
-                "A full discount isn’t allowed with this coupon.",
-                "FREE_ORDER_NOT_ALLOWED"
+                "Final amount must be greater than zero",
+                "INVALID_FINAL_AMOUNT"
             );
         }
 
-        /* ---------- SUCCESS ---------- */
-        return apiResponse.success(res, "Coupon applied successfully", {
-            coupon_code,
-            original_amount: cartTotal,
-            applicable_on: applicableAmount,
-            discount,
-            final_amount: finalAmount,
-        });
+        /* -------------------------------------------------------------------------- */
+        /*                                  SUCCESS                                   */
+        /* -------------------------------------------------------------------------- */
+
+        return apiResponse.success(
+            res,
+            "Coupon applied successfully",
+            {
+                coupon_code,
+
+                coupon_type: coupon.discount_type,
+                coupon_value: coupon.discount_value,
+
+                applicable_for: coupon.applicable_for,
+
+                cart_total: totalCartAmount,
+
+                applicable_amount: applicableAmount,
+
+                discount,
+
+                final_amount: finalAmount,
+
+                breakdown: totals,
+            }
+        );
 
     } catch (error) {
+
         console.error("Apply coupon error:", error);
+
         return apiResponse.error(
             res,
             "Failed to apply coupon",
@@ -402,9 +568,6 @@ exports.applyCoupon = async (req, res) => {
         );
     }
 };
-
-
-
 
 
 

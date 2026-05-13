@@ -258,7 +258,7 @@ module.exports.wellnessList = async (req, res) => {
         const { id } = req.params;
         const wellness = await Wellness.findAll({
             where: { event_id: id },
-            include: [{ model: Event, as: 'eventList', attributes: ['name'] }],
+            include: [{ model: Event, as: 'eventList', attributes: ['name','id','slug'] }],
             order: [['id', 'DESC']]
         });
         const baseUrl = process.env.BASE_URL || "http://localhost:5000";

@@ -32,7 +32,9 @@ module.exports.getOrdersList = async (req, res) => {
                 'sub_total',
                 'tax_total',
                 'created',
-                'paymenttype'
+                'paymenttype',
+                'grand_total'
+                // 'discount_amount'
             ],
 
             order: [['id', 'DESC']]

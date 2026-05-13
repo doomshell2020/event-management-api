@@ -862,7 +862,7 @@ exports.requestList = async (req, res) => {
 
         completedData = await OrderItems.findAll({
             where: { committee_user_id: user_id },
-            attributes: ["order_id"],
+            attributes: ["order_id", "refund_status"],
             include: [
                 {
                     model: Event, as: "event",
@@ -1426,16 +1426,56 @@ exports.listCommitteeMembers = async (req, res) => {
             },
             attributes: [
                 'committee_user_id',
-                [Sequelize.fn('SUM', Sequelize.col('price')), 'total_sales']
+                [Sequelize.fn('SUM', Sequelize.col('price')), 'total_sales'],
+
+                // Cancel Count
+                [
+                    Sequelize.fn(
+                        'SUM',
+                        Sequelize.literal(
+                            `CASE 
+                        WHEN LOWER(refund_status) = 'success' THEN 1 
+                        ELSE 0 
+                    END`
+                        )
+                    ),
+                    'cancel_count'
+                ],
+
+                // Cancel Amount (NEW)
+                [
+                    Sequelize.fn(
+                        'SUM',
+                        Sequelize.literal(`
+                    CASE 
+                        WHEN LOWER(refund_status) = 'success' THEN price 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    'cancel_amount'
+                ]
+
             ],
             group: ['committee_user_id'],
             raw: true
         });
 
+        // console.log("salesData",salesData)
         // 🔹 3. Sales Map
         const salesMap = {};
         salesData.forEach(item => {
             salesMap[item.committee_user_id] = Number(item.total_sales);
+        });
+
+        const refundMap = {};
+        salesData.forEach(item => {
+            refundMap[item.committee_user_id] = Number(item.cancel_count) || 0;
+        });
+
+        const cancelMap = {};
+        salesData.forEach(item => {
+            cancelMap[item.committee_user_id] = Number(item.cancel_amount) || 0;
         });
 
         // 🔹 4. Payouts Data
@@ -1488,11 +1528,19 @@ exports.listCommitteeMembers = async (req, res) => {
 
             const totalSales = salesMap[userId] || 0;
 
+            const refundCount = refundMap[userId] || 0;
+
+            const cancelAmount = cancelMap[userId] || 0;
+
             const totalPaid = payoutMap[userId] || 0;
 
             const totalCommission = Number(((totalSales * data.commission) / 100).toFixed(2));
 
-            const balance = totalCommission - totalPaid;
+            const totalCancelCommission = Number(((cancelAmount * data.commission) / 100).toFixed(2));
+
+            const afterCancelTicketsCommission = totalCommission - totalCancelCommission;
+
+            const balance = afterCancelTicketsCommission - totalPaid;
 
             const key = `${userId}_${event_id}`;
 
@@ -1500,7 +1548,12 @@ exports.listCommitteeMembers = async (req, res) => {
 
             data.total_sales = totalSales;
 
-            data.total_commission = totalCommission;
+            data.refund_count = refundCount;
+
+            data.cancel_amount = cancelAmount;
+
+            // data.total_commission = totalCommission;
+            data.total_commission = afterCancelTicketsCommission;
 
             data.total_paid = totalPaid;
 
@@ -1578,7 +1631,12 @@ exports.createPayoutCommitteeMember = async (req, res) => {
             attributes: [[Sequelize.fn('SUM', Sequelize.col('price')), 'total_sales']],
             where: {
                 event_id,
-                committee_user_id: user_id
+                committee_user_id: user_id,
+
+                [Op.or]: [
+                    { refund_status: { [Op.ne]: 'success' } },
+                    { refund_status: null }
+                ]
             },
             raw: true
         });
