@@ -108,6 +108,7 @@ Event.hasMany(EventGates, { foreignKey: 'event_id', as: 'eventGates' });
 Event.hasMany(EventExhibitors, { foreignKey: 'event_id', as: 'exhibitors' });
 Event.hasMany(EventGallery, { foreignKey: 'event_id', as: 'gallery' });
 Event.hasMany(EventSliders, { foreignKey: 'event_id', as: 'sliders' });
+Event.hasMany(Payouts, { foreignKey: 'event_id', as: 'payouts' });
 
 OrderItems.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 OrderItems.belongsTo(Orders, { foreignKey: "order_id", as: "order" });

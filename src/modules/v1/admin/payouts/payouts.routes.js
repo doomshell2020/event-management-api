@@ -50,6 +50,11 @@ router.get('/events/sales-summary',
     payoutsController.allEventsSalesSummary
 );
 
+router.get('/events/sales-summary-2',
+    authenticate,
+    payoutsController.allEventsSalesSummary2
+);
+
 /* ==========   EVENT SALES & ORDER LIST   ========== */
 router.get('/event/:event_id/sales',
     authenticate,
