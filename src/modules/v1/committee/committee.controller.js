@@ -243,6 +243,226 @@ exports.createCommitteeGroup = async (req, res) => {
     }
 };
 
+
+// exports.handleCommitteePushTicket = async (req, res) => {
+//     const transaction = await sequelize.transaction();
+
+//     try {
+//         const committee_user_id = req.user.id;
+//         const { event_id, email, tickets } = req.body;
+
+//         /* ================= EVENT CHECK ================= */
+//         const event = await Event.findByPk(event_id);
+//         if (!event) {
+//             return apiResponse.error(res, "Event not found", 404);
+//         }
+
+//         /* ================= USER CHECK ================= */
+//         const user = await User.findOne({ where: { email } });
+//         if (!user) {
+//             return apiResponse.error(res, "User not found with this email", 404);
+//         }
+
+//         /* ================= ASSIGNED TICKETS ================= */
+//         const assignedTickets = await CommitteeAssignTickets.findAll({
+//             where: { event_id, user_id: committee_user_id, status: "Y" },
+//             raw: true
+//         });
+
+//         if (!assignedTickets.length) {
+//             return apiResponse.error(res, "No tickets assigned to committee member", 403);
+//         }
+
+//         const assignedMap = {};
+//         assignedTickets.forEach(t => {
+//             assignedMap[String(t.ticket_id)] = t;
+//         });
+
+//         /* ================= TICKET TYPES ================= */
+//         const ticketTypeIds = tickets.map(t => t.ticket_id);
+//         const ticketTypes = await TicketType.findAll({
+//             where: { id: ticketTypeIds },
+//             attributes: ["id", "title", "type"],
+//             raw: true
+//         });
+
+//         const ticketMap = {};
+//         ticketTypes.forEach(t => {
+//             ticketMap[String(t.id)] = t;
+//         });
+
+//         /* ================= PROCESS TICKETS ================= */
+//         for (const item of tickets) {
+//             const { ticket_id, qty } = item;
+
+//             const assigned = assignedMap[String(ticket_id)];
+//             if (!assigned) {
+//                 throw new Error("Ticket not assigned to committee member");
+//             }
+
+//             const ticketType = ticketMap[String(ticket_id)];
+//             if (!ticketType) {
+//                 throw new Error("Invalid ticket type");
+//             }
+
+//             const available = assigned.count - assigned.usedticket;
+//             if (qty > available) {
+//                 throw new Error(`Only ${available} tickets available`);
+//             }
+
+//             /* ================= COMPS TICKETS ================= */
+//             if (ticketType.type == "comps") {
+
+//                 /* 🔍 DUPLICATE COMPS CHECK */
+//                 const existingComps = await OrderItems.findOne({
+//                     where: {
+//                         event_id,
+//                         user_id: user.id,
+//                         ticket_id
+//                     }
+//                 });
+
+//                 if (existingComps) {
+//                     throw new Error(
+//                         `Complimentary ticket already generated for "${ticketType.title}"`
+//                     );
+//                 }
+
+//                 /* 🎟 GENERATE COMPS TICKETS (QTY TIMES) */
+//                 for (let i = 0; i < qty; i++) {
+//                     const result = await pushFromCommitteeCompsTicket({
+//                         event_id,
+//                         user_id: user.id,
+//                         ticket_id,
+//                         createdBy: committee_user_id
+//                     });
+
+//                     if (!result || !result.success) {
+//                         throw new Error("Failed to generate complimentary ticket");
+//                     }
+//                 }
+
+//             } else {
+//                 /* ================= PAID / NORMAL TICKETS ================= */
+
+//                 const exists = await Cart.findOne({
+//                     where: {
+//                         user_id: user.id,
+//                         event_id,
+//                         ticket_id,
+//                         ticket_type: ticketType.type,
+//                         status: "Y"
+//                     },
+//                     transaction
+//                 });
+
+//                 if (exists) {
+//                     throw new Error(`Ticket "${ticketType.title}" already assigned`);
+//                 }
+
+//                 await Cart.create({
+//                     user_id: user.id,
+//                     event_id,
+//                     ticket_id,
+//                     no_tickets: qty,
+//                     ticket_type: "committesale",
+//                     commitee_user_id: committee_user_id,
+//                     status: "Y"
+//                 }, { transaction });
+//             }
+
+//             /* ================= UPDATE COMMITTEE COUNT ================= */
+//             await CommitteeAssignTickets.update(
+//                 {
+//                     usedticket: sequelize.literal(`usedticket + ${qty}`)
+//                 },
+//                 {
+//                     where: { id: assigned.id },
+//                     transaction
+//                 }
+//             );
+//         }
+
+//         await transaction.commit();
+
+//         /* ================= SUMMARY EMAIL ================= */
+//         const ticketTableHtml = `
+//             <table cellspacing="0" width="100%" style="border-collapse:collapse; background:#ffffff;">
+//                 <thead>
+//                     <tr style="background:#f7f7f7;">
+//                         <th align="left" style="padding:8px; border:1px solid #ddd;">
+//                             Ticket Name
+//                         </th>
+//                         <th align="center" style="padding:8px; border:1px solid #ddd;">
+//                             Quantity
+//                         </th>
+//                     </tr>
+//                 </thead>
+//                 <tbody>
+//                     ${tickets.map(t => `
+//                         <tr>
+//                             <td style="padding:8px; border:1px solid #ddd;">
+//                                 ${ticketMap[String(t.ticket_id)]?.title || 'Unknown Ticket'}
+//                             </td>
+//                             <td align="center" style="padding:8px; border:1px solid #ddd;">
+//                                 ${t.qty}
+//                             </td>
+//                         </tr>
+//                     `).join('')}
+//                 </tbody>
+//             </table>
+//             `;
+
+//         const templateId = config.emailTemplates.committeePushTicketsToUser;
+//         const templateRecord = await Templates.findOne({
+//             where: { id: templateId }
+//         });
+
+//         if (!templateRecord) {
+//             throw new Error('Email template not found');
+//         }
+
+//         const { subject, description } = templateRecord;
+
+//         const html = replaceTemplateVariables(description, {
+//             UserName: `${user.first_name} ${user.last_name}`,
+//             EventName: event.name || 'Unknown Event',
+//             TicketTable: ticketTableHtml,
+//             CheckoutURL: `${config.clientUrl}/event/${event.id}/${event.slug}`,
+//             SITE_URL: config.clientUrl,
+//         });
+
+//         await sendEmail(user.email, `${subject} | ${event.name}`, html);
+
+//         // await sendEmail(
+//         //     user.email,
+//         //     "Committee Ticket Assigned",
+//         //     committeeTicketAssignedTemplate(
+//         //         user,
+//         //         event,
+//         //         emailTickets,
+//         //         `${config.clientUrl}`
+//         //     )
+//         // );
+
+//         return apiResponse.success(
+//             res,
+//             "Tickets successfully pushed and email sent",
+//             null
+//         );
+
+//     } catch (error) {
+//         await transaction.rollback();
+
+//         console.error("handleCommitteePushTicket error:", error);
+//         return apiResponse.error(
+//             res,
+//             error.message || "Something went wrong while pushing tickets",
+//             400
+//         );
+//     }
+// };
+
 exports.handleCommitteePushTicket = async (req, res) => {
     const transaction = await sequelize.transaction();
 
@@ -251,74 +471,140 @@ exports.handleCommitteePushTicket = async (req, res) => {
         const { event_id, email, tickets } = req.body;
 
         /* ================= EVENT CHECK ================= */
-        const event = await Event.findByPk(event_id);
+        const event = await Event.findByPk(event_id, { transaction });
+
         if (!event) {
+            await transaction.rollback();
             return apiResponse.error(res, "Event not found", 404);
         }
 
         /* ================= USER CHECK ================= */
-        const user = await User.findOne({ where: { email } });
+        const user = await User.findOne({
+            where: { email },
+            transaction
+        });
+
         if (!user) {
-            return apiResponse.error(res, "User not found with this email", 404);
+            await transaction.rollback();
+            return apiResponse.error(
+                res,
+                "User not found with this email",
+                404
+            );
         }
 
         /* ================= ASSIGNED TICKETS ================= */
         const assignedTickets = await CommitteeAssignTickets.findAll({
-            where: { event_id, user_id: committee_user_id, status: "Y" },
-            raw: true
+            where: {
+                event_id,
+                user_id: committee_user_id,
+                status: "Y"
+            },
+            transaction,
+            lock: transaction.LOCK.UPDATE
         });
 
         if (!assignedTickets.length) {
-            return apiResponse.error(res, "No tickets assigned to committee member", 403);
+            await transaction.rollback();
+
+            return apiResponse.error(
+                res,
+                "No tickets assigned to committee member",
+                403
+            );
         }
 
         const assignedMap = {};
-        assignedTickets.forEach(t => {
+
+        assignedTickets.forEach((t) => {
             assignedMap[String(t.ticket_id)] = t;
         });
 
         /* ================= TICKET TYPES ================= */
-        const ticketTypeIds = tickets.map(t => t.ticket_id);
+        const ticketTypeIds = tickets.map((t) => t.ticket_id);
+
         const ticketTypes = await TicketType.findAll({
-            where: { id: ticketTypeIds },
+            where: {
+                id: ticketTypeIds
+            },
             attributes: ["id", "title", "type"],
-            raw: true
+            raw: true,
+            transaction
         });
 
         const ticketMap = {};
-        ticketTypes.forEach(t => {
+
+        ticketTypes.forEach((t) => {
             ticketMap[String(t.id)] = t;
         });
 
         /* ================= PROCESS TICKETS ================= */
         for (const item of tickets) {
+
             const { ticket_id, qty } = item;
 
             const assigned = assignedMap[String(ticket_id)];
+
             if (!assigned) {
-                throw new Error("Ticket not assigned to committee member");
+                throw new Error(
+                    "Ticket not assigned to committee member"
+                );
             }
 
             const ticketType = ticketMap[String(ticket_id)];
+
             if (!ticketType) {
                 throw new Error("Invalid ticket type");
             }
 
-            const available = assigned.count - assigned.usedticket;
-            if (qty > available) {
-                throw new Error(`Only ${available} tickets available`);
+            /* =========================================================
+               RESERVED TICKETS CHECK
+               count - usedticket - reserved(cart)
+            ========================================================== */
+
+            const reservedCartQty = await Cart.sum("no_tickets", {
+                where: {
+                    event_id,
+                    ticket_id,
+                    status: "Y"
+                },
+                transaction
+            });
+
+            const totalAssigned = Number(assigned.count || 0);
+            const totalUsed = Number(assigned.usedticket || 0);
+            const totalReserved = Number(reservedCartQty || 0);
+
+            const available =
+                totalAssigned -
+                totalUsed -
+                totalReserved;
+
+            if (available <= 0) {
+                throw new Error(
+                    `No tickets available for "${ticketType.title}"`
+                );
             }
 
-            /* ================= COMPS TICKETS ================= */
-            if (ticketType.type == "comps") {
+            if (qty > available) {
+                throw new Error(
+                    `Only ${available} tickets available for "${ticketType.title}"`
+                );
+            }
 
-                /* 🔍 DUPLICATE COMPS CHECK */
+            /* ================= COMPLIMENTARY TICKETS ================= */
+
+            if (ticketType.type === "comps") {
+
+                /* DUPLICATE COMPS CHECK */
+
                 const existingComps = await OrderItems.findOne({
                     where: {
                         event_id,
                         user_id: user.id,
                         ticket_id
-                    }
+                    },
+                    transaction
                 });
 
                 if (existingComps) {
@@ -327,37 +613,69 @@ exports.handleCommitteePushTicket = async (req, res) => {
                     );
                 }
 
-                /* 🎟 GENERATE COMPS TICKETS (QTY TIMES) */
+                /* GENERATE COMPS TICKETS */
+
                 for (let i = 0; i < qty; i++) {
-                    const result = await pushFromCommitteeCompsTicket({
-                        event_id,
-                        user_id: user.id,
-                        ticket_id,
-                        createdBy: committee_user_id
-                    });
+
+                    const result =
+                        await pushFromCommitteeCompsTicket({
+                            event_id,
+                            user_id: user.id,
+                            ticket_id,
+                            createdBy: committee_user_id
+                        });
 
                     if (!result || !result.success) {
-                        throw new Error("Failed to generate complimentary ticket");
+                        throw new Error(
+                            "Failed to generate complimentary ticket"
+                        );
                     }
                 }
 
+                /*
+                    COMPS ticket directly generated
+                    so update usedticket
+                */
+
+                await CommitteeAssignTickets.update(
+                    {
+                        usedticket: sequelize.literal(
+                            `usedticket + ${qty}`
+                        )
+                    },
+                    {
+                        where: {
+                            id: assigned.id
+                        },
+                        transaction
+                    }
+                );
+
             } else {
-                /* ================= PAID / NORMAL TICKETS ================= */
+
+                /* ================= NORMAL / PAID TICKETS ================= */
 
                 const exists = await Cart.findOne({
                     where: {
                         user_id: user.id,
                         event_id,
                         ticket_id,
-                        ticket_type: ticketType.type,
                         status: "Y"
                     },
                     transaction
                 });
 
                 if (exists) {
-                    throw new Error(`Ticket "${ticketType.title}" already assigned`);
+                    throw new Error(
+                        `Ticket "${ticketType.title}" already assigned`
+                    );
                 }
+
+                /*
+                    IMPORTANT:
+                    Cart ticket = reserved ticket
+                    DO NOT update usedticket here
+                */
 
                 await Cart.create({
                     user_id: user.id,
@@ -367,82 +685,82 @@ exports.handleCommitteePushTicket = async (req, res) => {
                     ticket_type: "committesale",
                     commitee_user_id: committee_user_id,
                     status: "Y"
-                }, { transaction });
-            }
-
-            /* ================= UPDATE COMMITTEE COUNT ================= */
-            await CommitteeAssignTickets.update(
-                {
-                    usedticket: sequelize.literal(`usedticket + ${qty}`)
-                },
-                {
-                    where: { id: assigned.id },
+                }, {
                     transaction
-                }
-            );
+                });
+            }
         }
 
         await transaction.commit();
 
         /* ================= SUMMARY EMAIL ================= */
+
         const ticketTableHtml = `
-            <table cellspacing="0" width="100%" style="border-collapse:collapse; background:#ffffff;">
+            <table cellspacing="0"
+                   width="100%"
+                   style="border-collapse:collapse;background:#ffffff;">
+
                 <thead>
                     <tr style="background:#f7f7f7;">
-                        <th align="left" style="padding:8px; border:1px solid #ddd;">
+                        <th align="left"
+                            style="padding:8px;border:1px solid #ddd;">
                             Ticket Name
                         </th>
-                        <th align="center" style="padding:8px; border:1px solid #ddd;">
+
+                        <th align="center"
+                            style="padding:8px;border:1px solid #ddd;">
                             Quantity
                         </th>
                     </tr>
                 </thead>
+
                 <tbody>
                     ${tickets.map(t => `
                         <tr>
-                            <td style="padding:8px; border:1px solid #ddd;">
-                                ${ticketMap[String(t.ticket_id)]?.title || 'Unknown Ticket'}
+                            <td style="padding:8px;border:1px solid #ddd;">
+                                ${ticketMap[String(t.ticket_id)]?.title || "Unknown Ticket"}
                             </td>
-                            <td align="center" style="padding:8px; border:1px solid #ddd;">
+
+                            <td align="center"
+                                style="padding:8px;border:1px solid #ddd;">
                                 ${t.qty}
                             </td>
                         </tr>
-                    `).join('')}
+                    `).join("")}
                 </tbody>
-            </table>
-            `;
 
-        const templateId = config.emailTemplates.committeePushTicketsToUser;
+            </table>
+        `;
+
+        const templateId =
+            config.emailTemplates.committeePushTicketsToUser;
+
         const templateRecord = await Templates.findOne({
-            where: { id: templateId }
+            where: {
+                id: templateId
+            }
         });
 
         if (!templateRecord) {
-            throw new Error('Email template not found');
+            throw new Error("Email template not found");
         }
 
         const { subject, description } = templateRecord;
 
         const html = replaceTemplateVariables(description, {
             UserName: `${user.first_name} ${user.last_name}`,
-            EventName: event.name || 'Unknown Event',
+            EventName: event.name || "Unknown Event",
             TicketTable: ticketTableHtml,
-            CheckoutURL: `${config.clientUrl}/event/${event.id}/${event.slug}`,
-            SITE_URL: config.clientUrl,
+            CheckoutURL:
+                `${config.clientUrl}/event/${event.id}/${event.slug}`,
+            SITE_URL: config.clientUrl
         });
 
-        await sendEmail(user.email, `${subject} | ${event.name}`, html);
-
-        // await sendEmail(
-        //     user.email,
-        //     "Committee Ticket Assigned",
-        //     committeeTicketAssignedTemplate(
-        //         user,
-        //         event,
-        //         emailTickets,
-        //         `${config.clientUrl}`
-        //     )
-        // );
+        await sendEmail(
+            user.email,
+            `${subject} | ${event.name}`,
+            html
+        );
 
         return apiResponse.success(
             res,
@@ -451,16 +769,24 @@ exports.handleCommitteePushTicket = async (req, res) => {
         );
 
     } catch (error) {
+
         await transaction.rollback();
 
-        console.error("handleCommitteePushTicket error:", error);
+        console.error(
+            "handleCommitteePushTicket error:",
+            error
+        );
+
         return apiResponse.error(
             res,
-            error.message || "Something went wrong while pushing tickets",
+            error.message ||
+            "Something went wrong while pushing tickets",
             400
         );
     }
 };
+
+
 
 exports.handleCommitteeTicketDetails = async (req, res) => {
     try {

@@ -195,7 +195,7 @@ exports.getEventDetails = async (req, res) => {
                     "cancelled_revenue"
                 ],
                 // cancel total tax..
-                 [
+                [
                     fn(
                         "SUM",
                         literal(`
@@ -209,7 +209,7 @@ exports.getEventDetails = async (req, res) => {
                     "cancelled_tax"
                 ],
                 // cancel platform_fee_tax..
-                 [
+                [
                     fn(
                         "SUM",
                         literal(`
@@ -223,7 +223,7 @@ exports.getEventDetails = async (req, res) => {
                     "cancelled_platform_tax"
                 ],
                 // cancel payment_gateway_tax..
-                 [
+                [
                     fn(
                         "SUM",
                         literal(`
@@ -243,16 +243,16 @@ exports.getEventDetails = async (req, res) => {
         // console.log("revenueData",revenueData.cancelled_revenue)
 
         const totalRevenue = Number(revenueData.total_revenue || 0);
-        const totalCancelledRevenue= Number(revenueData.cancelled_revenue || 0);
+        const totalCancelledRevenue = Number(revenueData.cancelled_revenue || 0);
 
         const totalCancelledTax = Number(revenueData.cancelled_tax || 0);
 
         const cancelledPlatformTax = Number(revenueData.cancelled_platform_tax || 0);
         const cancelledPaymentGatewayTax = Number(revenueData.cancelled_payment_gateway_tax || 0);
-        console.log("cancelledPlatformTax",cancelledPlatformTax)
-        console.log("cancelledPaymentGatewayTax",cancelledPaymentGatewayTax)
+        // console.log("cancelledPlatformTax",cancelledPlatformTax)
+        // console.log("cancelledPaymentGatewayTax",cancelledPaymentGatewayTax)
 
-        const OrgCancelRevenue = Number(totalCancelledRevenue -totalCancelledTax|| 0);
+        const OrgCancelRevenue = Number(totalCancelledRevenue - totalCancelledTax || 0);
         // console.log("OrgCancelRevenue",OrgCancelRevenue)
         const totalDiscount = Number(revenueData.total_discount || 0);
         const netTotalEarning = Number(revenueData.gross_amount || 0);
@@ -263,8 +263,13 @@ exports.getEventDetails = async (req, res) => {
 
         // const netEarning = Number(revenueData.gross_amount || 0);
 
-        const platformFee = Number(revenueData.platform_fee_tax || 0);
-        const gatewayFee = Number(revenueData.payment_gateway_tax || 0);
+        // const platformFee = Number(revenueData.platform_fee_tax || 0);
+        // const gatewayFee = Number(revenueData.payment_gateway_tax || 0);
+
+        const platformFee = Number(revenueData.platform_fee_tax || 0) - Number(cancelledPlatformTax || 0);
+
+        const gatewayFee = Number(revenueData.payment_gateway_tax || 0) - Number(cancelledPaymentGatewayTax || 0);
+
 
         // Committee earnings
         const committeeData = await OrderItems.findOne({
@@ -565,8 +570,10 @@ exports.getEventDetails = async (req, res) => {
                 },
                 revenueDistribution: {
                     organizer: netEarning,
-                    platform: platformEarning,
-                    gateway: paymentGatewayEarning,
+                    platform: platformFee,
+                    gateway: gatewayFee,
+                    // platform: platformEarning,
+                    // gateway: paymentGatewayEarning,
                     committee: committeeEarning
                 },
                 commissionSplit: {
@@ -806,37 +813,117 @@ exports.getOrganizersEvent = async (req, res) => {
                 [fn("SUM", col("platform_fee_tax")), "platform_fee_tax"],
                 [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"],
                 [fn("SUM", col("discount_amount")), "total_discount"],
+                // Cancelled Revenue
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN grand_total 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_revenue"
+                ],
+                // cancel total tax..
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN tax_total 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_tax"
+                ],
+                // cancel platform_fee_tax..
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN platform_fee_tax 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_platform_tax"
+                ],
+                // cancel payment_gateway_tax..
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN payment_gateway_tax 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_payment_gateway_tax"
+                ]
             ],
             raw: true
         });
 
         const totalRevenue = Number(revenueData?.total_revenue || 0);
         // const grossAmount = Number(revenueData?.gross_amount || 0);
+        const totalCancelledRevenue = Number(revenueData.cancelled_revenue || 0);
+        const totalCancelledTax = Number(revenueData.cancelled_tax || 0);
+
+        // console.log("totalCancelledTax-",totalCancelledTax)
+        const totalOrgCancelAmount = totalCancelledRevenue - totalCancelledTax
+
+        // console.log("totalCancelOrgAmount",totalCancelOrgAmount)
+
+        const cancelledPlatformTax = Number(revenueData.cancelled_platform_tax || 0);
+        const cancelledPaymentGatewayTax = Number(revenueData.cancelled_payment_gateway_tax || 0);
+        //  console.log("cancelledPlatformTax",cancelledPlatformTax)
+        //  console.log("cancelledPaymentGatewayTax",cancelledPaymentGatewayTax)
+
+
+
         const totalDiscount = Number(revenueData?.total_discount || 0);
         const netTotalEarning = Number(revenueData?.gross_amount || 0);
 
         const grossAmount = netTotalEarning - totalDiscount;
-        const platformFee = Number(revenueData?.platform_fee_tax || 0);
-        const gatewayFee = Number(revenueData?.payment_gateway_tax || 0);
-        const organizerEarning = grossAmount;
+        // const platformFee = Number(revenueData?.platform_fee_tax || 0);
+        // const gatewayFee = Number(revenueData?.payment_gateway_tax || 0);
+        const platformFee = Number(revenueData.platform_fee_tax || 0) - Number(cancelledPlatformTax || 0);
+        const gatewayFee = Number(revenueData.payment_gateway_tax || 0) - Number(cancelledPaymentGatewayTax || 0);
+        const organizerEarning = Number(grossAmount - totalOrgCancelAmount || 0);
 
 
         // Committee earnings
+
         const committeeData = await OrderItems.findOne({
             where: {
                 event_id: { [Op.in]: eventIds },
                 committee_user_id: { [Op.ne]: null },
-                status: "Y"
+                status: "Y",
+                cancel_status: {
+                    [Op.or]: [
+                        { [Op.ne]: "cancel" },
+                        { [Op.is]: null }
+                    ]
+                }
             },
             attributes: [
                 [
                     fn(
                         "SUM",
                         literal(`
-          CAST(COALESCE(OrderItems.price,0) AS DECIMAL(10,2))
-          * CAST(COALESCE(committeeMembers.commission,0) AS DECIMAL(10,2))
-          / 100
-        `)
+                    CAST(COALESCE(OrderItems.price,0) AS DECIMAL(10,2))
+                    * CAST(COALESCE(committeeMembers.commission,0) AS DECIMAL(10,2))
+                    / 100
+                `)
                     ),
                     "committee_earning"
                 ]
@@ -854,7 +941,45 @@ exports.getOrganizersEvent = async (req, res) => {
             ],
             raw: true
         });
-        const committeeFee = Number(committeeData.committee_earning || 0);
+
+        console.log("committeeData", committeeData)
+        const committeeFee = Number(committeeData?.committee_earning || 0);
+
+
+        // const committeeData = await OrderItems.findOne({
+        //     where: {
+        //         event_id: { [Op.in]: eventIds },
+        //         committee_user_id: { [Op.ne]: null },
+        //         status: "Y",
+
+        //     },
+        //     attributes: [
+        //         [
+        //             fn(
+        //                 "SUM",
+        //                 literal(`
+        //   CAST(COALESCE(OrderItems.price,0) AS DECIMAL(10,2))
+        //   * CAST(COALESCE(committeeMembers.commission,0) AS DECIMAL(10,2))
+        //   / 100
+        // `)
+        //             ),
+        //             "committee_earning"
+        //         ]
+        //     ],
+        //     include: [
+        //         {
+        //             model: CommitteeMembers,
+        //             as: "committeeMembers",
+        //             attributes: [],
+        //             required: true,
+        //             where: {
+        //                 event_id: { [Op.in]: eventIds }
+        //             }
+        //         }
+        //     ],
+        //     raw: true
+        // });
+        // const committeeFee = Number(committeeData.committee_earning || 0);
 
         /* ================= SALES TRENDS ================= */
 
@@ -1412,12 +1537,6 @@ exports.getOrganizersEvent = async (req, res) => {
             };
         }
 
-
-
-
-
-
-
         // ================= PER EVENT DATA =================
 
         // Total Tickets per event
@@ -1711,6 +1830,7 @@ exports.getOrganizersEvent = async (req, res) => {
                     totalTicketsSold: totalTicketsSold || 0,
                     totalRevenue,
                     organizerEarning,
+                    totalCancelledRevenue,
                     totalAddonsCreated: totalAddonsCreated || 0,
                     totalAddonsSold: totalAddonsSold || 0,
                     totalPackagesCreated: totalPackagesCreated || 0,
@@ -1972,19 +2092,88 @@ exports.getOrganizerEventDashboardByEventId = async (req, res) => {
                 [fn("SUM", col("platform_fee_tax")), "platform_fee_tax"],
                 [fn("SUM", col("payment_gateway_tax")), "payment_gateway_tax"],
                 [fn("SUM", col("discount_amount")), "total_discount"],
+                // Cancelled Revenue
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN grand_total 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_revenue"
+                ],
+                // cancel total tax..
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN tax_total 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_tax"
+                ],
+                // cancel platform_fee_tax..
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN platform_fee_tax 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_platform_tax"
+                ],
+                // cancel payment_gateway_tax..
+                [
+                    fn(
+                        "SUM",
+                        literal(`
+                    CASE 
+                        WHEN cancel_status = 'cancel' 
+                        THEN payment_gateway_tax 
+                        ELSE 0 
+                    END
+                `)
+                    ),
+                    "cancelled_payment_gateway_tax"
+                ]
+
             ],
             raw: true
         });
 
         const totalRevenue = Number(revenueData?.total_revenue || 0);
         // const grossAmount = Number(revenueData?.gross_amount || 0);
+        const totalCancelledRevenue = Number(revenueData.cancelled_revenue || 0);
+        const totalCancelledTax = Number(revenueData.cancelled_tax || 0);
+
+        // console.log("totalCancelledTax-",totalCancelledTax)
+        const totalOrgCancelAmount = totalCancelledRevenue - totalCancelledTax
+
+        // console.log("totalCancelOrgAmount",totalCancelOrgAmount)
+
+        const cancelledPlatformTax = Number(revenueData.cancelled_platform_tax || 0);
+        const cancelledPaymentGatewayTax = Number(revenueData.cancelled_payment_gateway_tax || 0);
         const totalDiscount = Number(revenueData?.total_discount || 0);
         const netTotalEarning = Number(revenueData?.gross_amount || 0);
 
         const grossAmount = netTotalEarning - totalDiscount;
-        const platformFee = Number(revenueData?.platform_fee_tax || 0);
-        const gatewayFee = Number(revenueData?.payment_gateway_tax || 0);
-        const organizerEarning = grossAmount;
+        // const platformFee = Number(revenueData?.platform_fee_tax || 0);
+        // const gatewayFee = Number(revenueData?.payment_gateway_tax || 0);
+        const platformFee = Number(revenueData.platform_fee_tax || 0) - Number(cancelledPlatformTax || 0);
+        const gatewayFee = Number(revenueData.payment_gateway_tax || 0) - Number(cancelledPaymentGatewayTax || 0);
+        const organizerEarning = grossAmount - totalOrgCancelAmount;
 
         /* ================= COMMITTEE EARNING ================= */
 

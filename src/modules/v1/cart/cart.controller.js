@@ -77,6 +77,92 @@ module.exports = {
             }
 
             /* ================= COMMITTEE LOGIC ================= */
+            // if (item_type == 'committesale') {
+
+            //     // if (count > 1)
+            //     //     return apiResponse.error(
+            //     //         res,
+            //     //         "Only 1 committee ticket can be requested",
+            //     //         400
+            //     //     );
+
+            //     const pendingSameTicket = await Cart.findOne({
+            //         where: {
+            //             user_id,
+            //             event_id,
+            //             ticket_id,
+            //             ticket_type: 'committesale',
+            //             status: 'N'
+            //         }
+            //     });
+
+            //     if (pendingSameTicket)
+            //         return apiResponse.error(
+            //             res,
+            //             "You already have a pending request for this committee ticket",
+            //             400
+            //         );
+
+            //     const committeeAssign = await CommitteeAssignTickets.findOne({
+            //         where: {
+            //             event_id,
+            //             ticket_id,
+            //             user_id: committee_member_id,
+            //             status: 'Y'
+            //         }
+            //     });
+
+            //     if (!committeeAssign)
+            //         return apiResponse.error(
+            //             res,
+            //             "No committee ticket allocation available",
+            //             400
+            //         );
+
+            //     // Get total purchased tickets from orders
+            //     const purchasedData = await OrderItems.findOne({
+            //         attributes: [
+            //             [Sequelize.fn('SUM', Sequelize.col('count')), 'totalPurchased']
+            //         ],
+            //         where: {
+            //             event_id,
+            //             ticket_id,
+            //             type: 'committesale',
+            //             committee_user_id: committee_member_id,
+            //             status: 'Y' // or completed/paid status
+            //         },
+            //         raw: true
+            //     });
+
+            //     const purchased = parseInt(purchasedData?.totalPurchased || 0);
+
+            //     // 🔢 Pending tickets (not yet approved)
+            //     const pending = parseInt(pendingSameTicket?.count || 0);
+
+            //     // 🔢 Total assigned
+            //     const assigned = committeeAssign.count || 0;
+
+            //     // ✅ FINAL AVAILABLE
+            //     const available = assigned - purchased - pending;
+
+            //     // const available = committeeAssign.count - (committeeAssign.usedticket || 0);
+            //     // if (available < 1)
+            //     if (available <= 0)
+            //         return apiResponse.error(
+            //             res,
+            //             "No committee ticket available for selected committee member.",
+            //             400
+            //         );
+
+            //     if (count > available)
+            //         return apiResponse.error(
+            //             res,
+            //             `You can request maximum ${available} ticket(s) for this committee member.`,
+            //             400
+            //         );
+
+            // }
+
             if (item_type == 'committesale') {
 
                 // if (count > 1)
@@ -85,6 +171,10 @@ module.exports = {
                 //         "Only 1 committee ticket can be requested",
                 //         400
                 //     );
+
+                /* =========================================
+                   CHECK PENDING REQUEST OF SAME USER
+                ========================================= */
 
                 const pendingSameTicket = await Cart.findOne({
                     where: {
@@ -103,6 +193,10 @@ module.exports = {
                         400
                     );
 
+                /* =========================================
+                   COMMITTEE ASSIGN CHECK
+                ========================================= */
+
                 const committeeAssign = await CommitteeAssignTickets.findOne({
                     where: {
                         event_id,
@@ -119,34 +213,80 @@ module.exports = {
                         400
                     );
 
-                // Get total purchased tickets from orders
+                /* =========================================
+                   PURCHASED TICKETS
+                ========================================= */
+
                 const purchasedData = await OrderItems.findOne({
                     attributes: [
-                        [Sequelize.fn('SUM', Sequelize.col('count')), 'totalPurchased']
+                        [
+                            Sequelize.fn(
+                                'SUM',
+                                Sequelize.col('count')
+                            ),
+                            'totalPurchased'
+                        ]
                     ],
                     where: {
                         event_id,
                         ticket_id,
                         type: 'committesale',
                         committee_user_id: committee_member_id,
-                        status: 'Y' // or completed/paid status
+                        status: 'Y'
                     },
                     raw: true
                 });
 
-                const purchased = parseInt(purchasedData?.totalPurchased || 0);
+                const purchased = parseInt(
+                    purchasedData?.totalPurchased || 0
+                );
 
-                // 🔢 Pending tickets (not yet approved)
-                const pending = parseInt(pendingSameTicket?.count || 0);
+                /* =========================================
+                   RESERVED / PENDING CART TICKETS
+                   IMPORTANT:
+                   Count all active reserved tickets
+                ========================================= */
 
-                // 🔢 Total assigned
-                const assigned = committeeAssign.count || 0;
+                const reservedCartData = await Cart.findOne({
+                    attributes: [
+                        [
+                            Sequelize.fn(
+                                'SUM',
+                                Sequelize.col('no_tickets')
+                            ),
+                            'totalReserved'
+                        ]
+                    ],
+                    where: {
+                        event_id,
+                        ticket_id,
+                        commitee_user_id: committee_member_id,
+                        ticket_type: 'committesale',
+                        status: 'Y'
+                    },
+                    raw: true
+                });
 
-                // ✅ FINAL AVAILABLE
-                const available = assigned - purchased - pending;
+                const reserved = parseInt(
+                    reservedCartData?.totalReserved || 0
+                );
 
-                // const available = committeeAssign.count - (committeeAssign.usedticket || 0);
-                // if (available < 1)
+                /* =========================================
+                   TOTAL ASSIGNED
+                ========================================= */
+
+                const assigned =
+                    parseInt(committeeAssign.count || 0);
+
+                /* =========================================
+                   FINAL AVAILABLE
+                ========================================= */
+
+                const available =
+                    assigned -
+                    purchased -
+                    reserved;
+
                 if (available <= 0)
                     return apiResponse.error(
                         res,
@@ -160,8 +300,10 @@ module.exports = {
                         `You can request maximum ${available} ticket(s) for this committee member.`,
                         400
                     );
-
             }
+
+
+
             /* ================= EXISTING CART CHECK ================= */
             const existing = await Cart.findOne({
                 where: {
@@ -455,10 +597,23 @@ module.exports = {
                                             "sales_count"
                                         ],
                                         // ✅ 2. package_assigned_count
+                                        //                                     [
+                                        //                                         Sequelize.literal(`(
+                                        //     SELECT COALESCE(SUM(pd.qty), 0)
+                                        //     FROM tblpackage_details AS pd
+                                        //     WHERE pd.ticket_type_id = \`ticketPrices\`.ticket_type_id
+                                        // )`),
+                                        //                                         "package_assigned_count"
+                                        //                                     ]
                                         [
                                             Sequelize.literal(`(
-        SELECT COALESCE(SUM(pd.qty), 0)
+        SELECT COALESCE(
+            SUM(pd.qty * p.package_limit),
+            0
+        )
         FROM tblpackage_details AS pd
+        INNER JOIN tblpackage AS p
+            ON p.id = pd.package_id
         WHERE pd.ticket_type_id = \`ticketPrices\`.ticket_type_id
     )`),
                                             "package_assigned_count"
@@ -530,15 +685,33 @@ module.exports = {
                                         "sales_count"
                                     ],
 
-                                    // ✅ 2. package_assigned_count (package me used tickets)
+                                    // ✅ 2. package_assigned_count 
+                                    //                         [
+                                    //                             Sequelize.literal(`(
+                                    //     SELECT COALESCE(SUM(pd.qty), 0)
+                                    //     FROM tblpackage_details AS pd
+                                    //     WHERE pd.ticket_type_id = \`tickets\`.id
+                                    // )`),
+                                    //                             "package_assigned_count"
+                                    //                         ]
+
+                                    // PACKAGE ASSIGNED COUNT
                                     [
                                         Sequelize.literal(`(
-                SELECT COALESCE(SUM(pd.qty), 0)
+                SELECT COALESCE(
+                    SUM(pd.qty * p.package_limit),
+                    0
+                )
                 FROM tblpackage_details AS pd
+                INNER JOIN tblpackage AS p
+                    ON p.id = pd.package_id
                 WHERE pd.ticket_type_id = \`tickets\`.id
             )`),
                                         "package_assigned_count"
-                                    ]]
+                                    ]
+
+
+                                ]
                             },
                             include: [
                                 {
@@ -611,12 +784,25 @@ module.exports = {
                                     ],
 
                                     // ✅ NEW: package_assigned_count
+                                    // [
+                                    //     Sequelize.literal(`(
+                                    //     SELECT COALESCE(SUM(pd.qty), 0)
+                                    //     FROM tblpackage_details AS pd
+                                    //     WHERE pd.addon_id = addons.id
+                                    //     )`),
+                                    //     "package_assigned_count"
+                                    // ]
                                     [
                                         Sequelize.literal(`(
-                                        SELECT COALESCE(SUM(pd.qty), 0)
-                                        FROM tblpackage_details AS pd
-                                        WHERE pd.addon_id = addons.id
-                                        )`),
+        SELECT COALESCE(
+            SUM(pd.qty * p.package_limit),
+            0
+        )
+        FROM tblpackage_details AS pd
+        INNER JOIN tblpackage AS p
+            ON p.id = pd.package_id
+        WHERE pd.addon_id = addons.id
+    )`),
                                         "package_assigned_count"
                                     ]
 

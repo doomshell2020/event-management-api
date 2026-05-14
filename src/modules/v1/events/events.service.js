@@ -1447,56 +1447,150 @@ module.exports.createEventSliders = async (req) => {
 
 
 // UPDATE EVENT EXHIBITORS (SERVICE)
+// UPDATE EVENT EXHIBITORS (SERVICE)
+
 module.exports.updateEventExhibitors = async (req) => {
+
     try {
+
         const { event_id, exhibitors } = req.body;
 
+        console.log(
+            "event_id, exhibitors",
+            event_id,
+            exhibitors
+        );
+
         if (!event_id) {
-            return { success: false, message: 'event_id is required' };
+
+            return {
+                success: false,
+                message: "event_id is required"
+            };
         }
 
-        // ✅ Parse data
-        let parsed = typeof exhibitors === "string"
-            ? JSON.parse(exhibitors)
-            : exhibitors;
+        /* =========================================
+           PARSE DATA
+        ========================================= */
+
+        let parsed =
+            typeof exhibitors === "string"
+                ? JSON.parse(exhibitors)
+                : exhibitors;
 
         const files = req.files || [];
 
-        // ✅ Convert files → map
+        console.log("parsed", parsed);
+        console.log("files", files);
+
+        /* =========================================
+           FILE MAP
+        ========================================= */
+
         const fileMap = {};
-        files.forEach(file => {
-            fileMap[file.fieldname] = file.filename;
+
+        files.forEach((file) => {
+
+            fileMap[file.fieldname] =
+                file.filename;
         });
 
-        // ✅ Existing DB data
-        const existing = await EventExhibitors.findAll({ where: { event_id } });
-        const existingIds = existing.map(e => e.id);
+        console.log("fileMap", fileMap);
 
-        const incomingIds = parsed.filter(e => e.id).map(e => e.id);
+        /* =========================================
+           EXISTING DATA
+        ========================================= */
 
-        // 🗑️ DELETE removed exhibitors
-        const deleteIds = existingIds.filter(id => !incomingIds.includes(id));
+        const existing =
+            await EventExhibitors.findAll({
+                where: { event_id }
+            });
+
+        const existingIds =
+            existing.map((e) => Number(e.id));
+
+        /*
+            ONLY REAL DB IDS
+        */
+
+        const incomingIds = parsed
+            .map((e) => Number(e.id))
+            .filter((id) =>
+                existingIds.includes(id)
+            );
+
+        /* =========================================
+           DELETE REMOVED EXHIBITORS
+        ========================================= */
+
+        const deleteIds =
+            existingIds.filter(
+                (id) => !incomingIds.includes(id)
+            );
+
         if (deleteIds.length > 0) {
-            await EventExhibitors.destroy({ where: { id: deleteIds } });
+
+            await EventExhibitors.destroy({
+                where: {
+                    id: deleteIds
+                }
+            });
         }
 
-        // 🔄 UPDATE + CREATE
+        /* =========================================
+           UPDATE + CREATE
+        ========================================= */
+
         for (const ex of parsed) {
 
             let image = null;
 
-            // 🔥 Check new uploaded image by ID
-            const key = `exhibitor_logos_${ex.id}`;
+            /*
+                FIND EXISTING ITEM
+            */
+
+            const existingItem =
+                existing.find(
+                    (e) =>
+                        Number(e.id) ===
+                        Number(ex.id)
+                );
+
+            /*
+                FILE KEY
+            */
+
+            const fileKey =
+                ex.id || ex.temp_id;
+
+            const key =
+                `exhibitor_logos_${fileKey}`;
+
+            console.log("Checking file key:", key);
+
+            /*
+                NEW IMAGE
+            */
+
             if (fileMap[key]) {
+
                 image = fileMap[key];
-            } else if (ex.id) {
-                // 🔥 Preserve old image
-                const existingItem = existing.find(e => e.id === ex.id);
-                image = existingItem ? existingItem.image : null;
+
+            } else if (existingItem) {
+
+                /*
+                    PRESERVE OLD IMAGE
+                */
+
+                image = existingItem.image;
             }
 
-            if (ex.id) {
-                // ✅ UPDATE
+            /*
+                UPDATE EXISTING
+            */
+
+            if (existingItem) {
+
                 await EventExhibitors.update(
                     {
                         name: ex.name,
@@ -1504,10 +1598,19 @@ module.exports.updateEventExhibitors = async (req) => {
                         website: ex.website,
                         image
                     },
-                    { where: { id: ex.id } }
+                    {
+                        where: {
+                            id: existingItem.id
+                        }
+                    }
                 );
+
             } else {
-                // ✅ CREATE (new exhibitor)
+
+                /*
+                    CREATE NEW
+                */
+
                 await EventExhibitors.create({
                     event_id,
                     name: ex.name,
@@ -1518,10 +1621,19 @@ module.exports.updateEventExhibitors = async (req) => {
             }
         }
 
-        return { success: true };
+        return {
+            success: true,
+            message:
+                "Event exhibitors updated successfully"
+        };
 
     } catch (error) {
-        console.error("Update Exhibitor Error:", error);
+
+        console.error(
+            "Update Exhibitor Error:",
+            error
+        );
+
         return {
             success: false,
             message: "Internal server error"
