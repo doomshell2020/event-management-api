@@ -500,11 +500,11 @@ exports.applyCoupon = async (req, res) => {
 
             discount = (applicableAmount * discountValue) / 100;
 
-        } else if (coupon.discount_type === "flat") {
+        } else if (coupon.discount_type === "fixed_amount") {
 
             discount = discountValue;
 
-            // Flat discount cannot exceed applicable amount
+            // fixed_amount discount cannot exceed applicable amount
             if (discount >= applicableAmount) {
                 return apiResponse.conflict(
                     res,
