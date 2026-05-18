@@ -393,10 +393,6 @@ exports.getEventDetails = async (req, res) => {
                                     'comps',
                                     'committesale'
                                 )
-                                AND (
-                                    cancel_status IS NULL
-                                    OR cancel_status != 'cancel'
-                                )
                                 THEN IFNULL(count,1)
                                 ELSE 0
                             END
@@ -415,10 +411,6 @@ exports.getEventDetails = async (req, res) => {
                         literal(`
                             CASE
                                 WHEN type='addon'
-                                AND (
-                                    cancel_status IS NULL
-                                    OR cancel_status != 'cancel'
-                                )
                                 THEN IFNULL(count,1)
                                 ELSE 0
                             END
@@ -437,10 +429,6 @@ exports.getEventDetails = async (req, res) => {
                         literal(`
                             CASE
                                 WHEN type='package'
-                                AND (
-                                    cancel_status IS NULL
-                                    OR cancel_status != 'cancel'
-                                )
                                 THEN IFNULL(count,1)
                                 ELSE 0
                             END
@@ -459,10 +447,6 @@ exports.getEventDetails = async (req, res) => {
                         literal(`
                             CASE
                                 WHEN type='appointment'
-                                AND (
-                                    cancel_status IS NULL
-                                    OR cancel_status != 'cancel'
-                                )
                                 THEN IFNULL(count,1)
                                 ELSE 0
                             END
@@ -571,8 +555,7 @@ exports.getEventDetails = async (req, res) => {
 
             where: {
                 event_id: eventIds,
-                type: "package",
-                cancel_status: null
+                type: "package"
             },
 
             attributes: [
@@ -583,7 +566,7 @@ exports.getEventDetails = async (req, res) => {
                 [
                     fn(
                         "SUM",
-                        col("count")
+                        literal("IFNULL(count,1)")
                     ),
                     "sold"
                 ]
@@ -623,6 +606,9 @@ exports.getEventDetails = async (req, res) => {
 
             packageSalesMap[sale.event_id].addons +=
                 Number(sale.sold || 0) * pkg.addon;
+
+
+
 
         });
 
@@ -814,7 +800,6 @@ exports.getEventDetails = async (req, res) => {
 
             const packageData =
                 packageSalesMap[event.id] || {};
-
             return {
 
                 event_id: event.id,
