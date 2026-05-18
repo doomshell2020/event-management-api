@@ -597,14 +597,7 @@ module.exports = {
                                             "sales_count"
                                         ],
                                         // ✅ 2. package_assigned_count
-                                        //                                     [
-                                        //                                         Sequelize.literal(`(
-                                        //     SELECT COALESCE(SUM(pd.qty), 0)
-                                        //     FROM tblpackage_details AS pd
-                                        //     WHERE pd.ticket_type_id = \`ticketPrices\`.ticket_type_id
-                                        // )`),
-                                        //                                         "package_assigned_count"
-                                        //                                     ]
+
                                         [
                                             Sequelize.literal(`(
         SELECT COALESCE(
@@ -685,15 +678,7 @@ module.exports = {
                                         "sales_count"
                                     ],
 
-                                    // ✅ 2. package_assigned_count 
-                                    //                         [
-                                    //                             Sequelize.literal(`(
-                                    //     SELECT COALESCE(SUM(pd.qty), 0)
-                                    //     FROM tblpackage_details AS pd
-                                    //     WHERE pd.ticket_type_id = \`tickets\`.id
-                                    // )`),
-                                    //                             "package_assigned_count"
-                                    //                         ]
+
 
                                     // PACKAGE ASSIGNED COUNT
                                     [
@@ -708,7 +693,21 @@ module.exports = {
                 WHERE pd.ticket_type_id = \`tickets\`.id
             )`),
                                         "package_assigned_count"
-                                    ]
+                                    ],
+
+                                    //                                 [
+                                    //                                     Sequelize.literal(`(
+                                    //     SELECT COALESCE(SUM(oi.count), 0)
+                                    //     FROM tbl_order_items AS oi
+                                    //     INNER JOIN tblorders AS o
+                                    //         ON o.id = oi.order_id
+                                    //     WHERE 
+                                    //         oi.ticket_id = \`tickets\`.id
+                                    //         AND oi.event_id = ${Number(ev)}
+                                    //         AND o.user_id = ${req.user.id}
+                                    // )`),
+                                    //                                     "user_purchased_count"
+                                    //                                 ],
 
 
                                 ]

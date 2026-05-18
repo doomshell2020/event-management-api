@@ -1013,9 +1013,9 @@ exports.handleAction = async (req, res) => {
         }
         // 🔒 Update allocation and cart status
         // await assign.update({ usedticket: used + 1 });
-        await assign.update({
-            usedticket: (assign.usedticket || 0) + requestedCount
-        });
+        // await assign.update({
+        //     usedticket: (assign.usedticket || 0) + requestedCount
+        // });
         await cartItem.update({ status: 'Y' });
 
         /* ================= APPROVAL EMAIL ================= */

@@ -1,7 +1,7 @@
 
-const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots, Package, AddonTypes, WellnessSlots, Wellness,EventGates } = require('../../../models/index');
+const { TicketType, Event, Currency, OrderItems, Orders, Payment, User, Templates, TicketPricing, PackageDetails, EventSlots, Package, AddonTypes, WellnessSlots, Wellness, EventGates } = require('../../../models/index');
 const { fn, col, literal } = require("sequelize");
-const { Op,Sequelize } = require('sequelize');
+const { Op, Sequelize } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
 const { generateQRCode } = require('../../../common/utils/qrGenerator');
@@ -485,6 +485,11 @@ module.exports.generateComplementary = async (req) => {
             itemsData,
             { transaction, returning: true }
         );
+
+        /* ✅ UPDATE TICKET COUNT */
+        await ticket.update({
+            count:  quantity
+        }, { transaction });
 
         /* 📸 GENERATE QR FOR EACH ITEM */
         const qrResults = [];
@@ -1071,10 +1076,10 @@ module.exports.listTicketsByEvent = async (event_id) => {
                         attributes: ['start_time', 'end_time', 'slot_date', 'slot_name']
                     }
                 }, {
-                model: EventGates,
-                as: "gates", // ⚠️ same as relation
-                attributes: ["id", "title"]
-              }
+                    model: EventGates,
+                    as: "gates", // ⚠️ same as relation
+                    attributes: ["id", "title"]
+                }
             ],
 
             order: [["createdAt", "DESC"]],

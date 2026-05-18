@@ -64,7 +64,10 @@ module.exports.getLatestEvents = async (req, res) => {
                     Sequelize.fn('SUM', Sequelize.col('orders.tax_total')), 0), 'total_tax'],
 
                 [Sequelize.fn('COALESCE',
-                    Sequelize.fn('SUM', Sequelize.col('orders.grand_total')), 0), 'grand_total']
+                    Sequelize.fn('SUM', Sequelize.col('orders.grand_total')), 0), 'grand_total'],
+
+                [Sequelize.fn('COALESCE',
+                    Sequelize.fn('SUM', Sequelize.col('orders.discount_amount')), 0), 'discount_amount']
             ],
 
             group: ['Event.id', 'Organizer.id', 'currencyName.id']

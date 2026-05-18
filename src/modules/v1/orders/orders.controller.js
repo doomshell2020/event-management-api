@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency, Questions, QuestionItems, Templates, EventGates } = require('../../../models');
+const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency, Questions, QuestionItems, Templates, EventGates,CommitteeAssignTickets } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
@@ -979,8 +979,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     ticket_pricing_id: item.item_type == "ticket_price" ? item.ticket_id : null,
                     appointment_id: item.item_type == "appointment" ? item.ticket_id : null,
                     price: item.price,
-                    committee_user_id:
-                        item.item_type == "committesale" ? item.committee_user_id : null,
+                    committee_user_id: item.item_type == "committesale" ? item.committee_user_id : null,
                     slot_id: item.slot_id || null
                 }, { transaction });
 
@@ -1018,6 +1017,20 @@ module.exports.fulfilOrderFromSnapshot = async ({
                         path: path.join(__dirname, "../../../uploads/qr_codes/", qr.qrImageName)
                     });
                 }
+            }
+            /* ✅ UPDATE COMMITTEE USED TICKETS */
+            if (item.item_type === "committesale") {
+
+                await CommitteeAssignTickets.increment(
+                    { usedticket: item.quantity },
+                    {
+                        where: {
+                            ticket_id: item.ticket_id,
+                            committee_user_id: item.committee_user_id
+                        },
+                        transaction
+                    }
+                );
             }
         }
 

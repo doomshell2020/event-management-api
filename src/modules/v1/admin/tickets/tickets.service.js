@@ -21,7 +21,7 @@ module.exports.getTicketList = async (req, res) => {
                 { model: AddonTypes, as: "addonType", attributes: ["name"] },
                 { model: Package, as: "package", attributes: ["name"] },
                 {
-                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id",'date','slot_start_time','slot_end_time'],
+                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id", 'date', 'slot_start_time', 'slot_end_time'],
                     include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
                 },
                 {
@@ -77,6 +77,7 @@ module.exports.getTicketList = async (req, res) => {
 // search event details..service
 module.exports.searchTicketList = async (req) => {
     try {
+
         let {
             customer,
             mobile,
@@ -88,23 +89,35 @@ module.exports.searchTicketList = async (req) => {
             type
         } = req.query;
 
-        const clean = (v) => (v && v.trim() !== "" ? v.trim() : null);
+        // =====================================================
+        // CLEAN VALUES
+        // =====================================================
+
+        const clean = (v) =>
+            v && v.trim() !== ""
+                ? v.trim()
+                : null;
 
         customer = clean(customer);
         mobile = clean(mobile);
+        email = clean(email);
         event = clean(event);
         ticketNumber = clean(ticketNumber);
-        email = clean(email);
 
         const hasAnyFilter =
-            customer || mobile || event || ticketNumber || purchaseFrom || purchaseTo || email;
+            customer ||
+            mobile ||
+            email ||
+            event ||
+            ticketNumber ||
+            purchaseFrom ||
+            purchaseTo ||
+            type;
 
-        /* ============================
-           📅 PURCHASE DATE FILTER
-        ============================ */
-        /* ============================
-     📅 PURCHASE DATE FILTER (OrderItems)
-  ============================ */
+        // =====================================================
+        // DATE FILTER
+        // =====================================================
+
         const orderItemWhere = {};
 
         const from = purchaseFrom
@@ -114,20 +127,36 @@ module.exports.searchTicketList = async (req) => {
         const to = purchaseTo
             ? new Date(`${purchaseTo}T23:59:59`)
             : null;
+
         if (from && to) {
-            orderItemWhere.createdAt = { [Op.between]: [from, to] };
+
+            orderItemWhere.createdAt = {
+                [Op.between]: [from, to]
+            };
+
         } else if (from) {
-            orderItemWhere.createdAt = { [Op.gte]: from };
+
+            orderItemWhere.createdAt = {
+                [Op.gte]: from
+            };
+
         } else if (to) {
-            orderItemWhere.createdAt = { [Op.lte]: to };
+
+            orderItemWhere.createdAt = {
+                [Op.lte]: to
+            };
         }
 
-        /* ============================
-           🎟 TICKET NUMBER FILTER
-        ============================ */
+        // =====================================================
+        // TICKET NUMBER FILTER
+        // =====================================================
+
         const ticketWhere = {};
+
         if (ticketNumber) {
+
             const ticketId = Number(ticketNumber);
+
             ticketWhere[Op.or] = [
                 { ticket_id: ticketId },
                 { addon_id: ticketId },
@@ -135,111 +164,250 @@ module.exports.searchTicketList = async (req) => {
             ];
         }
 
-        /* ============================
-           🧩 TYPE FILTER (ORDER ITEMS)
-        ============================ */
+        // =====================================================
+        // TYPE FILTER
+        // =====================================================
+
         const typeWhere = {};
 
         if (type) {
+
             if (type === "ticket") {
+
                 typeWhere.type = {
-                    [Op.in]: ["ticket", "ticket_price", "comps", "committesale"]
+                    [Op.in]: [
+                        "ticket",
+                        "ticket_price",
+                        "comps",
+                        "committesale"
+                    ]
                 };
+
             } else {
-                // addon / appointment / package
+
                 typeWhere.type = type;
             }
         }
 
+        // =====================================================
+        // USER FILTER
+        // =====================================================
 
-
-
-
-        /* ============================
-           👤 USER FILTER
-        ============================ */
         const userWhere = {};
 
+
+        // CUSTOMER SEARCH
         if (customer) {
-            userWhere.first_name = { [Op.like]: `%${customer}%` };
-            // userWhere[Op.or] = [
-            //     { first_name: { [Op.like]: `%${customer}%` } },
-            // ];
+
+            userWhere.first_name = {
+                [Op.like]: `%${customer}%`
+            };
         }
 
+        // MOBILE SEARCH
         if (mobile) {
-            userWhere.mobile = { [Op.like]: `%${mobile}%` };
+
+            userWhere.mobile = {
+                [Op.like]: `%${mobile}%`
+            };
         }
 
+        // EMAIL SEARCH
         if (email) {
-            userWhere.email = { [Op.like]: `%${email}%` };
+
+            userWhere.email = {
+                [Op.like]: `%${decodeURIComponent(email)}%`
+            };
         }
 
-        /* ============================
-           🎉 EVENT FILTER
-        ============================ */
+        // =====================================================
+        // EVENT FILTER
+        // =====================================================
+
         const eventWhere = event
-            ? { name: { [Op.like]: `%${event}%` } }
+            ? {
+                name: {
+                    [Op.like]: `%${event}%`
+                }
+            }
             : undefined;
 
-        /* ============================
-           🔎 FETCH TICKETS (FIXED)
-        ============================ */
+        // =====================================================
+        // FETCH DATA
+        // =====================================================
+
         const tickets = await OrderItems.findAll({
+
             where: {
                 ...ticketWhere,
-                ...orderItemWhere,   // ✅ DATE FILTER HERE
+                ...orderItemWhere,
                 ...typeWhere
             },
-            // where: ticketWhere,
-            //  ...orderItemWhere   // ✅ DATE FILTER HERE
+
             include: [
-                { model: TicketType, as: "ticketType", attributes: ["title"] },
-                { model: AddonTypes, as: "addonType", attributes: ["name"] },
-                { model: Package, as: "package", attributes: ["name"] },
+
+                // =====================================================
+                // TICKET
+                // =====================================================
+
                 {
-                    model: WellnessSlots, as: "appointment", attributes: ["wellness_id",'date','slot_start_time','slot_end_time'],
-                    include: [{ model: Wellness, as: "wellnessList", attributes: ["name"] }]
+                    model: TicketType,
+                    as: "ticketType",
+                    attributes: ["title"]
                 },
+
+                // =====================================================
+                // ADDON
+                // =====================================================
+
                 {
-                    model: TicketPricing, as: 'ticketPricing', required: false, attributes: ["id", "price"],
-                    include: [{ model: TicketType, as: "ticket", required: false, attributes: ["title"] },
-                    { model: EventSlots, as: "slot", required: false, attributes: ["id", "slot_name"] }
+                    model: AddonTypes,
+                    as: "addonType",
+                    attributes: ["name"]
+                },
+
+                // =====================================================
+                // PACKAGE
+                // =====================================================
+
+                {
+                    model: Package,
+                    as: "package",
+                    attributes: ["name"]
+                },
+
+                // =====================================================
+                // APPOINTMENT
+                // =====================================================
+
+                {
+                    model: WellnessSlots,
+                    as: "appointment",
+                    attributes: [
+                        "wellness_id",
+                        "date",
+                        "slot_start_time",
+                        "slot_end_time"
+                    ],
+                    include: [
+                        {
+                            model: Wellness,
+                            as: "wellnessList",
+                            attributes: ["name"]
+                        }
                     ]
                 },
+
+                // =====================================================
+                // TICKET PRICING
+                // =====================================================
+
+                {
+                    model: TicketPricing,
+                    as: "ticketPricing",
+                    required: false,
+                    attributes: ["id", "price"],
+
+                    include: [
+
+                        {
+                            model: TicketType,
+                            as: "ticket",
+                            required: false,
+                            attributes: ["title"]
+                        },
+
+                        {
+                            model: EventSlots,
+                            as: "slot",
+                            required: false,
+                            attributes: ["id", "slot_name"]
+                        }
+                    ]
+                },
+
+                // =====================================================
+                // ORDER
+                // =====================================================
+
                 {
                     model: Orders,
                     as: "order",
-                    attributes: ['sub_total', 'tax_total', 'created'],
-                    // where: Object.keys(orderWhere).length ? orderWhere : undefined,
-                    // required: !!hasAnyFilter,
-                    // required: false,
-                    required: !!event,
+
+                    attributes: [
+                        "sub_total",
+                        "tax_total",
+                        "created"
+                    ],
+
+                    required: hasAnyFilter,
+
                     include: [
+
+                        // =====================================================
+                        // USER
+                        // =====================================================
+
                         {
                             model: User,
                             as: "user",
-                            attributes: ['id', 'email', 'first_name', 'last_name', 'mobile'],
-                            where: Object.keys(userWhere).length ? userWhere : undefined,
-                            required: Object.keys(userWhere).length > 0
+
+                            attributes: [
+                                "id",
+                                "email",
+                                "first_name",
+                                "last_name",
+                                "mobile"
+                            ],
+
+                            where:
+                                Object.keys(userWhere).length
+                                    ? userWhere
+                                    : undefined,
+
+                            required:
+                                Object.keys(userWhere).length > 0
                         },
+
+                        // =====================================================
+                        // EVENT
+                        // =====================================================
+
                         {
                             model: Event,
                             as: "event",
-                            attributes: ['name', 'date_from', 'date_to'],
+
+                            attributes: [
+                                "name",
+                                "date_from",
+                                "date_to"
+                            ],
+
                             where: eventWhere,
+
                             required: !!event,
-                            include: {
-                                model: Currency,
-                                as: "currencyName",
-                                attributes: ['Currency_symbol']
-                            }
+
+                            include: [
+
+                                {
+                                    model: Currency,
+                                    as: "currencyName",
+                                    attributes: [
+                                        "Currency_symbol"
+                                    ]
+                                }
+                            ]
                         }
                     ]
                 }
             ],
-            order: [['id', 'DESC']]
+
+            order: [["id", "DESC"]]
         });
+
+        // =====================================================
+        // RESPONSE
+        // =====================================================
 
         return {
             success: true,
@@ -248,7 +416,12 @@ module.exports.searchTicketList = async (req) => {
         };
 
     } catch (error) {
-        console.error("Search error:", error);
+
+        console.error(
+            "Search error:",
+            error
+        );
+
         return {
             success: false,
             message: "Search failed",
@@ -375,7 +548,7 @@ module.exports.getTicketsWithEventIdAndType = async (req) => {
                 {
                     model: WellnessSlots,
                     as: "appointment",
-                    attributes: ["wellness_id",'date','slot_start_time','slot_end_time'],
+                    attributes: ["wellness_id", 'date', 'slot_start_time', 'slot_end_time'],
                     include: [
                         {
                             model: Wellness,
