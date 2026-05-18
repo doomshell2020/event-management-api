@@ -1026,7 +1026,7 @@ module.exports.fulfilOrderFromSnapshot = async ({
                     {
                         where: {
                             ticket_id: item.ticket_id,
-                            committee_user_id: item.committee_user_id
+                            user_id: item.committee_user_id
                         },
                         transaction
                     }
