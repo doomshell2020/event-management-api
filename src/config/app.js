@@ -64,6 +64,11 @@ const config = {
     newEventCreated: process.env.NEW_EVENT_CREATED_TEMPLATE_ID || '18',
     contactUs: process.env.CONTACT_US_TEMPLATE_ID || '25',
     cancelAppointment: process.env.CANCEL_APPOINTMENT_TEMPLATE_ID || '46',
+
+    cancelOrderRequestUser: 47,
+    cancelOrderRequestOrganizer: 48,
+    cancelOrderRequestApproved: 49,
+    cancelOrderRequestRejected: 50,
   },
   // -------------------------
   // 🔐 SECURITY CONFIG

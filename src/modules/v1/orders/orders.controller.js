@@ -1,5 +1,5 @@
 const apiResponse = require('../../../common/utils/apiResponse');
-const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency, Questions, QuestionItems, Templates, EventGates,CommitteeAssignTickets } = require('../../../models');
+const { Cart, Payment, QuestionsBook, CartQuestionsDetails, PaymentSnapshotItems, Orders, TicketType, AddonTypes, TicketPricing, Package, EventSlots, OrderItems, Event, WellnessSlots, Wellness, User, Company, Currency, Questions, QuestionItems, Templates, EventGates, CommitteeAssignTickets } = require('../../../models');
 const { generateQRCode } = require("../../../common/utils/qrGenerator");
 const orderConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/orderConfirmationWithQR');
 const appointmentConfirmationTemplateWithQR = require('../../../common/utils/emailTemplates/appointmentConfirmationTemplate');
@@ -3117,7 +3117,14 @@ exports.sendCancelOrderRequest = async (req, res) => {
                 {
                     model: Event,
                     as: "event",
-                    attributes: ["name"]
+                    attributes: ["name"],
+                    include: [
+                        {
+                            model: User,
+                            as: "Organizer",
+                            attributes: ["first_name", "last_name", "email"]
+                        }
+                    ]
                 }
             ]
         });
@@ -3204,21 +3211,73 @@ exports.sendCancelOrderRequest = async (req, res) => {
 
 
         // ===== SEND EMAIL =====
-        const templateId = config.emailTemplates.cancelAppointment;
 
-        const template = await Templates.findOne({
-            where: { id: templateId }
+        // ===== SEND EMAIL =====
+
+        const templateId1 = config.emailTemplates.cancelOrderRequestUser;
+        const templateId2 = config.emailTemplates.cancelOrderRequestOrganizer;
+
+
+        // ===== USER TEMPLATE =====
+        const userTemplate = await Templates.findOne({
+            where: { id: templateId1 }
         });
 
-        // if (template) {
-        //     const html = replaceTemplateVariables(template.description, {
-        //         UserName: `${order.user.first_name} ${order.user.last_name}`,
-        //         EventName: order.event?.name || "",
-        //         SITE_URL: config.clientUrl
-        //     });
 
-        //     await sendEmail(order.user.email, template.subject, html);
-        // }
+        // ===== ORGANIZER TEMPLATE =====
+        const organizerTemplate = await Templates.findOne({
+            where: { id: templateId2 }
+        });
+
+
+        // ================= USER EMAIL =================
+        if (userTemplate && order.user?.email) {
+
+            const userHtml = replaceTemplateVariables(
+                userTemplate.description,
+                {
+                    UserName: `${order.user.first_name} ${order.user.last_name}`,
+                    EventName: order.event?.name || "",
+                    SITE_URL: config.clientUrl,
+                    OrderNo: order.order_uid || order.id
+                }
+            );
+
+            const userSubject = userTemplate.subject;
+
+            await sendEmail(
+                order.user.email,
+                userSubject,
+                userHtml
+            );
+        }
+
+
+
+        // ================= ORGANIZER EMAIL =================
+        if (organizerTemplate && order.event?.Organizer?.email) {
+
+            const organizerHtml = replaceTemplateVariables(
+                organizerTemplate.description,
+                {
+                    OrganizerName: `${order.event.Organizer.first_name} ${order.event.Organizer.last_name}`,
+                    UserName: `${order.user.first_name} ${order.user.last_name}`,
+                    EventName: order.event?.name || "",
+                    SITE_URL: config.clientUrl,
+                    OrderNo: order.order_uid || order.id
+                }
+            );
+
+            const organizerSubject = organizerTemplate.subject;
+
+            await sendEmail(
+                order.event.Organizer.email,
+                organizerSubject,
+                organizerHtml
+            );
+        }
+
+
 
         return res.status(200).json({
             success: true,
@@ -3255,8 +3314,24 @@ exports.rejectCancelOrderRequest = async (req, res) => {
             });
         }
 
+        // const order = await Orders.findByPk(id, {
+        //     include: ["orderItems"]
+        // });
+
         const order = await Orders.findByPk(id, {
-            include: ["orderItems"]
+            include: [
+                "orderItems",
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["first_name", "last_name", "email"]
+                },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ["name"]
+                }
+            ]
         });
 
         if (!order) {
@@ -3297,6 +3372,37 @@ exports.rejectCancelOrderRequest = async (req, res) => {
             cancel_request_reject_reason: reason
         });
 
+        // ===== SEND REJECT EMAIL =====
+
+        const templateId = config.emailTemplates.cancelOrderRequestRejected;
+
+        const template = await Templates.findOne({
+            where: { id: templateId }
+        });
+
+        if (template && order.user?.email) {
+
+            const html = replaceTemplateVariables(
+                template.description,
+                {
+                    UserName: `${order.user.first_name} ${order.user.last_name}`,
+                    EventName: order.event?.name || "",
+                    RejectReason: reason,
+                    OrderNo: order.order_uid || order.id,
+                    SITE_URL: config.clientUrl
+                }
+            );
+
+            await sendEmail(
+                order.user.email,
+                template.subject,
+                html
+            );
+        }
+
+
+
+
         return res.status(200).json({
             success: true,
             message: "Order & items rejected successfully"
@@ -3325,8 +3431,24 @@ exports.approveCancelOrderRequest = async (req, res) => {
         }
 
         // 🔥 GET ORDER + ITEMS
+        // const order = await Orders.findByPk(id, {
+        //     include: ["orderItems"]
+        // });
+
         const order = await Orders.findByPk(id, {
-            include: ["orderItems"]
+            include: [
+                "orderItems",
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["first_name", "last_name", "email"]
+                },
+                {
+                    model: Event,
+                    as: "event",
+                    attributes: ["name"]
+                }
+            ]
         });
 
         if (!order) {
@@ -3413,6 +3535,36 @@ exports.approveCancelOrderRequest = async (req, res) => {
             refund_date: new Date(),
             is_refunded: true
         });
+
+        // ===== SEND APPROVED EMAIL =====
+
+        const templateId =
+            config.emailTemplates.cancelOrderRequestApproved;
+
+        const template = await Templates.findOne({
+            where: { id: templateId }
+        });
+
+        if (template && order.user?.email) {
+
+            const html = replaceTemplateVariables(
+                template.description,
+                {
+                    UserName: `${order.user.first_name} ${order.user.last_name}`,
+                    EventName: order.event?.name || "",
+                    RefundAmount: totalAmount,
+                    OrderNo: order.order_uid || order.id,
+                    SITE_URL: config.clientUrl
+                }
+            );
+
+            await sendEmail(
+                order.user.email,
+                template.subject,
+                html
+            );
+        }
+
 
         return res.status(200).json({
             success: true,
